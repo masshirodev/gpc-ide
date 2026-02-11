@@ -1,0 +1,17 @@
+[mash]
+display_name = "Mash"
+id = "mash"
+type = "fgs"
+description = "Frame-perfect button mash for dizzy or grab escape.\nRapidly toggles a configurable button at maximum speed."
+state_display = "MSH"
+status_var = "MashStatus"
+trigger = "// Mash selected button at frame-perfect speed (for dizzy/grab escape)\nif (MashStatus && get_val(MashButton)) {\n    combo_run(MashCombo);\n} else {\n    combo_stop(MashCombo);\n}"
+combo = "combo MashCombo {\n    MashActualSpeed = MashSpeed * 10;\n    set_val(MashButton, 100);\n    wait(MashActualSpeed);\n    set_val(MashButton, 0);\n    wait(MashActualSpeed);\n}"
+options = [
+    { name = "Status", var = "MashStatus", type = "toggle", default = 0 },
+    { name = "Button", var = "MashButton", type = "value", min = 0, max = 17, default = 4 },
+    { name = "Speed", var = "MashSpeed", type = "value", min = 1, max = 10, default = 2 },
+]
+
+[mash.extra_vars]
+MashActualSpeed = "int"

@@ -1,0 +1,31 @@
+[autorun]
+display_name = "Auto Run"
+id = "autorun"
+type = "all"
+description = "Locks the left stick at 100% in the last direction when pushed past a threshold.\nRelease the stick to center to stop. Acts as cruise control for movement."
+state_display = "AR"
+status_var = "AutoRunStatus"
+trigger = "if (AutoRunStatus) {\n    _lx = get_val(PS5_LX);\n    _ly = get_val(PS5_LY);\n    _mag = isqrt(_lx * _lx + _ly * _ly);\n    if (_mag > AutoRunThreshold) {\n        AutoRunLX = _lx * 100 / _mag;\n        AutoRunLY = _ly * 100 / _mag;\n        AutoRunActive = 1;\n    } else if (_mag < 20) {\n        AutoRunActive = 0;\n    }\n    if (AutoRunActive) {\n        set_val(PS5_LX, AutoRunLX);\n        set_val(PS5_LY, AutoRunLY);\n    }\n}"
+combo = "// Auto Run uses direct set_val, no combo needed"
+
+[[autorun.options]]
+name = "Status"
+var = "AutoRunStatus"
+type = "toggle"
+default = 0
+
+[[autorun.options]]
+name = "Threshold"
+var = "AutoRunThreshold"
+type = "value"
+min = 50
+max = 100
+default = 80
+
+[autorun.extra_vars]
+AutoRunLX = "int"
+AutoRunLY = "int"
+AutoRunActive = "int"
+_lx = "int"
+_ly = "int"
+_mag = "int"

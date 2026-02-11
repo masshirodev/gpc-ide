@@ -1,0 +1,12 @@
+[jumpshot]
+display_name = "Jump Shot"
+id = "jumpshot"
+type = "fps"
+description = "Automatically jumps when firing.\nTaps Cross on each shot to add vertical movement while shooting."
+state_display = "JS"
+status_var = "JumpShotStatus"
+trigger = "if (JumpShotStatus && event_press(PS5_R2)) {\n    if (!combo_running(JumpShot)) {\n        combo_run(JumpShot);\n    }\n}"
+combo = "combo JumpShot {\n    set_val(PS5_CROSS, 100);\n    wait(jitter(60));\n    set_val(PS5_CROSS, 0);\n    wait(jitter(300));\n}"
+options = [
+    { name = "Status", var = "JumpShotStatus", type = "toggle", default = 0 },
+]

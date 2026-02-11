@@ -1,0 +1,61 @@
+
+// ===================== HELPER GLOBALS =====================
+
+// NOTE: Menu, Menu_Page, rect_y are now defined in Modules/core.gpc (modular system)
+
+#include "oled.gpc"
+
+// ===================== HELPERS =====================
+
+function GetKeyboardKey(key) {
+    if (key >= 0xE0) {
+        return get_modifiers(1 << (key ^ 0xE0));
+    }
+
+    return get_keyboard(key);
+}
+
+// Find number of digits in a number
+function find_digits(fNumber) {
+    fNumber = abs(fNumber);
+    if(fNumber >= 10000) return 5;
+    else if (fNumber >= 1000) return 4;
+    else if (fNumber >= 10) return 2;
+    else if (fNumber >= 100) return 3;
+    return 1;
+}
+
+// ===================== TIMING JITTER =====================
+// Adds random noise to timing values for anti-detection
+// Returns base + jitter (±10% of base, bounded ±2ms to ±30ms)
+int _jitter_seed, _jitter_range;
+
+function jitter(base) { return jitter_custom(base, 10, 2, 30); }
+function jitter_custom(base, jpercent, jmin, jmax) {
+    // Mix runtime with a rolling seed for better randomness
+    _jitter_seed = (_jitter_seed * 1103515245 + 12345) ^ get_rtime();
+
+    // Calculate jitter range: jpercent% of base, bounded jmin-jmax ms
+    _jitter_range = base * jpercent / 100;
+    if (_jitter_range < jmin) _jitter_range = jmin;
+    if (_jitter_range > jmax) _jitter_range = jmax;
+
+    // Return base + random offset in range [-jrange, +jrange]
+    return base + (abs(_jitter_seed) % (_jitter_range * 2 + 1)) - _jitter_range;
+}
+
+// ===================== PACKERS =====================
+// -100..100, stored as 0..200
+// Prioritize bitpacking for memory efficiency
+
+// @DEPRECATED: Prioritize bitpacking for memory efficiency instead
+// Pack a single value at specified index (0-3)
+function PackValue(value, index) {
+    return (value + 100) << (index * 8);
+}
+
+// @DEPRECATED: Prioritize bitpacking for memory efficiency instead
+// Unpack a single value from packed int by index (0-3)
+function UnpackValue(packed, index) {
+    return ((packed >> (index * 8)) & 0xFF) - 100;
+}

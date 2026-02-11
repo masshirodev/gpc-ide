@@ -1,0 +1,42 @@
+
+function drawing_scroll_current(page) {
+    // Special case: page < 0 means draw entire scroll bar filled (no pagination)
+    if (page < 0) {
+        rect_oled(9, 9, 6, 46, 1, OLED_WHITE);
+        return;
+    }
+
+    if (page > 5) {
+        return;
+    }
+
+    if (page == 0) {
+        rect_oled(9, 9, 6, 7, 1, OLED_WHITE);
+        return;
+    }
+
+    if (page == 1) {
+        rect_oled(9, 16, 6, 8, 1, OLED_WHITE);
+        return;
+    }
+    
+    if (page == 2) {
+        rect_oled(9, 24, 6, 8, 1, OLED_WHITE);
+        return;
+    }
+
+    if (page == 3) {
+        rect_oled(9, 32, 6, 8, 1, OLED_WHITE);
+        return;
+    }
+
+    if (page == 4) {
+        rect_oled(9, 40, 6, 8, 1, OLED_WHITE);
+        return;
+    }
+
+    if (page == 5) {
+        rect_oled(9, 48, 6, 7, 1, OLED_WHITE);
+        return;
+    }
+}

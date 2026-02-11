@@ -1,0 +1,31 @@
+# GPC IDE Editor Themes
+# These themes are available in the Settings modal
+
+[[themes]]
+id = "gpc-dark"
+name = "GPC Dark (Custom)"
+description = "Custom dark theme optimized for GPC syntax"
+base = "vs-dark"
+
+[[themes]]
+id = "vs-dark"
+name = "VS Dark (Default)"
+description = "Visual Studio Code dark theme"
+base = "vs-dark"
+
+[[themes]]
+id = "vs-light"
+name = "VS Light"
+description = "Visual Studio Code light theme"
+base = "vs"
+
+[[themes]]
+id = "hc-black"
+name = "High Contrast"
+description = "High contrast black theme for accessibility"
+base = "hc-black"
+
+# To add a new custom theme:
+# 1. Add an entry here with a unique id
+# 2. Add the theme definition in gpc-language.ts using monaco.editor.defineTheme()
+# 3. The theme will automatically appear in the Settings modal

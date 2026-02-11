@@ -1,0 +1,17 @@
+[strafe]
+display_name = "Strafe"
+id = "strafe"
+type = "fps"
+description = "Automated left-right strafing while firing.\nOscillates the left stick horizontally at configurable strength and speed."
+state_display = "ST"
+status_var = "StrafeStatus"
+trigger = "if (StrafeStatus && get_val(PS5_R2)) {\n    if (abs(get_val(PS5_LX)) > 70 || abs(get_val(PS5_LY)) > 70) {\n        combo_stop(Strafe);\n    } else {\n        combo_run(Strafe);\n    }\n}\nif (!get_val(PS5_R2) && combo_running(Strafe)) {\n    combo_stop(Strafe);\n}"
+combo = "combo Strafe {\n    StrafeActual = (StrafeStrength * 327);\n    set_val(PS5_LX, clamp(get_val(PS5_LX) + StrafeActual, -32767, 32767));\n    wait(jitter(StrafeSpeed));\n    set_val(PS5_LX, clamp(get_val(PS5_LX) - StrafeActual, -32767, 32767));\n    wait(jitter(StrafeSpeed));\n}"
+options = [
+    { name = "Status", var = "StrafeStatus", type = "toggle", default = 0 },
+    { name = "Strength", var = "StrafeStrength", type = "value", min = 1, max = 100, default = 50 },
+    { name = "Speed", var = "StrafeSpeed", type = "value", min = 50, max = 300, default = 100 },
+]
+
+[strafe.extra_vars]
+StrafeActual = "int"

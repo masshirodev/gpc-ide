@@ -1,0 +1,31 @@
+[package]
+name = "gpc-ide"
+version = "0.1.0"
+description = "GPC IDE - Desktop IDE for Cronus Zen game scripts"
+authors = ["masshiro"]
+license = "MIT"
+edition = "2021"
+rust-version = "1.77.2"
+
+[lib]
+name = "gpc_ide_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.5.4", features = [] }
+
+[dependencies]
+serde_json = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+log = "0.4"
+tauri = { version = "2.10.0", features = [] }
+tauri-plugin-log = "2"
+tauri-plugin-dialog = "2"
+toml = "0.8"
+toml_edit = "0.22"
+walkdir = "2"
+tokio = { version = "1", features = ["process", "io-util", "sync", "rt"] }
+notify = "7"
+
+[dev-dependencies]
+tempfile = "3"

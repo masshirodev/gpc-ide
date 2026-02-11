@@ -1,0 +1,31 @@
+[autoblock]
+display_name = "Auto Block"
+id = "autoblock"
+type = "fgs"
+description = "Automatically blocks when no attack buttons are pressed.\nSupports low block (crouch + back) and high block (stand + back) modes."
+state_display = "AB"
+status_var = "AutoBlockStatus"
+trigger = "// Auto block when not pressing any attack button\nif (AutoBlockStatus) {\n    if (!get_val(PS5_SQUARE) && !get_val(PS5_TRIANGLE) &&\n        !get_val(PS5_CROSS) && !get_val(PS5_CIRCLE) &&\n        !get_val(PS5_R1) && !get_val(PS5_R2)) {\n        if (AutoBlockType == 0) {\n            // Low block (crouch + back)\n            set_val(PS5_LX, AutoBlockDirection);\n            set_val(PS5_LY, 100);\n        } else if (AutoBlockType == 1) {\n            // High block (stand + back)\n            set_val(PS5_LX, AutoBlockDirection);\n        }\n    }\n}"
+combo = "// Auto Block uses direct set_val, no combo needed"
+
+[[autoblock.options]]
+name = "Status"
+var = "AutoBlockStatus"
+type = "toggle"
+default = 0
+
+[[autoblock.options]]
+name = "Type"
+var = "AutoBlockType"
+type = "value"
+min = 0
+max = 1
+default = 0
+
+[[autoblock.options]]
+name = "Direction"
+var = "AutoBlockDirection"
+type = "value"
+min = -100
+max = 100
+default = -100

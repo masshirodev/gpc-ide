@@ -1,0 +1,12 @@
+[evasiveedge]
+display_name = "Evasive Edge"
+id = "evasiveedge"
+type = "fps"
+description = "Strafes left and right while firing.\nOscillates the left stick horizontally when no manual movement is detected."
+state_display = "EE"
+status_var = "EvasiveEdgeStatus"
+trigger = "if (EvasiveEdgeStatus && get_val(PS5_R2) > 50) {\n    if (abs(get_val(PS5_LY)) > 20 || abs(get_val(PS5_LX)) > 20) {\n        combo_stop(EvasiveEdge);\n    } else {\n        combo_run(EvasiveEdge);\n    }\n}"
+combo = "combo EvasiveEdge {\n    set_val(PS5_LX, -75);\n    wait(jitter(150));\n    set_val(PS5_LX, 75);\n    wait(jitter(150));\n}"
+options = [
+    { name = "Status", var = "EvasiveEdgeStatus", type = "toggle", default = 0 },
+]

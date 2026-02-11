@@ -1,0 +1,4 @@
+
+function drawing_scroll_outer() {
+    rect_oled(8, 8, 8, 48, 0, OLED_WHITE);
+}

@@ -1,0 +1,23 @@
+[holdbreath]
+display_name = "Hold Breath"
+id = "holdbreath"
+type = "fps"
+description = "Automatically holds breath (L3) while ADS for steadier aim.\nHolds for a configurable duration then releases."
+state_display = "HB"
+status_var = "HoldBreathStatus"
+trigger = "if (HoldBreathStatus && get_val(PS5_L2)) {\n    if (!combo_running(HoldBreath)) {\n        combo_run(HoldBreath);\n    }\n}\nif (HoldBreathStatus && !get_val(PS5_L2)) {\n    combo_stop(HoldBreath);\n}"
+combo = "combo HoldBreath {\n    set_val(PS5_L3, 100);\n    wait(jitter(HoldBreathDuration));\n}"
+
+[[holdbreath.options]]
+name = "Status"
+var = "HoldBreathStatus"
+type = "toggle"
+default = 0
+
+[[holdbreath.options]]
+name = "Duration"
+var = "HoldBreathDuration"
+type = "value"
+min = 1000
+max = 30000
+default = 10000

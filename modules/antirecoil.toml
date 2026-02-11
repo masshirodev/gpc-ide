@@ -1,0 +1,41 @@
+[antirecoil]
+display_name = "Anti Recoil (Basic)"
+id = "antirecoil"
+type = "fps"
+description = "Compensates for weapon recoil while firing by pulling the right stick down.\nApplies randomized variance to vertical and horizontal correction for natural feel.\nUses a single set of V/H values (not per-weapon)."
+state_display = "AR"
+status_var = "AntiRecoilStatus"
+has_quick_toggle = true
+conflicts = [
+    "antirecoil_decay",
+    "antirecoil_timeline",
+]
+trigger = "if (AntiRecoilStatus && get_val(PS5_L2) && get_val(PS5_R2)) {\n    AntiRecoil_Timer++;\n    if (AntiRecoil_Timer >= ANTIRECOIL_INIT_DELAY) {\n        combo_run(AntiRecoil);\n    }\n} else {\n    AntiRecoil_Timer = 0;\n}"
+combo = "define ANTIRECOIL_INIT_DELAY = 15;  // Skip first ~150ms of firing (minimal recoil)\n\ncombo AntiRecoil {\n    // Advance LCG seed every cycle for well-distributed variance\n    _jitter_seed = (_jitter_seed * 1103515245 + 12345) ^ get_rtime();\n\n    // Per-cycle variance: ±15% of base value, V and H derived independently\n    random_variance_v = (abs(_jitter_seed) % 31) - 15;\n    random_variance_h = (abs(_jitter_seed / 31) % 23) - 11;\n\n    if (Recoil_Vertical != 0) {\n        set_val(PS5_RY, clamp(get_val(PS5_RY) + Recoil_Vertical + (random_variance_v * abs(Recoil_Vertical) / 100), -100, 100));\n    }\n    if (Recoil_Horizontal != 0) {\n        set_val(PS5_RX, clamp(get_val(PS5_RX) + Recoil_Horizontal + (random_variance_h * abs(Recoil_Horizontal) / 100), -100, 100));\n    }\n}"
+
+[[antirecoil.options]]
+name = "Status"
+var = "AntiRecoilStatus"
+type = "toggle"
+default = 0
+
+[[antirecoil.options]]
+name = "Vertical"
+var = "Recoil_Vertical"
+type = "value"
+min = -100
+max = 100
+default = 15
+
+[[antirecoil.options]]
+name = "Horizontal"
+var = "Recoil_Horizontal"
+type = "value"
+min = -100
+max = 100
+default = 0
+
+[antirecoil.extra_vars]
+random_variance_v = "int"
+random_variance_h = "int"
+AntiRecoil_Timer = "int"

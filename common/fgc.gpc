@@ -1,0 +1,40 @@
+
+#include "helper.gpc"
+#include "control.gpc"
+
+// FGC Helper Functions
+// Common utilities for fighting game scripts
+
+// Side variable: 0 = P1 (facing right), 1 = P2 (facing left)
+int Side;
+int _dir_lx, _dir_ly;
+
+// Set direction using numpad notation (auto-flips on P2 side)
+// 7 8 9      UL  U  UR
+// 4 5 6  ->   L  N   R
+// 1 2 3      DL  D  DR
+function direction(d) {
+    // Neutral input - reset directions
+    if (d == 5) {
+        set_val(PS5_LX, 0);
+        set_val(PS5_LY, 0);
+        return;
+    }
+
+    _dir_lx = 0;
+    _dir_ly = 0;
+
+    // Vertical: 1,2,3 = down / 7,8,9 = up
+    if (d <= 3) { _dir_ly = 100; }
+    if (d >= 7) { _dir_ly = -100; }
+
+    // Horizontal: 1,4,7 = left / 3,6,9 = right
+    if (d == 1 || d == 4 || d == 7) { _dir_lx = -100; }
+    if (d == 3 || d == 6 || d == 9) { _dir_lx = 100; }
+
+    // Flip horizontal on P2 side
+    if (Side) { _dir_lx = _dir_lx * -1; }
+
+    if (_dir_lx != 0) { set_val(PS5_LX, _dir_lx); }
+    if (_dir_ly != 0) { set_val(PS5_LY, _dir_ly); }
+}

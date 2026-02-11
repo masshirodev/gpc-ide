@@ -1,0 +1,12 @@
+[crouchshot]
+display_name = "Crouch Shot"
+id = "crouchshot"
+type = "fps"
+description = "Repeatedly crouches while ADS and firing.\nTaps Circle on a loop to peek from behind cover."
+state_display = "CS"
+status_var = "CrouchShotStatus"
+trigger = "if (CrouchShotStatus && get_val(PS5_L2) && get_val(PS5_R2)) {\n    if (!combo_running(CrouchShot)) {\n        combo_run(CrouchShot);\n    }\n}"
+combo = "combo CrouchShot {\n    set_val(PS5_CIRCLE, 100);\n    wait(jitter(75));\n    set_val(PS5_CIRCLE, 0);\n    wait(jitter(125));\n}"
+options = [
+    { name = "Status", var = "CrouchShotStatus", type = "toggle", default = 0 },
+]

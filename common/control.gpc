@@ -1,0 +1,67 @@
+
+#include "helper.gpc"
+
+// Control Helper Functions
+// Common utilities for input
+
+// Press a button
+function press(button) {
+    set_val(button, 100);
+}
+
+// Release a button
+function release(button) {
+    set_val(button, 0);
+}
+
+// Press a button for a short time with optional jitter
+function dpress(button, delay, jitter) {
+    set_val(button, 100);
+    
+    if (jitter) { wait(jitter(delay)); }
+    else { wait(delay); }
+
+    set_val(button, 0);
+}
+
+// Press two buttons simultaneously for a short time with optional jitter
+function dpress2(button1, button2, delay, jitter) {
+    set_val(button1, 100);
+    set_val(button2, 100);
+    
+    if (jitter) { wait(jitter(delay)); }
+    else { wait(delay); }
+
+    set_val(button1, 0);
+    set_val(button2, 0);
+}
+
+// Press three buttons simultaneously for a short time with optional jitter
+function dpress3(button1, button2, button3, delay, jitter) {
+    set_val(button1, 100);
+    set_val(button2, 100);
+    set_val(button3, 100);
+    
+    if (jitter) { wait(jitter(delay)); }
+    else { wait(delay); }
+
+    set_val(button1, 0);
+    set_val(button2, 0);
+    set_val(button3, 0);
+}
+
+// Press four buttons simultaneously for a short time with optional jitter
+function dpress4(button1, button2, button3, button4, delay, jitter) {
+    set_val(button1, 100);
+    set_val(button2, 100);
+    set_val(button3, 100);
+    set_val(button4, 100);
+    
+    if (jitter) { wait(jitter(delay)); }
+    else { wait(delay); }
+
+    set_val(button1, 0);
+    set_val(button2, 0);
+    set_val(button3, 0);
+    set_val(button4, 0);
+}

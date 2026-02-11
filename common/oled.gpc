@@ -1,0 +1,31 @@
+
+// =============== OLED HELPERS ===============
+
+int numberStringLength, divisor, digitCounter;
+const int8 ASCII_NUM[] = { 48, 49, 50, 51, 52, 53, 54, 55, 56, 57 };
+
+// Clear OLED and reset HSB
+function Clear() {
+    cls_oled(OLED_BLACK);
+    set_hsb(0,0,0);
+}
+
+// Print number to OLED at specified position with specified font
+function PrintNumber(fValue, fDigits, fPrintStartX, fPrintStartY, fFont) {
+    numberStringLength = 1;
+    divisor = 10000;
+    if(fValue < 0) {
+        putc_oled(numberStringLength, 45);
+        numberStringLength += 1;
+        fValue = abs(fValue);
+    }
+    for(digitCounter = 5; digitCounter >= 1; digitCounter--) {
+        if(fDigits >= digitCounter) {
+            putc_oled(numberStringLength, ASCII_NUM[fValue / divisor]);
+            fValue %= divisor;
+            numberStringLength += 1;
+        }
+        divisor /= 10;
+    }
+    puts_oled(fPrintStartX, fPrintStartY, fFont, numberStringLength - 1, OLED_WHITE);
+}

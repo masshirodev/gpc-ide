@@ -1,0 +1,23 @@
+[easymotion]
+display_name = "Easy Motion"
+id = "easymotion"
+type = "fgs"
+description = "Simplified special move inputs using a modifier + attack button.\nExecutes QCF, DP, and QCB motions automatically with configurable input delay."
+state_display = "EM"
+status_var = "EasyMotionStatus"
+trigger = "// Easy motion: press modifier + attack button to execute motion input\nif (EasyMotionStatus && get_val(PS5_L2)) {\n    if (event_press(PS5_SQUARE)) {\n        // QCF + LP (hadouken-style)\n        combo_run(MotionQCF);\n    }\n    if (event_press(PS5_TRIANGLE)) {\n        // DP + MP (shoryuken-style)\n        combo_run(MotionDP);\n    }\n    if (event_press(PS5_CIRCLE)) {\n        // QCB + MK (tatsu-style)\n        combo_run(MotionQCB);\n    }\n}"
+combo = "// Quarter Circle Forward: Down, Down-Forward, Forward + Attack\ncombo MotionQCF {\n    set_val(PS5_LY, 100);\n    wait(EasyMotionInputDelay);\n    set_val(PS5_LY, 100);\n    set_val(PS5_LX, 100);\n    wait(EasyMotionInputDelay);\n    set_val(PS5_LY, 0);\n    set_val(PS5_LX, 100);\n    set_val(PS5_SQUARE, 100);\n    wait(EasyMotionInputDelay);\n    set_val(PS5_LX, 0);\n    set_val(PS5_SQUARE, 0);\n    wait(50);\n}\n\n// Dragon Punch: Forward, Down, Down-Forward + Attack\ncombo MotionDP {\n    set_val(PS5_LX, 100);\n    wait(EasyMotionInputDelay);\n    set_val(PS5_LX, 0);\n    set_val(PS5_LY, 100);\n    wait(EasyMotionInputDelay);\n    set_val(PS5_LY, 100);\n    set_val(PS5_LX, 100);\n    set_val(PS5_TRIANGLE, 100);\n    wait(EasyMotionInputDelay);\n    set_val(PS5_LY, 0);\n    set_val(PS5_LX, 0);\n    set_val(PS5_TRIANGLE, 0);\n    wait(50);\n}\n\n// Quarter Circle Back: Down, Down-Back, Back + Attack\ncombo MotionQCB {\n    set_val(PS5_LY, 100);\n    wait(EasyMotionInputDelay);\n    set_val(PS5_LY, 100);\n    set_val(PS5_LX, -100);\n    wait(EasyMotionInputDelay);\n    set_val(PS5_LY, 0);\n    set_val(PS5_LX, -100);\n    set_val(PS5_CIRCLE, 100);\n    wait(EasyMotionInputDelay);\n    set_val(PS5_LX, 0);\n    set_val(PS5_CIRCLE, 0);\n    wait(50);\n}"
+
+[[easymotion.options]]
+name = "Status"
+var = "EasyMotionStatus"
+type = "toggle"
+default = 0
+
+[[easymotion.options]]
+name = "Input Delay"
+var = "EasyMotionInputDelay"
+type = "value"
+min = 10
+max = 100
+default = 30

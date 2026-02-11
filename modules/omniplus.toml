@@ -1,0 +1,13 @@
+[omniplus]
+display_name = "Omni Plus"
+id = "omniplus"
+type = "fps"
+description = "COD Mechanic - Enhanced omnidirectional movement by toggling L3.\nTaps sprint on and off to maintain momentum in all directions."
+state_display = "OP"
+status_var = "OmniPlusStatus"
+trigger = "if (OmniPlusStatus && get_val(PS5_L3) < -95) {\n    combo_run(OmniPlus);\n}"
+combo = "combo OmniPlus {\n    set_val(PS5_L3, 100);\n    wait(jitter(OmniPlusDelay));\n    set_val(PS5_L3, 0);\n    wait(jitter(OmniPlusDelay));\n    set_val(PS5_L3, 100);\n    wait(jitter(OmniPlusDelay));\n    set_val(PS5_L3, 0);\n    wait(jitter(400));\n}"
+options = [
+    { name = "Status", var = "OmniPlusStatus", type = "toggle", default = 0 },
+    { name = "Delay", var = "OmniPlusDelay", type = "value", min = 20, max = 100, default = 40 },
+]

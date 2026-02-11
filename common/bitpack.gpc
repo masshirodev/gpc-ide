@@ -1,0 +1,149 @@
+
+// ===================== BIT-PACKING SPVAR LIBRARY =====================
+// Efficient bit-level packing for SPVAR persistence.
+// Dynamically calculates minimum bits needed per value based on min/max range.
+// Values are packed sequentially across SPVAR boundaries.
+//
+// Usage:
+//   Save:
+//     spvar_current_slot = SPVAR_1; spvar_current_bit = 0;
+//     spvar_current_value = 0; spvar_total_bits = 0;
+//     save_spvar(value, min, max);
+//     save_spvar(value2, min2, max2);
+//
+//   Load:
+//     spvar_current_slot = SPVAR_1; spvar_current_bit = 0;
+//     spvar_current_value = 0; spvar_total_bits = 0;
+//     value = read_spvar(min, max, default);
+//     value2 = read_spvar(min2, max2, default2);
+//
+// Based on ZGUR57's bit-packing system, cleaned up and documented.
+
+int spvar_total_bits;
+int spvar_current_bit,
+    spvar_current_slot,
+    spvar_current_value,
+    spvar_tmp,
+    spvar_bits;
+
+// Count the number of bits needed to represent a value
+function _bp_bit_count(val) {
+    spvar_tmp = 0;
+    val = abs(val);
+    while (val) {
+        spvar_tmp++;
+        val = val >> 1;
+    }
+    return spvar_tmp;
+}
+
+// Count the number of bits needed for a min/max range
+function _bp_bit_count2(val1, val2) {
+    spvar_tmp = max(_bp_bit_count(val1), _bp_bit_count(val2));
+    if (val1 < 0 || val2 < 0) {
+        spvar_tmp++;  // Extra bit for sign
+    }
+    spvar_total_bits += spvar_tmp;
+    return spvar_tmp;
+}
+
+// Generate a bitmask for the sign bit (highest bit in range)
+function _bp_make_sign(bits) {
+    return 1 << clamp(bits - 1, 0, 31);
+}
+
+// Generate a full bitmask (all bits set up to count)
+function _bp_make_full_mask(bits) {
+    if (bits == 32) { return -1; }
+    return 0x7FFFFFFF >> (31 - bits);
+}
+
+// Generate a bitmask for the value portion (below sign bit)
+function _bp_make_sign_mask(bits) {
+    return _bp_make_full_mask(bits - 1);
+}
+
+// Pack a potentially negative value into minimum bits
+function _bp_pack_i(val, bits) {
+    if (val < 0) {
+        return (abs(val) & _bp_make_sign_mask(bits)) | _bp_make_sign(bits);
+    }
+    return val & _bp_make_sign_mask(bits);
+}
+
+// Unpack a potentially negative value from packed bits
+function _bp_unpack_i(val, bits) {
+    if (val & _bp_make_sign(bits)) {
+        return 0 - (val & _bp_make_sign_mask(bits));
+    }
+    return val & _bp_make_sign_mask(bits);
+}
+
+// Read raw SPVAR value without range limits
+function _bp_read_slot(slot) {
+    return get_pvar(slot, 0x80000000, 0x7FFFFFFF, 0);
+}
+
+// Save a value to the bit-packed SPVAR stream
+// NOTE: Call flush_spvar() after all save_spvar() calls to write the final SPVAR.
+function save_spvar(val, min, max) {
+    spvar_bits = _bp_bit_count2(min, max);
+    val = clamp(val, min, max);
+
+    if (min < 0 || max < 0) {
+        val = _bp_pack_i(val, spvar_bits);
+    }
+    val = val & _bp_make_full_mask(spvar_bits);
+
+    // Check if value spans across SPVAR boundary
+    if (spvar_bits >= 32 - spvar_current_bit) {
+        spvar_current_value = spvar_current_value | (val << spvar_current_bit);
+        set_pvar(spvar_current_slot, spvar_current_value);
+        spvar_current_slot++;
+        spvar_bits -= (32 - spvar_current_bit);
+        val = val >> (32 - spvar_current_bit);
+        spvar_current_bit = 0;
+        spvar_current_value = 0;
+    }
+
+    spvar_current_value = spvar_current_value | (val << spvar_current_bit);
+    spvar_current_bit += spvar_bits;
+    if (!spvar_current_bit) {
+        spvar_current_value = 0;
+    }
+}
+
+// Flush remaining bits to SPVAR after all save_spvar() calls
+function flush_spvar() {
+    set_pvar(spvar_current_slot, spvar_current_value);
+}
+
+// Read a value from the bit-packed SPVAR stream
+function read_spvar(min, max, def) {
+    spvar_bits = _bp_bit_count2(min, max);
+    spvar_current_value = (_bp_read_slot(spvar_current_slot) >> spvar_current_bit) & _bp_make_full_mask(spvar_bits);
+
+    // Handle value spanning across SPVAR boundary
+    if (spvar_bits >= 32 - spvar_current_bit) {
+        spvar_current_value = (spvar_current_value & _bp_make_full_mask(32 - spvar_current_bit)) |
+            ((_bp_read_slot(spvar_current_slot + 1) & _bp_make_full_mask(spvar_bits - (32 - spvar_current_bit))) << (32 - spvar_current_bit));
+    }
+
+    spvar_current_bit += spvar_bits;
+    spvar_current_value = spvar_current_value & _bp_make_full_mask(spvar_bits);
+
+    if (spvar_current_bit >= 32) {
+        spvar_current_slot++;
+        spvar_current_bit -= 32;
+    }
+
+    if (min < 0 || max < 0) {
+        spvar_current_value = _bp_unpack_i(spvar_current_value, spvar_bits);
+    }
+
+    if (spvar_current_value < min || spvar_current_value > max) {
+        return def;
+    }
+
+    return spvar_current_value;
+}

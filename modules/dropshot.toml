@@ -1,0 +1,38 @@
+[dropshot]
+display_name = "Drop Shot"
+id = "dropshot"
+type = "fps"
+description = "Automatically goes prone when firing while ADS.\nPresses Circle to prone, then L3 to stand back up after a rest period."
+state_display = "DS"
+status_var = "DropShotStatus"
+trigger = "if (DropShotStatus && get_val(PS5_L2) && event_press(PS5_R2)) {\n    if (!DropShotActive) {\n        combo_run(DropShot);\n    }\n}"
+combo = "combo DropShot {\n    DropShotActive = 1;\n    set_val(DROPSHOT_PRONE_BTN, 100);\n    wait(jitter(800));\n    set_val(DROPSHOT_PRONE_BTN, 0);\n    wait(jitter(50));\n    set_val(DROPSHOT_STAND_BTN, 100);\n    wait(jitter(200));\n    set_val(DROPSHOT_STAND_BTN, 0);\n    DropShotActive = 0;\n    wait(jitter(DropShotRest));\n}"
+
+[[dropshot.params]]
+key = "prone_btn"
+prompt = "Prone button"
+type = "button"
+default = "PS5_CIRCLE"
+
+[[dropshot.params]]
+key = "stand_btn"
+prompt = "Stand button"
+type = "button"
+default = "PS5_L3"
+
+[[dropshot.options]]
+name = "Status"
+var = "DropShotStatus"
+type = "toggle"
+default = 0
+
+[[dropshot.options]]
+name = "Rest Time"
+var = "DropShotRest"
+type = "value"
+min = 100
+max = 1000
+default = 500
+
+[dropshot.extra_vars]
+DropShotActive = "int"

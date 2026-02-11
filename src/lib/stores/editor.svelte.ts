@@ -1,0 +1,207 @@
+import { readFile, writeFile } from '$lib/tauri/commands';
+import { getLspClient } from '$lib/stores/lsp.svelte';
+import { pathToUri } from '$lib/lsp/MonacoLspBridge';
+import { addToast } from '$lib/stores/toast.svelte';
+
+export interface EditorTab {
+    path: string;
+    name: string;
+    content: string;
+    originalContent: string;
+    dirty: boolean;
+}
+
+interface EditorStore {
+    tabs: EditorTab[];
+    activeTabPath: string | null;
+    saving: boolean;
+}
+
+let store = $state<EditorStore>({
+    tabs: [],
+    activeTabPath: null,
+    saving: false,
+});
+
+// Debounce timers for LSP didChange notifications
+const changeTimers = new Map<string, ReturnType<typeof setTimeout>>();
+const documentVersions = new Map<string, number>();
+
+export function getEditorStore() {
+    return store;
+}
+
+export function getActiveTab(): EditorTab | undefined {
+    return store.tabs.find((t) => t.path === store.activeTabPath);
+}
+
+function getFileName(path: string): string {
+    return path.split('/').pop() || path;
+}
+
+export async function openTab(path: string) {
+    // If already open, just activate
+    const existing = store.tabs.find((t) => t.path === path);
+    if (existing) {
+        store.activeTabPath = path;
+        return;
+    }
+
+    // Load file content
+    try {
+        const content = await readFile(path);
+        const tab: EditorTab = {
+            path,
+            name: getFileName(path),
+            content,
+            originalContent: content,
+            dirty: false,
+        };
+        store.tabs = [...store.tabs, tab];
+        store.activeTabPath = path;
+
+        // Notify LSP that the document was opened
+        const client = getLspClient();
+        if (client?.isInitialized()) {
+            const uri = pathToUri(path);
+            documentVersions.set(path, 1);
+            client.textDocumentDidOpen(uri, content);
+        }
+    } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        addToast(`Failed to open file: ${msg}`, 'error');
+    }
+}
+
+export function closeTab(path: string) {
+    const tab = store.tabs.find((t) => t.path === path);
+    if (tab?.dirty && !confirm(`Discard unsaved changes to ${tab.name}?`)) {
+        return;
+    }
+
+    const idx = store.tabs.findIndex((t) => t.path === path);
+    store.tabs = store.tabs.filter((t) => t.path !== path);
+
+    // If closing the active tab, switch to an adjacent one
+    if (store.activeTabPath === path) {
+        if (store.tabs.length === 0) {
+            store.activeTabPath = null;
+        } else {
+            const newIdx = Math.min(idx, store.tabs.length - 1);
+            store.activeTabPath = store.tabs[newIdx].path;
+        }
+    }
+
+    // Clear debounce timer
+    const timer = changeTimers.get(path);
+    if (timer) {
+        clearTimeout(timer);
+        changeTimers.delete(path);
+    }
+    documentVersions.delete(path);
+
+    // Notify LSP that the document was closed
+    const client = getLspClient();
+    if (client?.isInitialized()) {
+        client.textDocumentDidClose(pathToUri(path));
+    }
+}
+
+export function activateTab(path: string) {
+    store.activeTabPath = path;
+}
+
+export function updateTabContent(path: string, content: string) {
+    const tab = store.tabs.find((t) => t.path === path);
+    if (tab) {
+        tab.content = content;
+        tab.dirty = content !== tab.originalContent;
+    }
+
+    // Debounced LSP didChange notification (150ms)
+    const existing = changeTimers.get(path);
+    if (existing) clearTimeout(existing);
+
+    changeTimers.set(
+        path,
+        setTimeout(() => {
+            changeTimers.delete(path);
+            const client = getLspClient();
+            if (client?.isInitialized()) {
+                const version = (documentVersions.get(path) || 1) + 1;
+                documentVersions.set(path, version);
+                client.textDocumentDidChange(pathToUri(path), version, content);
+            }
+        }, 150)
+    );
+}
+
+export async function saveTab(path?: string) {
+    const targetPath = path ?? store.activeTabPath;
+    if (!targetPath || store.saving) return;
+
+    const tab = store.tabs.find((t) => t.path === targetPath);
+    if (!tab || !tab.dirty) return;
+
+    store.saving = true;
+    try {
+        await writeFile(targetPath, tab.content);
+        tab.originalContent = tab.content;
+        tab.dirty = false;
+        addToast(`Saved ${tab.name}`, 'success', 2000);
+    } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        addToast(`Failed to save ${tab.name}: ${msg}`, 'error');
+    } finally {
+        store.saving = false;
+    }
+}
+
+export function closeAllTabs() {
+    const dirtyTabs = store.tabs.filter((t) => t.dirty);
+    if (dirtyTabs.length > 0) {
+        if (!confirm(`Discard unsaved changes in ${dirtyTabs.length} file(s)?`)) {
+            return;
+        }
+    }
+
+    // Notify LSP about all closing documents
+    const client = getLspClient();
+    if (client?.isInitialized()) {
+        for (const tab of store.tabs) {
+            client.textDocumentDidClose(pathToUri(tab.path));
+        }
+    }
+
+    // Clear all timers
+    for (const timer of changeTimers.values()) {
+        clearTimeout(timer);
+    }
+    changeTimers.clear();
+    documentVersions.clear();
+
+    store.tabs = [];
+    store.activeTabPath = null;
+}
+
+export function hasUnsavedChanges(): boolean {
+    return store.tabs.some((t) => t.dirty);
+}
+
+// --- Pending line jump (for build error → editor navigation) ---
+
+let _pendingJump: { path: string; line: number } | null = null;
+
+export async function openTabAtLine(path: string, line: number) {
+    _pendingJump = { path, line };
+    await openTab(path);
+}
+
+export function consumePendingJump(forPath: string): number | null {
+    if (_pendingJump && _pendingJump.path === forPath) {
+        const line = _pendingJump.line;
+        _pendingJump = null;
+        return line;
+    }
+    return null;
+}

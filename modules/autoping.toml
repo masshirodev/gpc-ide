@@ -1,0 +1,29 @@
+[autoping]
+display_name = "Auto Ping"
+id = "autoping"
+type = "fps"
+description = "Automatically pings when firing while ADS.\nPresses D-pad Up at a configurable interval."
+state_display = "AP"
+status_var = "AutoPingStatus"
+trigger = "if (AutoPingStatus && get_val(PS5_L2) && event_press(PS5_R2)) {\n    combo_run(AutoPing);\n}"
+combo = "combo AutoPing {\n    set_val(AUTOPING_PING_BTN, 100);\n    wait(jitter(50));\n    set_val(AUTOPING_PING_BTN, 0);\n    wait(jitter(AutoPingInterval - 50));\n}"
+
+[[autoping.params]]
+key = "ping_btn"
+prompt = "Ping button"
+type = "button"
+default = "PS5_UP"
+
+[[autoping.options]]
+name = "Status"
+var = "AutoPingStatus"
+type = "toggle"
+default = 0
+
+[[autoping.options]]
+name = "Interval"
+var = "AutoPingInterval"
+type = "value"
+min = 100
+max = 2000
+default = 1000

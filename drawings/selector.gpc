@@ -1,0 +1,10 @@
+
+// ===================== SELECTOR =====================
+// X selector drawn with two diagonal lines
+
+function draw_selector(y) {
+    // Draw X at fixed x position (20-27), variable y
+    // X is 8x8 pixels, matching the scroll indicator width
+    line_oled(20, y, 27, y + 7, 1, OLED_WHITE);
+    line_oled(27, y, 20, y + 7, 1, OLED_WHITE);
+}

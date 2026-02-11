@@ -1,0 +1,12 @@
+@import 'tailwindcss';
+@plugin '@tailwindcss/forms';
+@plugin '@tailwindcss/typography';
+
+html,
+body {
+	height: 100%;
+	margin: 0;
+	overflow: hidden;
+	background-color: #18181b;
+	color: #e4e4e7;
+}

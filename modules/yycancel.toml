@@ -1,0 +1,13 @@
+[yycancel]
+display_name = "YY Cancel"
+id = "yycancel"
+type = "fps"
+description = "Weapon swap cancel by rapidly tapping Triangle while sprinting.\nUsed to cancel sprint animations for faster movement."
+state_display = "YY"
+status_var = "YYCancelStatus"
+trigger = "if (YYCancelStatus && get_val(PS5_L3)) {\n    if (!combo_running(YYCancel)) {\n        combo_run(YYCancel);\n    }\n}\nif (YYCancelStatus && !get_val(PS5_L3) && combo_running(YYCancel)) {\n    combo_stop(YYCancel);\n}"
+combo = "combo YYCancel {\n    set_val(PS5_L3, 100);\n    set_val(PS5_TRIANGLE, 100);\n    wait(jitter(YYDelay));\n    set_val(PS5_TRIANGLE, 0);\n    wait(jitter(YYDelay));\n    set_val(PS5_TRIANGLE, 100);\n    wait(jitter(YYDelay));\n    set_val(PS5_TRIANGLE, 0);\n    wait(jitter(YYDelay));\n    set_val(PS5_TRIANGLE, 100);\n    wait(jitter(YYDelay));\n    set_val(PS5_TRIANGLE, 0);\n    wait(jitter(YYDelay));\n    set_val(PS5_TRIANGLE, 100);\n    wait(jitter(YYDelay));\n    set_val(PS5_TRIANGLE, 0);\n    wait(jitter(YYDelay));\n}"
+options = [
+    { name = "Status", var = "YYCancelStatus", type = "toggle", default = 0 },
+    { name = "Delay", var = "YYDelay", type = "value", min = 20, max = 100, default = 40 },
+]

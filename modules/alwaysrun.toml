@@ -1,0 +1,23 @@
+[alwaysrun]
+display_name = "Always Run"
+id = "alwaysrun"
+type = "all"
+description = "Automatically sprints when pushing the left stick forward past a threshold.\nHolds L3 without needing to click it manually."
+state_display = "ALR"
+status_var = "AlwaysRunStatus"
+trigger = "if (AlwaysRunStatus && get_val(PS5_LY) < -AlwaysRunThreshold) {\n    set_val(PS5_L3, 100);\n}"
+combo = "// Always Run uses direct set_val, no combo needed"
+
+[[alwaysrun.options]]
+name = "Status"
+var = "AlwaysRunStatus"
+type = "toggle"
+default = 0
+
+[[alwaysrun.options]]
+name = "Threshold"
+var = "AlwaysRunThreshold"
+type = "value"
+min = 50
+max = 100
+default = 95

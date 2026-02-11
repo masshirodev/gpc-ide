@@ -1,0 +1,13 @@
+[throwtech]
+display_name = "Throw Tech"
+id = "throwtech"
+type = "fgs"
+description = "Mashes throw tech input during grab windows.\nRapidly presses LP+LK when a modifier is held to escape throws."
+state_display = "TT"
+status_var = "ThrowTechStatus"
+trigger = "if (ThrowTechStatus) {\n    // On opponent grab window, mash throw tech input\n    if (get_val(PS5_L1) || get_val(PS5_L2)) {\n        combo_run(ThrowTech);\n    } else {\n        combo_stop(ThrowTech);\n    }\n}"
+combo = "combo ThrowTech {\n    // Mash LP+LK (throw tech) - adjust buttons per game\n    set_val(PS5_SQUARE, 100);\n    set_val(PS5_CROSS, 100);\n    wait(jitter(ThrowTechSpeed));\n    set_val(PS5_SQUARE, 0);\n    set_val(PS5_CROSS, 0);\n    wait(jitter(ThrowTechSpeed));\n}"
+options = [
+    { name = "Status", var = "ThrowTechStatus", type = "toggle", default = 0 },
+    { name = "Speed", var = "ThrowTechSpeed", type = "value", min = 10, max = 100, default = 30 },
+]

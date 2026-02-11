@@ -1,0 +1,23 @@
+[weapondata]
+display_name = "Weapon Data"
+id = "weapondata"
+type = "fps"
+description = "Dynamic weapon data arrays for per-weapon systems.\nProvides weapon selection, recoil value storage, and GetActiveWeapon() helper."
+state_display = "WPN"
+menu_priority = 1
+trigger = "// Weapon data initialization\nif (!WeaponData_Initialized) {\n    InitializeWeaponData();\n    WeaponData_Initialized = TRUE;\n}"
+combo = "function Weapon_DisplayName(x, y) {\n    print(x, y, OLED_FONT_SMALL, OLED_WHITE, Weapons[CurrentWeapon]);\n}\n\nfunction Weapon_Edit() {\n    if (event_press(RIGHT_BTN)) {\n        CurrentWeapon++;\n        if (CurrentWeapon > WEAPON_MAX_INDEX) { CurrentWeapon = 0; }\n        DrewStates = FALSE;\n    }\n    if (event_press(LEFT_BTN)) {\n        CurrentWeapon--;\n        if (CurrentWeapon < 0) { CurrentWeapon = WEAPON_MAX_INDEX; }\n        DrewStates = FALSE;\n    }\n}\n\nfunction GetActiveWeapon() {\n    return CurrentWeapon;\n}\n\nfunction InitializeWeaponData() {\n    for (weapon_init_idx = 0; weapon_init_idx < WEAPON_COUNT; weapon_init_idx++) {\n        Weapons_RecoilValues[weapon_init_idx * 2] = 0;\n        Weapons_RecoilValues[weapon_init_idx * 2 + 1] = 0;\n    }\n}"
+
+[weapondata.config_menu]
+name = "Weapon"
+type = "custom"
+display_function = "Weapon_DisplayName"
+edit_function = "Weapon_Edit"
+profile_aware = true
+options = []
+
+[weapondata.extra_vars]
+CurrentWeapon = "int [profile]"
+WeaponData_Initialized = "int"
+weapon_init_idx = "int"
+Weapons_RecoilValues = "int [216]"

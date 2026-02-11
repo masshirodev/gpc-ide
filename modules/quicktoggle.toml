@@ -1,0 +1,9 @@
+[quicktoggle]
+display_name = "Quick Toggle"
+id = "quicktoggle"
+type = "fps"
+description = "Utility module providing a DoubleTab helper function.\nReturns TRUE on a second button press within 300ms for quick feature toggling."
+state_display = "QT"
+trigger = "// Quick Toggle: per-game button config in main.gpc or adapters.gpc\n// Usage: if (get_val(MENU_MOD_BTN) && DoubleTab(PS5_UP)) { FeatureStatus = !FeatureStatus; _Save(); }"
+combo = "// DoubleTab helper: returns TRUE on second press within 300ms\nfunction DoubleTab(button) {\n    if (event_press(button) && get_brtime(button) < 300) return TRUE;\n    return 0;\n}"
+options = []

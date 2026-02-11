@@ -1,0 +1,26 @@
+[antiafk]
+display_name = "Anti AFK"
+id = "antiafk"
+type = "all"
+description = "Prevents AFK kicks by moving the character after an idle timeout.\nNudges the left stick forward and back when no input is detected."
+state_display = "AFK"
+status_var = "AntiAfkStatus"
+trigger = "if (AntiAfkStatus) {\n    if (abs(get_val(PS5_LX)) > 10 || abs(get_val(PS5_LY)) > 10 ||\n        abs(get_val(PS5_RX)) > 10 || abs(get_val(PS5_RY)) > 10) {\n        AntiAfkTimer = 0;\n    } else {\n        AntiAfkTimer = AntiAfkTimer + get_rtime();\n        if (AntiAfkTimer >= AntiAfkTimeout) {\n            combo_run(AntiAfk);\n            AntiAfkTimer = 0;\n        }\n    }\n}"
+combo = "combo AntiAfk {\n    set_val(PS5_LY, -30);\n    wait(jitter(2000));\n    set_val(PS5_LY, 30);\n    wait(jitter(2000));\n    set_val(PS5_LY, 0);\n    wait(jitter(1000));\n}"
+
+[[antiafk.options]]
+name = "Status"
+var = "AntiAfkStatus"
+type = "toggle"
+default = 0
+
+[[antiafk.options]]
+name = "Timeout"
+var = "AntiAfkTimeout"
+type = "value"
+min = 10000
+max = 120000
+default = 60000
+
+[antiafk.extra_vars]
+AntiAfkTimer = "int"

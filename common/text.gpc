@@ -1,0 +1,11 @@
+
+// ===================== COMMON TEXT =====================
+
+const string CommonText[] = {
+  "",         // 0: On
+  "",         // 1: Off
+  "",         // 2: Page indicator
+  "Auto",     // 3: Automatic mode
+  "N/A",      // 4: Not available
+  " (A)"      // 5: Auto indicator
+};

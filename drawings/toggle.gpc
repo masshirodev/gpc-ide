@@ -1,0 +1,11 @@
+
+function drawing_toggle(x, y, state) {
+    // Draw toggle box: outlined if false, filled if true
+    if (state) {
+        // Filled box for enabled/true
+        rect_oled(x, y, 8, 8, 1, OLED_WHITE);
+    } else {
+        // Outlined box for disabled/false
+        rect_oled(x, y, 8, 8, 0, OLED_WHITE);
+    }
+}

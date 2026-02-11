@@ -1,0 +1,63 @@
+
+// ===================== SCROLL =====================
+// Scroll bar visualization with dynamic page support
+
+#include "../drawings/scroll_outer.gpc"
+#include "../drawings/scroll_current.gpc"
+#include "../drawings/selector.gpc"
+
+// Draw scroll bar with current page indicator
+function draw_scroll(page) {
+    drawing_scroll_outer();
+    drawing_scroll_current(page);
+}
+
+// Calculate scroll position based on current page and total pages
+// Maps page (0 to max_page-1) to position (0 to 5)
+// Returns -1 when there's only one page (no pagination needed) to draw filled bar
+function get_scroll_position(page, max_page) {
+    if (max_page <= 1) {
+        return -1;  // Draw entire scroll bar filled (no pagination)
+    }
+    if (max_page == 2) {
+        // 2 pages: position 0 or 5
+        if (page == 0) return 0;
+        return 5;
+    }
+    if (max_page == 3) {
+        // 3 pages: positions 0, 2, 5
+        if (page == 0) return 0;
+        if (page == 1) return 2;
+        return 5;
+    }
+    if (max_page == 4) {
+        // 4 pages: positions 0, 1, 3, 5
+        if (page == 0) return 0;
+        if (page == 1) return 1;
+        if (page == 2) return 3;
+        return 5;
+    }
+    if (max_page == 5) {
+        // 5 pages: positions 0, 1, 2, 3, 5
+        if (page == 0) return 0;
+        if (page == 1) return 1;
+        if (page == 2) return 2;
+        if (page == 3) return 3;
+        return 5;
+    }
+    // 6+ pages: direct mapping (capped at 5)
+    if (page >= 5) return 5;
+    return page;
+}
+
+// Draw scroll bar with dynamic positioning based on total pages
+function draw_scroll_dynamic(page, max_page) {
+    drawing_scroll_outer();
+    drawing_scroll_current(get_scroll_position(page, max_page));
+}
+
+// X selector for menus (new visual - y positions: 12, 28, 44)
+// Draws X at specified y position
+function XSelect(y) {
+    draw_selector(y);
+}

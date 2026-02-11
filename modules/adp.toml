@@ -1,0 +1,24 @@
+[adp]
+display_name = "Weapon Detection"
+id = "adp"
+type = "fps"
+description = "Automatic weapon detection using PS5 adaptive trigger signatures.\nDetects the active weapon via ADT values and updates the weapon index."
+state_display = "WPN"
+menu_priority = 0
+needs_weapondata = true
+trigger = "// ADP weapon detection (runs every cycle when in Auto mode)\nCheckADPWeapon();"
+combo = "define ADP_DETECT_DELAY = 10;\n\nconst string WaitingText[] = {\"Waiting...\"};\n\nfunction Weapon_DisplayName(x, y) {\n    if (CurrentWeapon == 0) {\n        if (ADP_DetectedWeapon == 0) {\n            print(x, y, OLED_FONT_SMALL, OLED_WHITE, WaitingText[0]);\n        } else {\n            print(x, y, OLED_FONT_SMALL, OLED_WHITE, Weapons[ADP_DetectedWeapon]);\n        }\n    } else {\n        print(x, y, OLED_FONT_SMALL, OLED_WHITE, Weapons[CurrentWeapon]);\n    }\n}\n\nfunction Weapon_Edit() {\n    if (event_press(RIGHT_BTN)) {\n        CurrentWeapon++;\n        if (CurrentWeapon > WEAPON_MAX_INDEX) { CurrentWeapon = 0; }\n        DrewStates = FALSE;\n    }\n    if (event_press(LEFT_BTN)) {\n        CurrentWeapon--;\n        if (CurrentWeapon < 0) { CurrentWeapon = WEAPON_MAX_INDEX; }\n        DrewStates = FALSE;\n    }\n}\n\nfunction CheckADPWeapon() {\n    if (CurrentWeapon != 0) {\n        ADP_DetectTimer = 0;\n        ADP_LastDetected = -1;\n        return;\n    }\n\n    if (get_adt(PS5_R2, PS5_ADT_MODE) == PS5_ADT_OFF) {\n        return;\n    }\n\n    detected = -1;\n\n    // INJECT_ADP_CHECKS_HERE\n\n    if (detected > 0) {\n        if (detected == ADP_LastDetected) {\n            ADP_DetectTimer++;\n            if (ADP_DetectTimer >= ADP_DETECT_DELAY) {\n                ADP_DetectedWeapon = detected;\n                DrewStates = FALSE;\n            }\n        } else {\n            ADP_LastDetected = detected;\n            ADP_DetectTimer = 0;\n        }\n    }\n}\n\nfunction GetActiveWeapon() {\n    if (CurrentWeapon == 0) {\n        return ADP_DetectedWeapon;\n    }\n    return CurrentWeapon;\n}"
+
+[adp.config_menu]
+name = "Weapon"
+type = "custom"
+display_function = "Weapon_DisplayName"
+edit_function = "Weapon_Edit"
+profile_aware = true
+
+[adp.extra_vars]
+CurrentWeapon = "int [profile]"
+ADP_DetectedWeapon = "int"
+ADP_DetectTimer = "int"
+ADP_LastDetected = "int"
+detected = "int"

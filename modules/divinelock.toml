@@ -1,0 +1,31 @@
+[divinelock]
+display_name = "Divine Lock"
+id = "divinelock"
+type = "fps"
+description = "Pulse ADS trigger to maintain aim lock-on.\nHolds L2 for a duration then briefly releases to re-engage lock-on."
+state_display = "DL"
+status_var = "DivineLockStatus"
+trigger = "if (DivineLockStatus && get_val(PS5_L2) > 50) {\n    combo_run(DivineLock);\n} else {\n    combo_stop(DivineLock);\n}"
+combo = "combo DivineLock {\n    set_val(PS5_L2, 100);\n    wait(jitter(DivineLockHold));\n    set_val(PS5_L2, 0);\n    wait(jitter(DivineLockWait));\n}"
+
+[[divinelock.options]]
+name = "Status"
+var = "DivineLockStatus"
+type = "toggle"
+default = 0
+
+[[divinelock.options]]
+name = "Hold"
+var = "DivineLockHold"
+type = "value"
+min = 100
+max = 2000
+default = 1000
+
+[[divinelock.options]]
+name = "Wait"
+var = "DivineLockWait"
+type = "value"
+min = 1
+max = 50
+default = 7

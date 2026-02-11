@@ -1,0 +1,25 @@
+[autorunkb]
+display_name = "Auto Run KB"
+id = "autorunkb"
+type = "all"
+description = "Holds forward (W) when a keybind is pressed.\nStops when any WASD key is pressed. Designed for keyboard setups."
+state_display = "ARK"
+status_var = "AutoRunKBStatus"
+trigger = "if (AutoRunKBStatus) {\n    if (GetKeyboardKey(AUTORUNKB_ACTIVATE_KEY)) {\n        AutoRunKBActive = 1;\n    }\n    if (AutoRunKBActive) {\n        if (GetKeyboardKey(KEY_W) || GetKeyboardKey(KEY_A) ||\n            GetKeyboardKey(KEY_S) || GetKeyboardKey(KEY_D)) {\n            AutoRunKBActive = 0;\n        } else {\n            set_val(PS5_LY, -100);\n        }\n    }\n}"
+
+combo = "// Auto Run KB uses direct set_val, no combo needed"
+
+[[autorunkb.params]]
+key = "activate_key"
+prompt = "Activate key (keyboard)"
+type = "key"
+default = "KEY_G"
+
+[[autorunkb.options]]
+name = "Status"
+var = "AutoRunKBStatus"
+type = "toggle"
+default = 0
+
+[autorunkb.extra_vars]
+AutoRunKBActive = "int"

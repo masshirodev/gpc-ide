@@ -1,0 +1,17 @@
+[turbo]
+display_name = "Turbo"
+id = "turbo"
+type = "fgs"
+description = "Rapid button press on hold for any configurable button.\nToggles the selected button on/off at a configurable speed."
+state_display = "TB"
+status_var = "TurboStatus"
+trigger = "if (TurboStatus && get_val(TurboButton)) {\n    combo_run(TurboPress);\n} else {\n    combo_stop(TurboPress);\n}"
+combo = "combo TurboPress {\n    TurboActualSpeed = TurboSpeed * 10;\n    set_val(TurboButton, 100);\n    wait(TurboActualSpeed);\n    set_val(TurboButton, 0);\n    wait(TurboActualSpeed);\n}"
+options = [
+    { name = "Status", var = "TurboStatus", type = "toggle", default = 0 },
+    { name = "Button", var = "TurboButton", type = "value", min = 0, max = 17, default = 4 },
+    { name = "Speed", var = "TurboSpeed", type = "value", min = 1, max = 10, default = 3 },
+]
+
+[turbo.extra_vars]
+TurboActualSpeed = "int"
