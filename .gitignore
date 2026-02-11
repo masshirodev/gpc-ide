@@ -1,0 +1,30 @@
+# Dependencies
+node_modules/
+
+# Build output
+Dist/
+build/
+.svelte-kit/
+
+# Rust / Tauri
+src-tauri/target/
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Env
+.env
+.env.*
+
+# Logs
+*.log
+
+# Lock files (keep package-lock.json, ignore yarn.lock)
+yarn.lock
