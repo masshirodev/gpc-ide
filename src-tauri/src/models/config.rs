@@ -7,6 +7,8 @@ pub struct GameConfig {
     pub filename: String,
     pub version: u32,
     #[serde(default)]
+    pub name: Option<String>,
+    #[serde(default)]
     pub r#type: Option<String>,
     #[serde(default)]
     pub profile_count: Option<u32>,

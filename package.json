@@ -46,6 +46,9 @@
 	},
 	"dependencies": {
 		"@tauri-apps/api": "^2.10.1",
+		"@tauri-apps/cli": "^2.10.0",
+		"@tauri-apps/plugin-dialog": "^2.6.0",
+		"@tauri-apps/plugin-opener": "^2.5.3",
 		"monaco-editor": "^0.55.1"
 	}
 }

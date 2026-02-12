@@ -8,6 +8,7 @@ export interface ModuleSummary {
 	option_count: number;
 	conflicts: string[];
 	needs_weapondata: boolean;
+	is_user_module: boolean;
 }
 
 export interface ModuleDefinition {

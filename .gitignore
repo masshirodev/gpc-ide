@@ -28,3 +28,7 @@ Thumbs.db
 
 # Lock files (keep package-lock.json, ignore yarn.lock)
 yarn.lock
+
+# Claude
+.claude/
+CLAUDE.md

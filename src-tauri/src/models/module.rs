@@ -36,6 +36,8 @@ pub struct ModuleDefinition {
     pub requires_keyboard_file: Option<bool>,
     #[serde(default)]
     pub config_menu: Option<ConfigMenu>,
+    #[serde(default)]
+    pub is_user_module: bool,
 }
 
 /// Custom menu configuration for data modules (weapondata, adp)
@@ -87,6 +89,7 @@ pub struct ModuleSummary {
     pub option_count: usize,
     pub conflicts: Vec<String>,
     pub needs_weapondata: bool,
+    pub is_user_module: bool,
 }
 
 impl ModuleDefinition {
@@ -101,6 +104,7 @@ impl ModuleDefinition {
             option_count: self.options.len(),
             conflicts: self.conflicts.clone(),
             needs_weapondata: self.needs_weapondata.unwrap_or(false),
+            is_user_module: self.is_user_module,
         }
     }
 }

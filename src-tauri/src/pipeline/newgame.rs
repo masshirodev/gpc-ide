@@ -10,6 +10,8 @@ use std::path::{Path, PathBuf};
 #[derive(Debug, Clone, serde::Deserialize)]
 pub struct CreateGameParams {
     pub name: String,
+    pub display_name: Option<String>,
+    pub username: Option<String>,
     pub game_type: String,
     pub version: u32,
     pub profiles: u32,
@@ -92,6 +94,8 @@ pub fn create_game(
     // Build config
     let config = NewGameConfig {
         name: game_basename(&params.name),
+        display_name: params.display_name.clone(),
+        username: params.username.clone(),
         game_type: params.game_type.clone(),
         version: params.version,
         profiles: params.profiles,

@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { getSettings, updateSettings, resetSettings, addWorkspace, removeWorkspace } from '$lib/stores/settings.svelte';
+    import { getSettings, updateSettings, resetSettings, addWorkspace, removeWorkspace, addGameType, removeGameType, getAllGameTypes } from '$lib/stores/settings.svelte';
     import { themes } from '$lib/config/themes';
     import { pickWorkspaceDirectory, getDefaultWorkspace } from '$lib/tauri/commands';
 
@@ -43,6 +43,15 @@
         const defaultPath = await getDefaultWorkspace();
         addWorkspace(defaultPath);
     }
+
+    let newGameType = $state('');
+
+    function handleAddGameType() {
+        if (newGameType.trim()) {
+            addGameType(newGameType.trim());
+            newGameType = '';
+        }
+    }
 </script>
 
 <svelte:window onkeydown={open ? handleKeydown : undefined} />
@@ -68,7 +77,30 @@
             </div>
 
             <!-- Body -->
-            <div class="space-y-5 px-5 py-4">
+            <div class="space-y-5 px-5 py-4" style="max-height: 70vh; overflow-y: auto;">
+                <!-- Username Section -->
+                <div>
+                    <h3 class="mb-2 text-sm font-medium text-zinc-300">Profile</h3>
+                    <div class="space-y-3">
+                        <div>
+                            <label class="mb-1 block text-xs text-zinc-400" for="username">
+                                Username
+                            </label>
+                            <input
+                                id="username"
+                                type="text"
+                                class="w-full rounded border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-sm text-zinc-200 placeholder-zinc-500 focus:border-emerald-500 focus:outline-none"
+                                placeholder="e.g. Mash"
+                                value={settings.username}
+                                oninput={(e) => updateSettings({ username: (e.target as HTMLInputElement).value })}
+                            />
+                            <p class="mt-1 text-xs text-zinc-500">
+                                Used in the default filename for new game scripts (e.g. Mash-GameName-v1).
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- LSP Section -->
                 <div>
                     <h3 class="mb-2 text-sm font-medium text-zinc-300">Language Server</h3>
@@ -143,6 +175,52 @@
                             </svg>
                             Add Workspace Directory
                         </button>
+                    </div>
+                </div>
+
+                <!-- Game Types Section -->
+                <div>
+                    <h3 class="mb-2 text-sm font-medium text-zinc-300">Custom Game Types</h3>
+                    <div class="space-y-2">
+                        <p class="text-xs text-zinc-500">
+                            Add custom game types beyond the built-in FPS, TPS, and FGS.
+                        </p>
+
+                        {#if settings.customGameTypes.length > 0}
+                            <div class="flex flex-wrap gap-1.5">
+                                {#each settings.customGameTypes as type}
+                                    <span class="flex items-center gap-1 rounded bg-zinc-800 px-2 py-1 text-xs text-zinc-300">
+                                        {type.toUpperCase()}
+                                        <button
+                                            class="ml-0.5 text-zinc-500 hover:text-red-400"
+                                            onclick={() => removeGameType(type)}
+                                            title="Remove type"
+                                        >
+                                            <svg class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
+                                                <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
+                                            </svg>
+                                        </button>
+                                    </span>
+                                {/each}
+                            </div>
+                        {/if}
+
+                        <div class="flex gap-2">
+                            <input
+                                type="text"
+                                class="flex-1 rounded border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-sm text-zinc-200 placeholder-zinc-500 focus:border-emerald-500 focus:outline-none"
+                                placeholder="e.g. racing"
+                                bind:value={newGameType}
+                                onkeydown={(e) => { if (e.key === 'Enter') handleAddGameType(); }}
+                            />
+                            <button
+                                class="rounded border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-xs text-zinc-300 hover:border-emerald-500 hover:bg-zinc-700 disabled:opacity-50"
+                                onclick={handleAddGameType}
+                                disabled={!newGameType.trim()}
+                            >
+                                Add
+                            </button>
+                        </div>
                     </div>
                 </div>
 

@@ -3,6 +3,7 @@
     import type { ModuleSummary } from '$lib/types/module';
     import type { AddModuleParams } from '$lib/tauri/commands';
     import { addToast } from '$lib/stores/toast.svelte';
+    import { getSettings } from '$lib/stores/settings.svelte';
 
     interface Props {
         open: boolean;
@@ -12,6 +13,9 @@
     }
 
     let { open, gamePath, onclose, onsuccess }: Props = $props();
+
+    let settingsStore = getSettings();
+    let settings = $derived($settingsStore);
 
     let modules = $state<ModuleSummary[]>([]);
     let selectedModule = $state<string>('');
@@ -36,7 +40,7 @@
             gameType = config.type || 'fps';
 
             // Load available modules (filters out already installed ones)
-            modules = await listAvailableModules(gamePath);
+            modules = await listAvailableModules(gamePath, settings.workspaces);
         } catch (e) {
             error = e instanceof Error ? e.message : String(e);
         }

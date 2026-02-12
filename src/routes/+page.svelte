@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { getGameStore, gamesByType } from '$lib/stores/game.svelte';
+    import { getGameStore, gamesByType, loadGames, clearSelection } from '$lib/stores/game.svelte';
     import { selectGame } from '$lib/stores/game.svelte';
     import {
         getEditorStore,
@@ -10,12 +10,14 @@
         activateTab,
         updateTabContent,
         saveTab,
-        closeAllTabs
+        closeAllTabs,
+        reloadTab,
+        getTab
     } from '$lib/stores/editor.svelte';
     import { getUiStore, setSidebarCollapsed } from '$lib/stores/ui.svelte';
     import { getLspStore, startLsp, stopLsp, getLspClient } from '$lib/stores/lsp.svelte';
     import { MonacoLspBridge } from '$lib/lsp/MonacoLspBridge';
-    import { buildGame, readFileTree, readFile, watchDirectory, deleteFile, regenerateFile } from '$lib/tauri/commands';
+    import { buildGame, readFileTree, readFile, watchDirectory, deleteFile, deleteGame, regenerateFile, regenerateAll, openInDefaultApp } from '$lib/tauri/commands';
     import { onFileChange } from '$lib/tauri/events';
     import type { BuildResult, FileTreeEntry } from '$lib/tauri/commands';
     import type { UnlistenFn } from '@tauri-apps/api/event';
@@ -27,7 +29,10 @@
     import AddModuleModal from '$lib/components/modals/AddModuleModal.svelte';
     import NewFileModal from '$lib/components/modals/NewFileModal.svelte';
     import TemplateImportModal from '$lib/components/modals/TemplateImportModal.svelte';
+    import ConfirmDialog from '$lib/components/modals/ConfirmDialog.svelte';
+    import CreateModuleModal from '$lib/components/modals/CreateModuleModal.svelte';
     import { addToast } from '$lib/stores/toast.svelte';
+    import { getSettings } from '$lib/stores/settings.svelte';
     import {
         getRecoilTransfer,
         clearRecoilTransfer
@@ -43,6 +48,8 @@
     let editorStore = getEditorStore();
     let ui = getUiStore();
     let lspStore = getLspStore();
+    let settingsStore = getSettings();
+    let settings = $derived($settingsStore);
     let grouped = $derived(gamesByType(store.games));
     let types = $derived(Object.keys(grouped).sort());
     let totalGames = $derived(store.games.length);
@@ -52,6 +59,7 @@
 
     // Build state
     let building = $state(false);
+    let regeneratingAll = $state(false);
     let buildResult = $state<BuildResult | null>(null);
     let buildOutputContent = $state<string | null>(null);
     let buildOutputLoading = $state(false);
@@ -60,6 +68,52 @@
     let showAddModuleModal = $state(false);
     let showNewFileModal = $state(false);
     let showTemplateImportModal = $state(false);
+    let showCreateModuleModal = $state(false);
+
+    // Confirm dialog state
+    let confirmDialog = $state<{
+        open: boolean;
+        title: string;
+        message: string;
+        confirmLabel: string;
+        variant: 'danger' | 'warning' | 'info';
+        onconfirm: () => void;
+    }>({
+        open: false,
+        title: '',
+        message: '',
+        confirmLabel: 'Confirm',
+        variant: 'info',
+        onconfirm: () => {}
+    });
+
+    function showConfirm(opts: {
+        title: string;
+        message: string;
+        confirmLabel?: string;
+        variant?: 'danger' | 'warning' | 'info';
+    }): Promise<boolean> {
+        return new Promise((resolve) => {
+            confirmDialog = {
+                open: true,
+                title: opts.title,
+                message: opts.message,
+                confirmLabel: opts.confirmLabel ?? 'Confirm',
+                variant: opts.variant ?? 'info',
+                onconfirm: () => {
+                    confirmDialog.open = false;
+                    resolve(true);
+                }
+            };
+            // Store resolve for cancel path
+            confirmDialogCancel = () => {
+                confirmDialog.open = false;
+                resolve(false);
+            };
+        });
+    }
+
+    let confirmDialogCancel = $state<() => void>(() => {});
 
     // File tree state
     let fileTree = $state<FileTreeEntry[]>([]);
@@ -80,7 +134,7 @@
 
     onMount(() => {
         const setupWatcher = async () => {
-            fsUnlisten = await onFileChange(() => {
+            fsUnlisten = await onFileChange((event) => {
                 // Debounce file tree refresh (500ms)
                 if (fsRefreshTimer) clearTimeout(fsRefreshTimer);
                 fsRefreshTimer = setTimeout(() => {
@@ -88,6 +142,29 @@
                         refreshFileTree(store.selectedGame.path);
                     }
                 }, 500);
+
+                // Auto-reload open tabs when files are modified externally
+                if (event.kind === 'modify' && event.paths) {
+                    for (const changedPath of event.paths) {
+                        const tab = getTab(changedPath);
+                        if (tab) {
+                            if (tab.dirty) {
+                                // Tab has local changes — ask user
+                                showConfirm({
+                                    title: 'File Changed',
+                                    message: `"${tab.name}" was modified externally. Reload and discard local changes?`,
+                                    confirmLabel: 'Reload',
+                                    variant: 'warning'
+                                }).then((confirmed) => {
+                                    if (confirmed) reloadTab(changedPath);
+                                });
+                            } else {
+                                // No local changes — reload silently
+                                reloadTab(changedPath);
+                            }
+                        }
+                    }
+                }
             });
         };
         setupWatcher();
@@ -161,6 +238,25 @@
             expandedDirs = new Set(fileTree.filter((e) => e.is_dir).map((e) => e.path));
         } catch (e) {
             console.error('Failed to load file tree:', e);
+        }
+    }
+
+    async function handleRegenerateAll() {
+        if (!store.selectedGame || regeneratingAll) return;
+
+        const confirmed = await showConfirm({ title: 'Regenerate', message: 'Regenerate all generated files? Any custom changes to module files, core.gpc, and main.gpc will be lost.', confirmLabel: 'Regenerate', variant: 'warning' });
+        if (!confirmed) return;
+
+        regeneratingAll = true;
+        try {
+            const files = await regenerateAll(store.selectedGame.path);
+            addToast(`Regenerated ${files.length} file(s)`, 'success');
+            await loadFileTree(store.selectedGame.path);
+        } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e);
+            addToast(`Regenerate failed: ${msg}`, 'error');
+        } finally {
+            regeneratingAll = false;
         }
     }
 
@@ -238,7 +334,7 @@
     async function handleDeleteFile(e: MouseEvent, path: string) {
         e.stopPropagation();
 
-        if (!confirm(`Are you sure you want to delete ${path.split('/').pop()}?`)) {
+        if (!await showConfirm({ title: 'Delete File', message: `Are you sure you want to delete ${path.split('/').pop()}?`, confirmLabel: 'Delete', variant: 'danger' })) {
             return;
         }
 
@@ -252,6 +348,23 @@
             closeTab(path);
         } catch (e) {
             addToast(`Failed to delete file: ${e}`, 'error');
+        }
+    }
+
+    async function handleDeleteGameFromDashboard(e: MouseEvent, game: import('$lib/types/config').GameSummary) {
+        e.stopPropagation();
+        if (!await showConfirm({ title: 'Delete Game', message: `Delete "${game.name}"? This will permanently delete all files in the game directory.`, confirmLabel: 'Delete', variant: 'danger' })) {
+            return;
+        }
+        try {
+            await deleteGame(game.path);
+            if (store.selectedGame?.path === game.path) {
+                clearSelection();
+            }
+            await loadGames(settings.workspaces);
+            addToast(`Game "${game.name}" deleted`, 'success');
+        } catch (e) {
+            addToast(`Failed to delete game: ${e}`, 'error');
         }
     }
 
@@ -274,7 +387,7 @@
     async function handleRegenerateFile() {
         if (!currentEditorTab || !store.selectedGame || regenerating) return;
 
-        const confirmed = confirm('Regenerate this file? Any custom changes will be lost.');
+        const confirmed = await showConfirm({ title: 'Regenerate', message: 'Regenerate this file? Any custom changes will be lost.', confirmLabel: 'Regenerate', variant: 'warning' });
         if (!confirmed) return;
 
         try {
@@ -405,6 +518,26 @@
         }
     }
 
+    async function handleOpenExternal() {
+        if (!currentEditorTab) return;
+        try {
+            await openInDefaultApp(currentEditorTab.path);
+        } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e);
+            addToast(`Failed to open external editor: ${msg}`, 'error');
+        }
+    }
+
+    async function handleCopyBuildOutput() {
+        if (!buildOutputContent) return;
+        try {
+            await navigator.clipboard.writeText(buildOutputContent);
+            addToast('Build output copied to clipboard', 'success');
+        } catch {
+            addToast('Failed to copy to clipboard', 'error');
+        }
+    }
+
     function handleKeydown(e: KeyboardEvent) {
         if ((e.ctrlKey || e.metaKey) && e.key === 's') {
             e.preventDefault();
@@ -499,12 +632,20 @@
                         <h2 class="text-sm font-semibold uppercase tracking-wider text-zinc-400">
                             Menu Items ({store.selectedConfig.menu.length})
                         </h2>
-                        <button
-                            class="rounded bg-emerald-600 px-3 py-1 text-xs font-medium text-white hover:bg-emerald-500"
-                            onclick={() => showAddModuleModal = true}
-                        >
-                            + Add Module
-                        </button>
+                        <div class="flex gap-2">
+                            <button
+                                class="rounded bg-emerald-600 px-3 py-1 text-xs font-medium text-white hover:bg-emerald-500"
+                                onclick={() => showAddModuleModal = true}
+                            >
+                                + Add Module
+                            </button>
+                            <button
+                                class="rounded border border-zinc-600 bg-zinc-800 px-3 py-1 text-xs font-medium text-zinc-300 hover:bg-zinc-700"
+                                onclick={() => showCreateModuleModal = true}
+                            >
+                                Create Module
+                            </button>
+                        </div>
                     </div>
                     <div class="space-y-2">
                         {#each store.selectedConfig.menu as item}
@@ -727,6 +868,7 @@
                                     <button
                                         class="group flex shrink-0 items-center gap-1.5 border-r border-zinc-800 px-3 py-1.5 text-xs transition-colors {editorStore.activeTabPath === tab.path ? 'bg-zinc-950 text-zinc-200' : 'bg-zinc-900/50 text-zinc-500 hover:text-zinc-300'}"
                                         onclick={() => activateTab(tab.path)}
+                                        onauxclick={(e) => { if (e.button === 1) { e.preventDefault(); handleCloseTab(e, tab.path); } }}
                                     >
                                         <span>{tab.name}</span>
                                         {#if tab.dirty}
@@ -744,7 +886,18 @@
                                     </button>
                                 {/each}
                             </div>
-                            <div class="flex shrink-0 gap-2 px-2">
+                            <div class="flex shrink-0 items-center gap-2 px-2">
+                                {#if currentEditorTab}
+                                    <button
+                                        class="p-1.5 text-zinc-500 hover:text-zinc-300 transition-colors"
+                                        onclick={handleOpenExternal}
+                                        title="Open in external editor"
+                                    >
+                                        <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                        </svg>
+                                    </button>
+                                {/if}
                                 {#if currentEditorTab && canRegenerateFile(currentEditorTab.path)}
                                     <button
                                         class="px-3 py-1.5 text-xs text-blue-400 hover:text-blue-300 disabled:opacity-50"
@@ -853,7 +1006,14 @@
             <div class="space-y-4">
                 <div class="flex items-center gap-3">
                     <button
-                        class="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50"
+                        class="rounded border border-zinc-700 px-4 py-2 text-sm font-medium text-zinc-300 hover:bg-zinc-800 disabled:opacity-50"
+                        onclick={handleRegenerateAll}
+                        disabled={regeneratingAll}
+                    >
+                        {regeneratingAll ? 'Regenerating...' : 'Regenerate'}
+                    </button>
+                    <button
+                        class="rounded bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
                         onclick={handleBuild}
                         disabled={building}
                     >
@@ -913,9 +1073,21 @@
                                 <span class="text-xs text-zinc-400">
                                     {buildResult.output_path.split('/').pop()}
                                 </span>
-                                <span class="text-xs text-zinc-600">
-                                    {buildOutputContent.split('\n').length} lines
-                                </span>
+                                <div class="flex items-center gap-3">
+                                    <span class="text-xs text-zinc-600">
+                                        {buildOutputContent.split('\n').length} lines
+                                    </span>
+                                    <button
+                                        class="flex items-center gap-1 rounded border border-zinc-700 px-2 py-0.5 text-xs text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200 transition-colors"
+                                        onclick={handleCopyBuildOutput}
+                                        title="Copy to clipboard"
+                                    >
+                                        <svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                        </svg>
+                                        Copy
+                                    </button>
+                                </div>
                             </div>
                             <div style="height: calc(100vh - 380px);">
                                 <MonacoEditor
@@ -990,21 +1162,32 @@
                         </h2>
                         <div class="grid gap-2">
                             {#each grouped[type] as game}
-                                <button
-                                    class="flex items-center justify-between rounded-lg border border-zinc-800 bg-zinc-900 p-3 text-left transition-colors hover:border-zinc-700 hover:bg-zinc-800"
-                                    onclick={() => selectGame(game)}
-                                >
-                                    <div>
-                                        <div class="font-medium text-zinc-200">{game.name}</div>
-                                        <div class="text-xs text-zinc-500">{game.title}</div>
-                                    </div>
-                                    <div class="flex items-center gap-3">
-                                        <span class="rounded bg-zinc-800 px-1.5 py-0.5 text-xs uppercase text-zinc-400">
-                                            {game.game_type}
-                                        </span>
-                                        <span class="text-sm text-zinc-500">{game.module_count} items</span>
-                                    </div>
-                                </button>
+                                <div class="group flex items-center justify-between rounded-lg border border-zinc-800 bg-zinc-900 p-3 text-left transition-colors hover:border-zinc-700 hover:bg-zinc-800">
+                                    <button
+                                        class="flex flex-1 items-center justify-between"
+                                        onclick={() => selectGame(game)}
+                                    >
+                                        <div>
+                                            <div class="font-medium text-zinc-200">{game.name}</div>
+                                            <div class="text-xs text-zinc-500">{game.title}</div>
+                                        </div>
+                                        <div class="flex items-center gap-3">
+                                            <span class="rounded bg-zinc-800 px-1.5 py-0.5 text-xs uppercase text-zinc-400">
+                                                {game.game_type}
+                                            </span>
+                                            <span class="text-sm text-zinc-500">{game.module_count} items</span>
+                                        </div>
+                                    </button>
+                                    <button
+                                        class="ml-2 rounded p-1.5 text-zinc-600 opacity-0 hover:bg-zinc-700 hover:text-red-400 group-hover:opacity-100"
+                                        onclick={(e) => handleDeleteGameFromDashboard(e, game)}
+                                        title="Delete game"
+                                    >
+                                        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                        </svg>
+                                    </button>
+                                </div>
                             {/each}
                         </div>
                     </div>
@@ -1051,3 +1234,21 @@
         }}
     />
 {/if}
+
+<CreateModuleModal
+    open={showCreateModuleModal}
+    onclose={() => showCreateModuleModal = false}
+    onsuccess={() => {
+        addToast('User module created. You can now add it to games.', 'success');
+    }}
+/>
+
+<ConfirmDialog
+    open={confirmDialog.open}
+    title={confirmDialog.title}
+    message={confirmDialog.message}
+    confirmLabel={confirmDialog.confirmLabel}
+    variant={confirmDialog.variant}
+    onconfirm={confirmDialog.onconfirm}
+    oncancel={confirmDialogCancel}
+/>

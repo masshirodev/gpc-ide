@@ -5,6 +5,8 @@ use std::fmt::Write;
 /// Parameters for generating a new game's config.toml
 pub struct NewGameConfig {
     pub name: String,
+    pub display_name: Option<String>,
+    pub username: Option<String>,
     pub game_type: String,
     pub version: u32,
     pub profiles: u32,
@@ -27,7 +29,11 @@ pub fn generate_config_toml(cfg: &NewGameConfig) -> String {
     )
     .unwrap();
     writeln!(out).unwrap();
-    writeln!(out, "filename = \"Mash-{}-v\"", cfg.name).unwrap();
+    if let Some(ref display_name) = cfg.display_name {
+        writeln!(out, "name = \"{}\"", display_name).unwrap();
+    }
+    let filename = build_filename(cfg.username.as_deref(), &cfg.name);
+    writeln!(out, "filename = \"{}\"", filename).unwrap();
     writeln!(out, "version = {}", cfg.version).unwrap();
     writeln!(out, "type = \"{}\"", cfg.game_type).unwrap();
     writeln!(out, "profile_count = {}", cfg.profiles).unwrap();
@@ -51,10 +57,11 @@ pub fn generate_config_toml(cfg: &NewGameConfig) -> String {
     // State screen
     writeln!(out).unwrap();
     writeln!(out, "[state_screen]").unwrap();
+    let title_name = cfg.display_name.as_deref().unwrap_or(&cfg.name);
     writeln!(
         out,
-        "title = \"{} v{}\"",
-        cfg.name, cfg.version
+        "title = \"{}-v{}\"",
+        title_name, cfg.version
     )
     .unwrap();
 
@@ -241,6 +248,25 @@ fn format_toml_value(val: &serde_json::Value) -> String {
         serde_json::Value::Bool(b) => b.to_string(),
         serde_json::Value::String(s) => format!("\"{}\"", s),
         _ => val.to_string(),
+    }
+}
+
+/// Normalize a string for safe use in filenames: keep alphanumeric, replace spaces/unsafe chars
+fn normalize_for_filename(s: &str) -> String {
+    s.chars()
+        .filter(|c| c.is_alphanumeric() || *c == '-' || *c == '_')
+        .collect()
+}
+
+/// Build the filename prefix: "{username}-{game}-v" or "{game}-v" if no username
+fn build_filename(username: Option<&str>, game_name: &str) -> String {
+    let normalized_game = normalize_for_filename(game_name);
+    match username {
+        Some(u) if !u.trim().is_empty() => {
+            let normalized_user = normalize_for_filename(u);
+            format!("{}-{}-v", normalized_user, normalized_game)
+        }
+        _ => format!("{}-v", normalized_game),
     }
 }
 

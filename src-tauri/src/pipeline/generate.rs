@@ -547,6 +547,20 @@ impl Generator {
             writeln!(out).unwrap();
         }
 
+        // Declare status_var from module metadata if not already declared
+        if let Some(meta) = module_meta {
+            if let Some(ref sv) = meta.status_var {
+                if !self.global_declared_vars.contains(sv) {
+                    if !has_module_vars {
+                        writeln!(out, "// Module variables").unwrap();
+                    }
+                    self.global_declared_vars.insert(sv.clone());
+                    writeln!(out, "int {};", sv).unwrap();
+                    writeln!(out).unwrap();
+                }
+            }
+        }
+
         // Extra variables from module metadata
         if let Some(meta) = module_meta {
             let mut has_extra = false;
@@ -813,14 +827,20 @@ impl Generator {
         let name = &module.sanitized_name;
 
         writeln!(out, "function {}_Save() {{", name).unwrap();
-        for pvar in &module.persist_vars {
-            writeln!(out, "    save_spvar({}, {}, {});", pvar.var_access, pvar.min, pvar.max).unwrap();
+        if module.persist_vars.is_empty() {
+            writeln!(out, "    return;").unwrap();
+        } else {
+            for pvar in &module.persist_vars {
+                writeln!(out, "    save_spvar({}, {}, {});", pvar.var_access, pvar.min, pvar.max).unwrap();
+            }
         }
         writeln!(out, "}}").unwrap();
         writeln!(out).unwrap();
 
         writeln!(out, "function {}_Load(has_data) {{", name).unwrap();
-        if !module.persist_vars.is_empty() {
+        if module.persist_vars.is_empty() {
+            writeln!(out, "    return;").unwrap();
+        } else {
             writeln!(out, "    if (!has_data) {{").unwrap();
             writeln!(out, "        // No saved data - use defaults").unwrap();
             for pvar in &module.persist_vars {

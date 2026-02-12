@@ -5,15 +5,19 @@
     import StatusBar from '$lib/components/layout/StatusBar.svelte';
     import SettingsModal from '$lib/components/layout/SettingsModal.svelte';
     import ToastContainer from '$lib/components/layout/ToastContainer.svelte';
-    import { loadGames, selectGame } from '$lib/stores/game.svelte';
+    import { loadGames, selectGame, getGameStore, clearSelection } from '$lib/stores/game.svelte';
     import { getUiStore, toggleSidebar } from '$lib/stores/ui.svelte';
-    import { getSettings } from '$lib/stores/settings.svelte';
+    import { getSettings, addWorkspace } from '$lib/stores/settings.svelte';
+    import { addToast } from '$lib/stores/toast.svelte';
+    import { pickWorkspaceDirectory, getDefaultWorkspace, deleteGame } from '$lib/tauri/commands';
+    import { ask } from '@tauri-apps/plugin-dialog';
     import { goto } from '$app/navigation';
     import { onMount } from 'svelte';
     import type { GameSummary } from '$lib/types/config';
 
     let { children } = $props();
     let ui = getUiStore();
+    let gameStore = getGameStore();
     let settingsStore = getSettings();
     let settings = $derived($settingsStore);
     let settingsOpen = $state(false);
@@ -29,9 +33,41 @@
         }
     });
 
+    let needsSetup = $derived(settings.workspaces.length === 0);
+
+    async function handleSetupPickWorkspace() {
+        const path = await pickWorkspaceDirectory();
+        if (path) {
+            addWorkspace(path);
+        }
+    }
+
+    async function handleSetupUseDefault() {
+        const defaultPath = await getDefaultWorkspace();
+        addWorkspace(defaultPath);
+    }
+
     function handleSelectGame(game: GameSummary) {
         selectGame(game);
         goto('/');
+    }
+
+    async function handleDeleteGame(game: GameSummary) {
+        const confirmed = await ask(
+            `Delete game "${game.name}"? This will permanently delete all files in the game directory.`,
+            { title: 'Delete Game', kind: 'warning' }
+        );
+        if (!confirmed) return;
+        try {
+            await deleteGame(game.path);
+            if (gameStore.selectedGame?.path === game.path) {
+                clearSelection();
+            }
+            await loadGames(settings.workspaces);
+            addToast(`Game "${game.name}" deleted`, 'success');
+        } catch (e) {
+            addToast(`Failed to delete game: ${e}`, 'error');
+        }
     }
 </script>
 
@@ -62,7 +98,7 @@
                 </button>
             </div>
         {:else}
-            <Sidebar onSelectGame={handleSelectGame} onCollapse={toggleSidebar} onOpenSettings={() => settingsOpen = true} />
+            <Sidebar onSelectGame={handleSelectGame} onDeleteGame={handleDeleteGame} onCollapse={toggleSidebar} onOpenSettings={() => settingsOpen = true} />
         {/if}
         <main class="flex-1 overflow-y-auto bg-zinc-950">
             {@render children()}
@@ -70,6 +106,42 @@
     </div>
     <StatusBar />
 </div>
+
+{#if needsSetup}
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/90">
+        <div class="w-full max-w-md rounded-lg border border-zinc-700 bg-zinc-900 p-6 shadow-2xl">
+            <div class="mb-6 text-center">
+                <svg class="mx-auto mb-3 h-12 w-12 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+                </svg>
+                <h2 class="text-lg font-semibold text-zinc-100">Set Up Workspace</h2>
+                <p class="mt-2 text-sm text-zinc-400">
+                    A workspace directory is needed to store your game scripts. Choose a custom location or use the default.
+                </p>
+            </div>
+            <div class="space-y-3">
+                <button
+                    class="flex w-full items-center justify-center gap-2 rounded-md bg-emerald-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-emerald-500"
+                    onclick={handleSetupUseDefault}
+                >
+                    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                    </svg>
+                    Use Default Directory
+                </button>
+                <button
+                    class="flex w-full items-center justify-center gap-2 rounded-md border border-zinc-600 bg-zinc-800 px-4 py-2.5 text-sm font-medium text-zinc-200 hover:border-zinc-500 hover:bg-zinc-700"
+                    onclick={handleSetupPickWorkspace}
+                >
+                    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+                    </svg>
+                    Choose Custom Directory
+                </button>
+            </div>
+        </div>
+    </div>
+{/if}
 
 <SettingsModal open={settingsOpen} onclose={() => settingsOpen = false} />
 <ToastContainer />

@@ -2,6 +2,7 @@
     import { getGameConfig, saveGameConfig } from '$lib/tauri/commands';
     import type { GameConfig, MenuItem } from '$lib/types/config';
     import { addToast } from '$lib/stores/toast.svelte';
+    import { getSettings, getAllGameTypes } from '$lib/stores/settings.svelte';
     import KeySelect from '$lib/components/inputs/KeySelect.svelte';
     import ButtonSelect from '$lib/components/inputs/ButtonSelect.svelte';
 
@@ -88,7 +89,8 @@
         return isNaN(num) || num < 1 ? 1 : num;
     }
 
-    const gameTypeOptions = ['fps', 'tps', 'fgs'];
+    let settingsStore = getSettings();
+    let gameTypeOptions = $derived(getAllGameTypes($settingsStore));
     const menuTypeOptions = ['clickable', 'toggle', 'value', 'selector', 'custom'];
 </script>
 
@@ -101,7 +103,7 @@
         <div class="flex-1 overflow-y-auto">
         <div class="mx-auto max-w-4xl">
             <!-- Save Button (Sticky Header) -->
-            <div class="sticky top-0 border-b border-zinc-800 bg-zinc-900 px-6 py-3">
+            <div class="sticky top-0 z-10 border-b border-zinc-800 bg-zinc-900 px-6 py-3">
                 <div class="flex items-center justify-between">
                     <h2 class="text-lg font-semibold text-zinc-100">Config Editor</h2>
                     <button

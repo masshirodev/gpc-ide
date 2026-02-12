@@ -5,11 +5,12 @@
 
     interface Props {
         onSelectGame: (game: GameSummary) => void;
+        onDeleteGame?: (game: GameSummary) => void;
         onCollapse?: () => void;
         onOpenSettings?: () => void;
     }
 
-    let { onSelectGame, onCollapse, onOpenSettings }: Props = $props();
+    let { onSelectGame, onDeleteGame, onCollapse, onOpenSettings }: Props = $props();
     let store = getGameStore();
     let grouped = $derived(gamesByType(store.games));
     let types = $derived(Object.keys(grouped).sort());
@@ -59,15 +60,32 @@
             <div class="mb-1">
                 <div class="px-3 py-1 text-xs font-medium text-zinc-500">{type}</div>
                 {#each grouped[type] as game}
-                    <button
-                        class="flex w-full items-center justify-between rounded px-3 py-1.5 text-left text-sm text-zinc-300 hover:bg-zinc-800"
+                    <div
+                        class="group flex w-full items-center justify-between rounded px-3 py-1.5 text-left text-sm text-zinc-300 hover:bg-zinc-800"
                         class:bg-zinc-800={store.selectedGame?.path === game.path}
                         class:text-emerald-400={store.selectedGame?.path === game.path}
-                        onclick={() => onSelectGame(game)}
                     >
-                        <span>{game.name}</span>
-                        <span class="text-xs text-zinc-500">v{game.version}</span>
-                    </button>
+                        <button
+                            class="flex-1 text-left truncate"
+                            onclick={() => onSelectGame(game)}
+                        >
+                            {game.name}
+                        </button>
+                        <div class="flex items-center gap-1">
+                            <span class="text-xs text-zinc-500">v{game.version}</span>
+                            {#if onDeleteGame}
+                                <button
+                                    class="rounded p-0.5 text-zinc-600 opacity-0 hover:text-red-400 group-hover:opacity-100"
+                                    onclick={(e) => { e.stopPropagation(); onDeleteGame(game); }}
+                                    title="Delete game"
+                                >
+                                    <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                    </svg>
+                                </button>
+                            {/if}
+                        </div>
+                    </div>
                 {/each}
             </div>
         {/each}

@@ -9,6 +9,7 @@ pub fn run() {
         .manage(commands::lsp::LspState::default())
         .manage(commands::watcher::WatcherState::default())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             if cfg!(debug_assertions) {
                 app.handle().plugin(
@@ -23,10 +24,13 @@ pub fn run() {
             commands::game::list_games,
             commands::game::get_game_config,
             commands::game::get_app_root,
+            commands::game::delete_game,
             commands::module::list_modules,
             commands::module::list_available_modules,
             commands::module::get_module,
             commands::module::validate_module_selection,
+            commands::module::save_user_module,
+            commands::module::delete_user_module,
             commands::wizard::create_game,
             commands::wizard::add_module,
             commands::build::build_game_cmd,
@@ -38,6 +42,7 @@ pub fn run() {
             commands::config::create_standalone_file,
             commands::config::delete_file,
             commands::config::regenerate_file,
+            commands::config::regenerate_all,
             commands::lsp::lsp_start,
             commands::lsp::lsp_stop,
             commands::lsp::lsp_send,

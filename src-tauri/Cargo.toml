@@ -21,6 +21,7 @@ log = "0.4"
 tauri = { version = "2.10.0", features = [] }
 tauri-plugin-log = "2"
 tauri-plugin-dialog = "2"
+tauri-plugin-opener = "2"
 toml = "0.8"
 toml_edit = "0.22"
 walkdir = "2"

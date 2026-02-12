@@ -110,11 +110,12 @@ fn parse_game_summary(config_path: &Path) -> Result<GameSummary, String> {
         toml::from_str(&content).map_err(|e| format!("Failed to parse TOML: {}", e))?;
 
     let game_dir = config_path.parent().unwrap();
-    let name = game_dir
+    let folder_name = game_dir
         .file_name()
         .and_then(|n| n.to_str())
         .unwrap_or("")
         .to_string();
+    let name = config.name.clone().unwrap_or(folder_name);
 
     let game_type = config.r#type.clone().unwrap_or_else(|| "fps".to_string());
 
@@ -136,6 +137,22 @@ pub fn get_game_config(game_path: String) -> Result<GameConfig, String> {
         .map_err(|e| format!("Failed to read {}: {}", config_path.display(), e))?;
 
     toml::from_str(&content).map_err(|e| format!("Failed to parse config: {}", e))
+}
+
+/// Delete an entire game directory
+#[tauri::command]
+pub fn delete_game(game_path: String) -> Result<(), String> {
+    let path = std::path::Path::new(&game_path);
+    if !path.exists() {
+        return Err("Game directory not found".to_string());
+    }
+    // Safety: require config.toml + Modules/ to confirm it's a real game dir
+    if !path.join("config.toml").exists() || !path.join("Modules").is_dir() {
+        return Err("Not a valid game directory".to_string());
+    }
+    std::fs::remove_dir_all(path)
+        .map_err(|e| format!("Failed to delete game directory: {}", e))?;
+    Ok(())
 }
 
 /// Get the app root path (where bundled resources live)

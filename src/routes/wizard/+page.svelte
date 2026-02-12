@@ -4,11 +4,12 @@
 	import type { ModuleSummary } from '$lib/types/module';
 	import type { CreateGameParams } from '$lib/tauri/commands';
 	import { loadGames } from '$lib/stores/game.svelte';
-	import { getSettings } from '$lib/stores/settings.svelte';
+	import { getSettings, getAllGameTypes } from '$lib/stores/settings.svelte';
 	import KeySelect from '$lib/components/inputs/KeySelect.svelte';
 
 	let settingsStore = getSettings();
 	let settings = $derived($settingsStore);
+	let gameTypeOptions = $derived(getAllGameTypes(settings));
 
 	// Wizard state
 	let step = $state(0);
@@ -16,6 +17,7 @@
 
 	// Step 1: Game Info
 	let gameName = $state('');
+	let displayName = $state('');
 	let gameType = $state('fps');
 	let version = $state(1);
 	let profiles = $state(0);
@@ -65,9 +67,9 @@
 		try {
 			// fps and tps share modules
 			const type = gameType === 'tps' ? 'fps' : gameType;
-			const allForType = await listModules(type);
+			const allForType = await listModules(type, settings.workspaces);
 			// Also include "all" type modules
-			const allType = await listModules('all');
+			const allType = await listModules('all', settings.workspaces);
 			const ids = new Set(allForType.map((m) => m.id));
 			for (const m of allType) {
 				if (!ids.has(m.id)) allForType.push(m);
@@ -126,6 +128,8 @@
 		try {
 			const params: CreateGameParams = {
 				name: gameName.trim(),
+				display_name: displayName.trim() || undefined,
+				username: settings.username.trim() || undefined,
 				game_type: gameType,
 				version,
 				profiles,
@@ -222,7 +226,23 @@
 						class="w-full rounded-md border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
 					/>
 					<p class="mt-1 text-xs text-zinc-500">
-						Use a path like "Shooter/Delta" for nested organization
+						Used for folder name. Use a path like "Shooter/Delta" for nested organization.
+					</p>
+				</div>
+
+				<div>
+					<label for="display-name" class="mb-1.5 block text-sm font-medium text-zinc-300">
+						Display Name <span class="text-zinc-500">(optional)</span>
+					</label>
+					<input
+						id="display-name"
+						type="text"
+						bind:value={displayName}
+						placeholder="e.g., My Cool Game"
+						class="w-full rounded-md border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+					/>
+					<p class="mt-1 text-xs text-zinc-500">
+						Shown in the sidebar and title. Supports spaces. Defaults to the game name if empty.
 					</p>
 				</div>
 
@@ -235,9 +255,9 @@
 						bind:value={gameType}
 						class="w-full rounded-md border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
 					>
-						<option value="fps">FPS - First-person Shooter</option>
-						<option value="tps">TPS - Third-person Shooter</option>
-						<option value="fgs">FGS - Fighting Game</option>
+						{#each gameTypeOptions as type}
+							<option value={type}>{type.toUpperCase()}</option>
+						{/each}
 					</select>
 				</div>
 
@@ -439,6 +459,10 @@
 					<div class="grid grid-cols-2 gap-y-2 text-sm">
 						<span class="text-zinc-400">Name</span>
 						<span class="text-zinc-200">{gameName}</span>
+						{#if displayName.trim()}
+							<span class="text-zinc-400">Display Name</span>
+							<span class="text-zinc-200">{displayName}</span>
+						{/if}
 						<span class="text-zinc-400">Type</span>
 						<span class="uppercase text-zinc-200">{gameType}</span>
 						<span class="text-zinc-400">Version</span>

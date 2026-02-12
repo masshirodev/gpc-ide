@@ -1,9 +1,18 @@
 use crate::models::module::ModuleDefinition;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
-/// Load all module definitions from Pipeline/Modules/*.toml
+/// Load all module definitions from bundled modules/ and optional extra directories
 pub fn load_all_modules(project_root: &Path) -> Result<Vec<ModuleDefinition>, String> {
+    load_all_modules_with_paths(project_root, &[])
+}
+
+/// Load all module definitions from bundled modules/ plus extra search paths (workspace modules/)
+pub fn load_all_modules_with_paths(
+    project_root: &Path,
+    extra_dirs: &[PathBuf],
+) -> Result<Vec<ModuleDefinition>, String> {
     let modules_dir = project_root.join("modules");
     if !modules_dir.exists() {
         return Err(format!(
@@ -13,19 +22,16 @@ pub fn load_all_modules(project_root: &Path) -> Result<Vec<ModuleDefinition>, St
     }
 
     let mut modules = Vec::new();
-    let entries = std::fs::read_dir(&modules_dir)
-        .map_err(|e| format!("Failed to read modules dir: {}", e))?;
+    let mut seen_ids: HashSet<String> = HashSet::new();
 
-    for entry in entries {
-        let entry = entry.map_err(|e| format!("Failed to read dir entry: {}", e))?;
-        let path = entry.path();
-        if path.extension().and_then(|s| s.to_str()) == Some("toml") {
-            match load_module(&path) {
-                Ok(module) => modules.push(module),
-                Err(e) => {
-                    log::warn!("Failed to load module {}: {}", path.display(), e);
-                }
-            }
+    // Load bundled modules first
+    load_modules_from_dir(&modules_dir, &mut modules, &mut seen_ids, false)?;
+
+    // Load user modules from extra directories
+    for extra_dir in extra_dirs {
+        let user_modules_dir = extra_dir.join("modules");
+        if user_modules_dir.exists() {
+            load_modules_from_dir(&user_modules_dir, &mut modules, &mut seen_ids, true)?;
         }
     }
 
@@ -37,6 +43,44 @@ pub fn load_all_modules(project_root: &Path) -> Result<Vec<ModuleDefinition>, St
     });
 
     Ok(modules)
+}
+
+fn load_modules_from_dir(
+    dir: &Path,
+    modules: &mut Vec<ModuleDefinition>,
+    seen_ids: &mut HashSet<String>,
+    is_user: bool,
+) -> Result<(), String> {
+    let entries = std::fs::read_dir(dir)
+        .map_err(|e| format!("Failed to read modules dir {}: {}", dir.display(), e))?;
+
+    for entry in entries {
+        let entry = entry.map_err(|e| format!("Failed to read dir entry: {}", e))?;
+        let path = entry.path();
+        if path.extension().and_then(|s| s.to_str()) == Some("toml") {
+            match load_module(&path) {
+                Ok(mut module) => {
+                    if seen_ids.contains(&module.id) {
+                        if is_user {
+                            log::warn!(
+                                "User module '{}' conflicts with bundled module, skipping",
+                                module.id
+                            );
+                            continue;
+                        }
+                    }
+                    module.is_user_module = is_user;
+                    seen_ids.insert(module.id.clone());
+                    modules.push(module);
+                }
+                Err(e) => {
+                    log::warn!("Failed to load module {}: {}", path.display(), e);
+                }
+            }
+        }
+    }
+
+    Ok(())
 }
 
 /// Load a single module definition from a TOML file.

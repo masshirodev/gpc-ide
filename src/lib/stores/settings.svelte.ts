@@ -1,21 +1,27 @@
 import { writable } from 'svelte/store';
 
 interface AppSettings {
+    username: string;
     customLspCommand: string;
     editorFontSize: number;
     editorTabSize: number;
     editorFontFamily: string;
     editorTheme: string;
     workspaces: string[];
+    customGameTypes: string[];
 }
 
+const BUILTIN_GAME_TYPES = ['fps', 'tps', 'fgs'];
+
 const DEFAULTS: AppSettings = {
+    username: '',
     customLspCommand: '',
     editorFontSize: 13,
     editorTabSize: 4,
     editorFontFamily: 'JetBrains Mono, Fira Code, Cascadia Code, monospace',
     editorTheme: 'gpc-dark',
     workspaces: [],
+    customGameTypes: [],
 };
 
 const STORAGE_KEY = 'gpc-ide-settings';
@@ -69,6 +75,30 @@ export function addWorkspace(path: string) {
 export function removeWorkspace(path: string) {
     store.update(current => {
         const updated = { ...current, workspaces: current.workspaces.filter(w => w !== path) };
+        persist(updated);
+        return updated;
+    });
+}
+
+export function getAllGameTypes(settings: AppSettings): string[] {
+    return [...BUILTIN_GAME_TYPES, ...settings.customGameTypes];
+}
+
+export function addGameType(type: string) {
+    store.update(current => {
+        const normalized = type.toLowerCase().trim();
+        if (!normalized || BUILTIN_GAME_TYPES.includes(normalized) || current.customGameTypes.includes(normalized)) {
+            return current;
+        }
+        const updated = { ...current, customGameTypes: [...current.customGameTypes, normalized] };
+        persist(updated);
+        return updated;
+    });
+}
+
+export function removeGameType(type: string) {
+    store.update(current => {
+        const updated = { ...current, customGameTypes: current.customGameTypes.filter(t => t !== type) };
         persist(updated);
         return updated;
     });

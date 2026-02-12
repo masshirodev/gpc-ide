@@ -188,6 +188,35 @@ export function hasUnsavedChanges(): boolean {
     return store.tabs.some((t) => t.dirty);
 }
 
+/** Reload a tab's content from disk (e.g., after external edit) */
+export async function reloadTab(path: string) {
+    const tab = store.tabs.find((t) => t.path === path);
+    if (!tab) return;
+
+    try {
+        const content = await readFile(path);
+        tab.content = content;
+        tab.originalContent = content;
+        tab.dirty = false;
+
+        // Notify LSP about the change
+        const client = getLspClient();
+        if (client?.isInitialized()) {
+            const version = (documentVersions.get(path) || 1) + 1;
+            documentVersions.set(path, version);
+            client.textDocumentDidChange(pathToUri(path), version, content);
+        }
+    } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        addToast(`Failed to reload ${tab.name}: ${msg}`, 'error');
+    }
+}
+
+/** Get a tab by path */
+export function getTab(path: string): EditorTab | undefined {
+    return store.tabs.find((t) => t.path === path);
+}
+
 // --- Pending line jump (for build error → editor navigation) ---
 
 let _pendingJump: { path: string; line: number } | null = null;

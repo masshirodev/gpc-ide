@@ -14,24 +14,55 @@ export async function getAppRoot(): Promise<string> {
 	return invoke<string>('get_app_root');
 }
 
-export async function listModules(moduleType?: string): Promise<ModuleSummary[]> {
-	return invoke<ModuleSummary[]>('list_modules', { moduleType: moduleType ?? null });
+export async function deleteGame(gamePath: string): Promise<void> {
+	return invoke<void>('delete_game', { gamePath });
 }
 
-export async function listAvailableModules(gamePath: string): Promise<ModuleSummary[]> {
-	return invoke<ModuleSummary[]>('list_available_modules', { gamePath });
+export async function listModules(moduleType?: string, workspacePaths?: string[]): Promise<ModuleSummary[]> {
+	return invoke<ModuleSummary[]>('list_modules', {
+		moduleType: moduleType ?? null,
+		workspacePaths: workspacePaths ?? null
+	});
 }
 
-export async function getModule(moduleId: string): Promise<ModuleDefinition> {
-	return invoke<ModuleDefinition>('get_module', { moduleId });
+export async function listAvailableModules(gamePath: string, workspacePaths?: string[]): Promise<ModuleSummary[]> {
+	return invoke<ModuleSummary[]>('list_available_modules', {
+		gamePath,
+		workspacePaths: workspacePaths ?? null
+	});
 }
 
-export async function validateModuleSelection(moduleIds: string[]): Promise<string[]> {
-	return invoke<string[]>('validate_module_selection', { moduleIds });
+export async function getModule(moduleId: string, workspacePaths?: string[]): Promise<ModuleDefinition> {
+	return invoke<ModuleDefinition>('get_module', {
+		moduleId,
+		workspacePaths: workspacePaths ?? null
+	});
+}
+
+export async function validateModuleSelection(moduleIds: string[], workspacePaths?: string[]): Promise<string[]> {
+	return invoke<string[]>('validate_module_selection', {
+		moduleIds,
+		workspacePaths: workspacePaths ?? null
+	});
+}
+
+// === User Module Commands ===
+
+export async function saveUserModule(workspacePath: string, moduleToml: string): Promise<string> {
+	return invoke<string>('save_user_module', { workspacePath, moduleToml });
+}
+
+export async function deleteUserModule(moduleId: string, workspacePaths?: string[]): Promise<void> {
+	return invoke<void>('delete_user_module', {
+		moduleId,
+		workspacePaths: workspacePaths ?? null
+	});
 }
 
 export interface CreateGameParams {
 	name: string;
+	display_name?: string;
+	username?: string;
 	game_type: string;
 	version: number;
 	profiles: number;
@@ -108,6 +139,10 @@ export async function regenerateFile(gamePath: string, filePath: string): Promis
 	return invoke<string>('regenerate_file', { gamePath, filePath });
 }
 
+export async function regenerateAll(gamePath: string): Promise<string[]> {
+	return invoke<string[]>('regenerate_all', { gamePath });
+}
+
 // === Add Module Commands ===
 
 export interface AddModuleParams {
@@ -178,4 +213,11 @@ export async function importTemplate(
 		templatePath,
 		targetFilename: targetFilename ?? null
 	});
+}
+
+// === Opener Commands ===
+
+export async function openInDefaultApp(path: string): Promise<void> {
+	const { openPath } = await import('@tauri-apps/plugin-opener');
+	return openPath(path);
 }

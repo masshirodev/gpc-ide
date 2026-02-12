@@ -1,6 +1,7 @@
 export interface GameConfig {
 	filename: string;
 	version: number;
+	name?: string;
 	type?: string;
 	profile_count: number;
 	state_screen: StateScreen;
