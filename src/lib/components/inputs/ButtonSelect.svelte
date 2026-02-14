@@ -1,11 +1,14 @@
 <script lang="ts">
+	import { getButtonNames, getConsolePrefix, type ConsoleType } from '$lib/utils/console-buttons';
+
 	interface Props {
 		value: string;
 		onchange: (value: string) => void;
+		consoleType?: ConsoleType;
 		placeholder?: string;
 	}
 
-	let { value, onchange, placeholder = 'Search buttons...' }: Props = $props();
+	let { value, onchange, consoleType = 'ps5', placeholder = 'Search buttons...' }: Props = $props();
 
 	let search = $state(value || '');
 	let open = $state(false);
@@ -13,18 +16,18 @@
 	let inputEl: HTMLInputElement | undefined = $state();
 	let listEl: HTMLDivElement | undefined = $state();
 
-	const BUTTONS: string[] = [
-		'PS5_CROSS', 'PS5_CIRCLE', 'PS5_SQUARE', 'PS5_TRIANGLE',
-		'PS5_L1', 'PS5_L2', 'PS5_L3', 'PS5_R1', 'PS5_R2', 'PS5_R3',
-		'PS5_UP', 'PS5_DOWN', 'PS5_LEFT', 'PS5_RIGHT',
-		'PS5_OPTIONS', 'PS5_CREATE', 'PS5_PS', 'PS5_TOUCH',
-		'PS5_RX', 'PS5_RY', 'PS5_LX', 'PS5_LY',
-	];
+	let buttons = $derived(getButtonNames(consoleType));
+	let prefix = $derived(getConsolePrefix(consoleType).toLowerCase());
 
 	let filtered = $derived.by(() => {
-		if (!search) return BUTTONS;
-		const q = search.toLowerCase().replace('ps5_', '');
-		return BUTTONS.filter(b => b.toLowerCase().replace('ps5_', '').includes(q));
+		if (!search) return buttons;
+		const q = search.toLowerCase().replace(prefix, '');
+		return buttons.filter(b => b.toLowerCase().replace(prefix, '').includes(q));
+	});
+
+	// Reset search text when value changes externally (e.g., console type switch)
+	$effect(() => {
+		search = value || '';
 	});
 
 	function select(btn: string) {

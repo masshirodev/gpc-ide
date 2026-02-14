@@ -2,7 +2,9 @@ export interface GameConfig {
 	filename: string;
 	version: number;
 	name?: string;
+	username?: string;
 	type?: string;
+	console_type?: string;
 	profile_count: number;
 	state_screen: StateScreen;
 	buttons: ButtonConfig;

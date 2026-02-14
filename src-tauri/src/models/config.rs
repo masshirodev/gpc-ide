@@ -9,7 +9,11 @@ pub struct GameConfig {
     #[serde(default)]
     pub name: Option<String>,
     #[serde(default)]
+    pub username: Option<String>,
+    #[serde(default)]
     pub r#type: Option<String>,
+    #[serde(default)]
+    pub console_type: Option<String>,
     #[serde(default)]
     pub profile_count: Option<u32>,
     #[serde(default)]

@@ -6,6 +6,7 @@
 	import { loadGames } from '$lib/stores/game.svelte';
 	import { getSettings, getAllGameTypes } from '$lib/stores/settings.svelte';
 	import KeySelect from '$lib/components/inputs/KeySelect.svelte';
+	import { CONSOLE_TYPES, CONSOLE_LABELS, type ConsoleType } from '$lib/utils/console-buttons';
 
 	let settingsStore = getSettings();
 	let settings = $derived($settingsStore);
@@ -19,6 +20,7 @@
 	let gameName = $state('');
 	let displayName = $state('');
 	let gameType = $state('fps');
+	let consoleType = $state<ConsoleType>('ps5');
 	let version = $state(1);
 	let profiles = $state(0);
 
@@ -131,6 +133,7 @@
 				display_name: displayName.trim() || undefined,
 				username: settings.username.trim() || undefined,
 				game_type: gameType,
+				console_type: consoleType,
 				version,
 				profiles,
 				module_ids: Array.from(selectedModuleIds),
@@ -246,19 +249,35 @@
 					</p>
 				</div>
 
-				<div>
-					<label for="game-type" class="mb-1.5 block text-sm font-medium text-zinc-300">
-						Game Type
-					</label>
-					<select
-						id="game-type"
-						bind:value={gameType}
-						class="w-full rounded-md border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-					>
-						{#each gameTypeOptions as type}
-							<option value={type}>{type.toUpperCase()}</option>
-						{/each}
-					</select>
+				<div class="grid grid-cols-2 gap-4">
+					<div>
+						<label for="game-type" class="mb-1.5 block text-sm font-medium text-zinc-300">
+							Game Type
+						</label>
+						<select
+							id="game-type"
+							bind:value={gameType}
+							class="w-full rounded-md border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+						>
+							{#each gameTypeOptions as type}
+								<option value={type}>{type.toUpperCase()}</option>
+							{/each}
+						</select>
+					</div>
+					<div>
+						<label for="console-type" class="mb-1.5 block text-sm font-medium text-zinc-300">
+							Console Type
+						</label>
+						<select
+							id="console-type"
+							bind:value={consoleType}
+							class="w-full rounded-md border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+						>
+							{#each CONSOLE_TYPES as ct}
+								<option value={ct}>{CONSOLE_LABELS[ct]}</option>
+							{/each}
+						</select>
+					</div>
 				</div>
 
 				<div class="grid grid-cols-2 gap-4">
@@ -465,6 +484,8 @@
 						{/if}
 						<span class="text-zinc-400">Type</span>
 						<span class="uppercase text-zinc-200">{gameType}</span>
+						<span class="text-zinc-400">Console</span>
+						<span class="text-zinc-200">{CONSOLE_LABELS[consoleType]}</span>
 						<span class="text-zinc-400">Version</span>
 						<span class="text-zinc-200">{version}</span>
 						<span class="text-zinc-400">Profiles</span>

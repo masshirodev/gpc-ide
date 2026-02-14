@@ -27,6 +27,14 @@ let store = $state<EditorStore>({
 const changeTimers = new Map<string, ReturnType<typeof setTimeout>>();
 const documentVersions = new Map<string, number>();
 
+// Track paths recently written by the app to suppress false watcher events
+const recentWrites = new Set<string>();
+
+/** Check if a file was recently saved by the app (suppresses false "modified externally" alerts) */
+export function wasRecentlySaved(path: string): boolean {
+    return recentWrites.has(path);
+}
+
 export function getEditorStore() {
     return store;
 }
@@ -145,9 +153,11 @@ export async function saveTab(path?: string) {
 
     store.saving = true;
     try {
+        recentWrites.add(targetPath);
         await writeFile(targetPath, tab.content);
         tab.originalContent = tab.content;
         tab.dirty = false;
+        setTimeout(() => recentWrites.delete(targetPath), 1000);
         addToast(`Saved ${tab.name}`, 'success', 2000);
     } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);

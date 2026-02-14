@@ -1,5 +1,6 @@
 use crate::models::config::{GameConfig, MenuItem, MenuItems, MenuOption};
 use crate::models::module::ModuleDefinition;
+use crate::pipeline::config_gen::resolve_config_template;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Write;
 
@@ -412,6 +413,12 @@ impl Generator {
             if let Some(ref opts) = item.options {
                 if !opts.is_empty() {
                     let labels_str = opts.iter().map(|o| format!("\"{}\"", o.name)).collect::<Vec<_>>().join(", ");
+                    writeln!(out, "const string {}_OptionText[] = {{{}}};", name, labels_str).unwrap();
+                }
+            } else if let Some(ref meta) = module_meta {
+                // Fallback: use option names from module metadata
+                if !meta.options.is_empty() {
+                    let labels_str = meta.options.iter().map(|o| format!("\"{}\"", o.name)).collect::<Vec<_>>().join(", ");
                     writeln!(out, "const string {}_OptionText[] = {{{}}};", name, labels_str).unwrap();
                 }
             }
@@ -1014,7 +1021,7 @@ impl Generator {
         self.write_module_param_defines(&mut out);
 
         // State screen title
-        let title = &self.config.state_screen.title;
+        let title = resolve_config_template(&self.config.state_screen.title, &self.config);
         writeln!(out, "const string StateTitle[] = {{\"{}\"}};", title).unwrap();
         if self.has_module("adp") {
             writeln!(out, "const string WaitingText[] = {{\"Waiting...\"}};").unwrap();
@@ -1407,7 +1414,7 @@ impl Generator {
 
     fn generate_main(&self) -> String {
         let mut out = String::with_capacity(2048);
-        let game_name = &self.config.filename;
+        let game_name = resolve_config_template(&self.config.filename, &self.config);
 
         let mut data_includes = Vec::new();
         let mut post_includes = Vec::new();
@@ -1571,13 +1578,16 @@ impl Generator {
     }
 
     fn write_button_defines(&self, out: &mut String) {
+        let ct = self.config.console_type.as_deref().unwrap_or("ps5");
+        let cd = crate::pipeline::config_gen::default_buttons(ct);
+
         writeln!(out, "// Button definitions").unwrap();
         let defaults = [
-            ("fire", "PS5_R2"), ("ads", "PS5_L2"),
-            ("menu_mod", "PS5_L2"), ("menu_btn", "PS5_OPTIONS"),
-            ("confirm", "PS5_CROSS"), ("cancel", "PS5_CIRCLE"),
-            ("up", "PS5_UP"), ("down", "PS5_DOWN"),
-            ("left", "PS5_LEFT"), ("right", "PS5_RIGHT"),
+            ("fire", cd.fire), ("ads", cd.ads),
+            ("menu_mod", cd.menu_mod), ("menu_btn", cd.menu_btn),
+            ("confirm", cd.confirm), ("cancel", cd.cancel),
+            ("up", cd.up), ("down", cd.down),
+            ("left", cd.left), ("right", cd.right),
         ];
         let buttons = &self.config.buttons;
         for (key, default) in defaults {
@@ -1596,10 +1606,10 @@ impl Generator {
             };
             writeln!(out, "define {}_BTN = {};", key.to_uppercase(), value).unwrap();
         }
-        writeln!(out, "define RX_AXIS = PS5_RX;").unwrap();
-        writeln!(out, "define RY_AXIS = PS5_RY;").unwrap();
-        writeln!(out, "define LX_AXIS = PS5_LX;").unwrap();
-        writeln!(out, "define LY_AXIS = PS5_LY;").unwrap();
+        writeln!(out, "define RX_AXIS = {};", cd.rx).unwrap();
+        writeln!(out, "define RY_AXIS = {};", cd.ry).unwrap();
+        writeln!(out, "define LX_AXIS = {};", cd.lx).unwrap();
+        writeln!(out, "define LY_AXIS = {};", cd.ly).unwrap();
         writeln!(out).unwrap();
     }
 
@@ -1841,6 +1851,8 @@ mod tests {
         GameConfig {
             filename: "Mash-Test-v".to_string(),
             version: 1,
+            name: Some("Test".to_string()),
+            username: Some("Mash".to_string()),
             r#type: Some("fps".to_string()),
             profile_count: Some(0),
             weapons: None,

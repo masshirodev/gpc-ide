@@ -50,6 +50,8 @@ pub struct ConfigMenu {
     #[serde(default)]
     pub edit_function: Option<String>,
     #[serde(default)]
+    pub render_function: Option<String>,
+    #[serde(default)]
     pub profile_aware: Option<bool>,
     #[serde(default)]
     pub options: Vec<ModuleOption>,

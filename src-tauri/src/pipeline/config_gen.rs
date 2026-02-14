@@ -1,3 +1,4 @@
+use crate::models::config::GameConfig;
 use crate::models::module::ModuleDefinition;
 use std::collections::HashMap;
 use std::fmt::Write;
@@ -8,6 +9,7 @@ pub struct NewGameConfig {
     pub display_name: Option<String>,
     pub username: Option<String>,
     pub game_type: String,
+    pub console_type: Option<String>,
     pub version: u32,
     pub profiles: u32,
     pub weapon_names: Vec<String>,
@@ -32,10 +34,17 @@ pub fn generate_config_toml(cfg: &NewGameConfig) -> String {
     if let Some(ref display_name) = cfg.display_name {
         writeln!(out, "name = \"{}\"", display_name).unwrap();
     }
+    if let Some(ref username) = cfg.username {
+        if !username.trim().is_empty() {
+            writeln!(out, "username = \"{}\"", username).unwrap();
+        }
+    }
     let filename = build_filename(cfg.username.as_deref(), &cfg.name);
     writeln!(out, "filename = \"{}\"", filename).unwrap();
     writeln!(out, "version = {}", cfg.version).unwrap();
     writeln!(out, "type = \"{}\"", cfg.game_type).unwrap();
+    let ct = cfg.console_type.as_deref().unwrap_or("ps5");
+    writeln!(out, "console_type = \"{}\"", ct).unwrap();
     writeln!(out, "profile_count = {}", cfg.profiles).unwrap();
 
     // Weapon names (if weapondata module is present)
@@ -57,25 +66,20 @@ pub fn generate_config_toml(cfg: &NewGameConfig) -> String {
     // State screen
     writeln!(out).unwrap();
     writeln!(out, "[state_screen]").unwrap();
-    let title_name = cfg.display_name.as_deref().unwrap_or(&cfg.name);
-    writeln!(
-        out,
-        "title = \"{}-v{}\"",
-        title_name, cfg.version
-    )
-    .unwrap();
+    writeln!(out, "title = \"{{game}}-v{{version}}\"").unwrap();
 
     // Buttons
+    let btn = default_buttons(ct);
     writeln!(out).unwrap();
     writeln!(out, "[buttons]").unwrap();
-    writeln!(out, "menu_mod = \"PS5_L2\"").unwrap();
-    writeln!(out, "menu_btn = \"PS5_OPTIONS\"").unwrap();
-    writeln!(out, "confirm = \"PS5_CROSS\"").unwrap();
-    writeln!(out, "cancel = \"PS5_CIRCLE\"").unwrap();
-    writeln!(out, "up = \"PS5_UP\"").unwrap();
-    writeln!(out, "down = \"PS5_DOWN\"").unwrap();
-    writeln!(out, "left = \"PS5_LEFT\"").unwrap();
-    writeln!(out, "right = \"PS5_RIGHT\"").unwrap();
+    writeln!(out, "menu_mod = \"{}\"", btn.menu_mod).unwrap();
+    writeln!(out, "menu_btn = \"{}\"", btn.menu_btn).unwrap();
+    writeln!(out, "confirm = \"{}\"", btn.confirm).unwrap();
+    writeln!(out, "cancel = \"{}\"", btn.cancel).unwrap();
+    writeln!(out, "up = \"{}\"", btn.up).unwrap();
+    writeln!(out, "down = \"{}\"", btn.down).unwrap();
+    writeln!(out, "left = \"{}\"", btn.left).unwrap();
+    writeln!(out, "right = \"{}\"", btn.right).unwrap();
 
     // Keyboard (quick toggles)
     writeln!(out).unwrap();
@@ -197,6 +201,19 @@ fn write_module_menu(
             if let Some(ref ef) = config_menu.edit_function {
                 writeln!(out, "edit_function = \"{}\"", ef).unwrap();
             }
+            if let Some(ref rf) = config_menu.render_function {
+                writeln!(out, "render_function = \"{}\"", rf).unwrap();
+            }
+            // Emit option_labels from module options so the generator
+            // can create the OptionText string array for custom render functions
+            if !module.options.is_empty() {
+                let labels: Vec<String> = module
+                    .options
+                    .iter()
+                    .map(|o| format!("\"{}\"", o.name))
+                    .collect();
+                writeln!(out, "option_labels = [{}]", labels.join(", ")).unwrap();
+            }
             if profiles > 0 {
                 writeln!(out, "profile_aware = true").unwrap();
             }
@@ -252,21 +269,82 @@ fn format_toml_value(val: &serde_json::Value) -> String {
 }
 
 /// Normalize a string for safe use in filenames: keep alphanumeric, replace spaces/unsafe chars
-fn normalize_for_filename(s: &str) -> String {
+pub(crate) fn normalize_for_filename(s: &str) -> String {
     s.chars()
         .filter(|c| c.is_alphanumeric() || *c == '-' || *c == '_')
         .collect()
 }
 
-/// Build the filename prefix: "{username}-{game}-v" or "{game}-v" if no username
-fn build_filename(username: Option<&str>, game_name: &str) -> String {
-    let normalized_game = normalize_for_filename(game_name);
+/// Resolve template variables in a config string.
+/// Supports: {version}, {game}, {gameabbr}, {username}, {type}
+pub fn resolve_config_template(template: &str, config: &GameConfig) -> String {
+    let game_name = config.name.as_deref().unwrap_or("");
+    let gameabbr = normalize_for_filename(game_name);
+    let username = config.username.as_deref().unwrap_or("");
+
+    template
+        .replace("{version}", &config.version.to_string())
+        .replace("{game}", game_name)
+        .replace("{gameabbr}", &gameabbr)
+        .replace("{username}", username)
+        .replace("{type}", config.r#type.as_deref().unwrap_or("fps"))
+}
+
+/// Build the filename template: "{username}-{gameabbr}-v{version}" or "{gameabbr}-v{version}"
+fn build_filename(username: Option<&str>, _game_name: &str) -> String {
     match username {
-        Some(u) if !u.trim().is_empty() => {
-            let normalized_user = normalize_for_filename(u);
-            format!("{}-{}-v", normalized_user, normalized_game)
-        }
-        _ => format!("{}-v", normalized_game),
+        Some(u) if !u.trim().is_empty() => "{username}-{gameabbr}-v{version}".to_string(),
+        _ => "{gameabbr}-v{version}".to_string(),
+    }
+}
+
+pub(crate) struct ConsoleDefaults {
+    pub menu_mod: &'static str,
+    pub menu_btn: &'static str,
+    pub confirm: &'static str,
+    pub cancel: &'static str,
+    pub up: &'static str,
+    pub down: &'static str,
+    pub left: &'static str,
+    pub right: &'static str,
+    pub fire: &'static str,
+    pub ads: &'static str,
+    pub rx: &'static str,
+    pub ry: &'static str,
+    pub lx: &'static str,
+    pub ly: &'static str,
+}
+
+pub(crate) fn default_buttons(console_type: &str) -> ConsoleDefaults {
+    match console_type {
+        "xb1" => ConsoleDefaults {
+            menu_mod: "XB1_LT", menu_btn: "XB1_MENU",
+            confirm: "XB1_A", cancel: "XB1_B",
+            up: "XB1_UP", down: "XB1_DOWN", left: "XB1_LEFT", right: "XB1_RIGHT",
+            fire: "XB1_RT", ads: "XB1_LT",
+            rx: "XB1_RX", ry: "XB1_RY", lx: "XB1_LX", ly: "XB1_LY",
+        },
+        "swi" => ConsoleDefaults {
+            menu_mod: "SWI_ZL", menu_btn: "SWI_PLUS",
+            confirm: "SWI_B", cancel: "SWI_A",
+            up: "SWI_UP", down: "SWI_DOWN", left: "SWI_LEFT", right: "SWI_RIGHT",
+            fire: "SWI_ZR", ads: "SWI_ZL",
+            rx: "SWI_RX", ry: "SWI_RY", lx: "SWI_LX", ly: "SWI_LY",
+        },
+        "wii" => ConsoleDefaults {
+            menu_mod: "WII_ZL", menu_btn: "WII_PLUS",
+            confirm: "WII_A", cancel: "WII_B",
+            up: "WII_UP", down: "WII_DOWN", left: "WII_LEFT", right: "WII_RIGHT",
+            fire: "WII_ZR", ads: "WII_ZL",
+            rx: "WII_RX", ry: "WII_RY", lx: "WII_LX", ly: "WII_LY",
+        },
+        _ => ConsoleDefaults { // ps5 default
+            menu_mod: "PS5_L2", menu_btn: "PS5_OPTIONS",
+            confirm: "PS5_CROSS", cancel: "PS5_CIRCLE",
+            up: "PS5_UP", down: "PS5_DOWN", left: "PS5_LEFT", right: "PS5_RIGHT",
+            fire: "PS5_R2", ads: "PS5_L2",
+            rx: "PS5_RX", ry: "PS5_RY", lx: "PS5_LX", ly: "PS5_LY",
+        },
     }
 }
 

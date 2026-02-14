@@ -1,3 +1,5 @@
+use crate::models::config::GameConfig;
+use crate::pipeline::config_gen::resolve_config_template;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
@@ -205,7 +207,7 @@ pub fn build_game(
         }
     };
 
-    let config: toml::Value = match toml::from_str(&config_content) {
+    let config: GameConfig = match toml::from_str(&config_content) {
         Ok(c) => c,
         Err(e) => {
             return BuildResult {
@@ -217,16 +219,8 @@ pub fn build_game(
         }
     };
 
-    let filename = config
-        .get("filename")
-        .and_then(|v| v.as_str())
-        .unwrap_or("Output");
-    let version = config
-        .get("version")
-        .and_then(|v| v.as_integer())
-        .unwrap_or(1);
-
-    let output_filename = format!("{}{}.gpc", filename, version);
+    let resolved_filename = resolve_config_template(&config.filename, &config);
+    let output_filename = format!("{}.gpc", resolved_filename);
     let dist_dir = project_root.join("Dist");
 
     // Ensure dist directory exists

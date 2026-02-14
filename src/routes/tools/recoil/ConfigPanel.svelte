@@ -14,6 +14,11 @@
         scale = $bindable(3),
         onClear
     }: Props = $props();
+
+    let rpmCalcOpen = $state(false);
+    let magSize = $state(30);
+    let emptyTime = $state(3);
+    let calculatedRpm = $derived(emptyTime > 0 ? Math.round((magSize / emptyTime) * 60) : 0);
 </script>
 
 <div class="rounded-lg border border-zinc-800 bg-zinc-900 p-3">
@@ -61,6 +66,62 @@
             <p class="text-xs text-zinc-600">
                 {Math.round(60000 / fireRate)}ms between shots
             </p>
+
+            <!-- RPM Calculator -->
+            <div class="border-t border-zinc-800 pt-2">
+                <button
+                    class="flex w-full items-center gap-1 text-xs text-zinc-500 hover:text-zinc-400"
+                    onclick={() => rpmCalcOpen = !rpmCalcOpen}
+                >
+                    <svg
+                        class="h-3 w-3 transition-transform {rpmCalcOpen ? 'rotate-90' : ''}"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                    >
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                    </svg>
+                    RPM Calculator
+                </button>
+                {#if rpmCalcOpen}
+                    <div class="mt-2 space-y-2">
+                        <label class="block">
+                            <span class="text-xs text-zinc-400">Magazine Size</span>
+                            <input
+                                type="number"
+                                bind:value={magSize}
+                                min="1"
+                                max="999"
+                                class="mt-0.5 block w-full rounded border border-zinc-700 bg-zinc-800 px-2.5 py-1.5 text-sm text-zinc-200 focus:border-emerald-600 focus:outline-none"
+                            />
+                        </label>
+                        <label class="block">
+                            <span class="text-xs text-zinc-400">Time to Empty (seconds)</span>
+                            <input
+                                type="number"
+                                bind:value={emptyTime}
+                                min="0.1"
+                                max="60"
+                                step="0.1"
+                                class="mt-0.5 block w-full rounded border border-zinc-700 bg-zinc-800 px-2.5 py-1.5 text-sm text-zinc-200 focus:border-emerald-600 focus:outline-none"
+                            />
+                        </label>
+                        {#if calculatedRpm > 0}
+                            <div class="flex items-center justify-between">
+                                <p class="text-xs text-zinc-300">
+                                    = <span class="font-medium text-emerald-400">{calculatedRpm}</span> RPM
+                                </p>
+                                <button
+                                    class="rounded bg-emerald-600 px-2 py-1 text-xs text-white hover:bg-emerald-500"
+                                    onclick={() => fireRate = calculatedRpm}
+                                >
+                                    Apply
+                                </button>
+                            </div>
+                        {/if}
+                    </div>
+                {/if}
+            </div>
         </div>
     {:else}
         <p class="text-xs leading-relaxed text-zinc-500">

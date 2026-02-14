@@ -3,8 +3,16 @@
     import type { GameConfig, MenuItem } from '$lib/types/config';
     import { addToast } from '$lib/stores/toast.svelte';
     import { getSettings, getAllGameTypes } from '$lib/stores/settings.svelte';
+    import { resolveConfigVars } from '$lib/utils/config-vars';
     import KeySelect from '$lib/components/inputs/KeySelect.svelte';
     import ButtonSelect from '$lib/components/inputs/ButtonSelect.svelte';
+    import {
+        CONSOLE_TYPES,
+        CONSOLE_LABELS,
+        translateButton,
+        detectConsoleFromButton,
+        type ConsoleType
+    } from '$lib/utils/console-buttons';
 
     interface Props {
         gamePath: string;
@@ -92,6 +100,26 @@
     let settingsStore = getSettings();
     let gameTypeOptions = $derived(getAllGameTypes($settingsStore));
     const menuTypeOptions = ['clickable', 'toggle', 'value', 'selector', 'custom'];
+
+    let resolvedFilename = $derived(config ? resolveConfigVars(config.filename, config) : '');
+    let resolvedTitle = $derived(config ? resolveConfigVars(config.state_screen.title, config) : '');
+    let hasTemplateVars = (text: string) => /{[a-z]+}/.test(text);
+
+    let consoleType = $derived((config?.console_type ?? 'ps5') as ConsoleType);
+
+    function handleConsoleTypeChange(newType: ConsoleType) {
+        if (!config) return;
+        const oldType = consoleType;
+        config.console_type = newType;
+
+        // Auto-translate all button mappings
+        const buttons = config.buttons as unknown as Record<string, string>;
+        for (const key of Object.keys(buttons)) {
+            buttons[key] = translateButton(buttons[key], oldType, newType);
+        }
+        // Trigger reactivity
+        config.buttons = { ...config.buttons };
+    }
 </script>
 
 {#if loading}
@@ -128,6 +156,9 @@
                             class="w-full rounded border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-200 focus:border-emerald-500 focus:outline-none"
                             bind:value={config.filename}
                         />
+                        {#if hasTemplateVars(config.filename)}
+                            <p class="mt-1 text-xs text-zinc-500">&rarr; {resolvedFilename}</p>
+                        {/if}
                     </div>
                     <div>
                         <label class="mb-1 block text-xs text-zinc-400">Version</label>
@@ -147,6 +178,18 @@
                         >
                             {#each gameTypeOptions as type}
                                 <option value={type}>{type.toUpperCase()}</option>
+                            {/each}
+                        </select>
+                    </div>
+                    <div>
+                        <label class="mb-1 block text-xs text-zinc-400">Console Type</label>
+                        <select
+                            class="w-full rounded border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-200 focus:border-emerald-500 focus:outline-none"
+                            value={consoleType}
+                            onchange={(e) => handleConsoleTypeChange((e.target as HTMLSelectElement).value as ConsoleType)}
+                        >
+                            {#each CONSOLE_TYPES as ct}
+                                <option value={ct}>{CONSOLE_LABELS[ct]}</option>
                             {/each}
                         </select>
                     </div>
@@ -173,6 +216,12 @@
                         class="w-full rounded border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-200 focus:border-emerald-500 focus:outline-none"
                         bind:value={config.state_screen.title}
                     />
+                    {#if hasTemplateVars(config.state_screen.title)}
+                        <p class="mt-1 text-xs text-zinc-500">&rarr; {resolvedTitle}</p>
+                    {/if}
+                    <p class="mt-1 text-xs text-zinc-600">
+                        Variables: {'{version}'}, {'{game}'}, {'{gameabbr}'}, {'{username}'}, {'{type}'}
+                    </p>
                 </div>
             </section>
 
@@ -184,8 +233,9 @@
                         <div>
                             <label class="mb-1 block text-xs text-zinc-400 capitalize">{key.replace(/_/g, ' ')}</label>
                             <ButtonSelect
+                                {consoleType}
                                 value={value}
-                                onchange={(v) => config && ((config.buttons as Record<string, string>)[key] = v)}
+                                onchange={(v) => config && ((config.buttons as unknown as Record<string, string>)[key] = v)}
                             />
                         </div>
                     {/each}

@@ -104,7 +104,7 @@ export function serializeRecoilTable(
     // Rebuild just the data rows
     const commentLine = '\n//  V0  H0  V1  H1  V2  H2  V3  H3  V4  H4  V5  H5  V6  H6  V7  H7  V8  H8  V9  H9';
 
-    const rows = entries.map((entry) => {
+    const rows = entries.map((entry, i) => {
         const vals = entry.values.map((v) => {
             const s = String(v);
             return s.length < 2 ? ' ' + s : s;
@@ -112,12 +112,13 @@ export function serializeRecoilTable(
 
         // Format: {V0, H0, V1, H1, ...}, /* index name type */
         const valStr = vals.join(', ');
+        const comma = i < entries.length - 1 ? ',' : ' ';
         const idxStr = String(entry.index).padStart(4, ' ');
         const nameStr = entry.name.padEnd(14, ' ');
         const typeStr = entry.type ? entry.type.padEnd(4, ' ') : '';
         const comment = `/*${idxStr}  ${nameStr}${typeStr}*/`;
 
-        return `    {${valStr}}, ${comment}`;
+        return `    {${valStr}}${comma} ${comment}`;
     });
 
     return header + commentLine + '\n' + rows.join('\n') + '\n' + footer;

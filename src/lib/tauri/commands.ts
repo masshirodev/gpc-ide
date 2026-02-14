@@ -64,6 +64,7 @@ export interface CreateGameParams {
 	display_name?: string;
 	username?: string;
 	game_type: string;
+	console_type?: string;
 	version: number;
 	profiles: number;
 	module_ids: string[];

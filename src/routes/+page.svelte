@@ -12,7 +12,8 @@
         saveTab,
         closeAllTabs,
         reloadTab,
-        getTab
+        getTab,
+        wasRecentlySaved
     } from '$lib/stores/editor.svelte';
     import { getUiStore, setSidebarCollapsed } from '$lib/stores/ui.svelte';
     import { getLspStore, startLsp, stopLsp, getLspClient } from '$lib/stores/lsp.svelte';
@@ -146,6 +147,9 @@
                 // Auto-reload open tabs when files are modified externally
                 if (event.kind === 'modify' && event.paths) {
                     for (const changedPath of event.paths) {
+                        // Skip files we just saved ourselves
+                        if (wasRecentlySaved(changedPath)) continue;
+
                         const tab = getTab(changedPath);
                         if (tab) {
                             if (tab.dirty) {
