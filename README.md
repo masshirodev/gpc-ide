@@ -1,5 +1,7 @@
 # GPC IDE
 
+![GPC IDE Screenshot](https://imgur.com/MZ5sfQU.png)
+
 Desktop IDE for creating, editing, and building Cronus Zen GPC game scripts with OLED menu support.
 
 Built with Tauri v2 (Rust backend) + SvelteKit (Svelte 5) + TailwindCSS + Monaco Editor.
@@ -21,6 +23,10 @@ Built with Tauri v2 (Rust backend) + SvelteKit (Svelte 5) + TailwindCSS + Monaco
 - [Node.js](https://nodejs.org/) (v18+)
 - [Rust](https://www.rust-lang.org/tools/install) (stable)
 - [Tauri v2 prerequisites](https://v2.tauri.app/start/prerequisites/)
+
+## Installation
+
+Head over to [Releases](https://github.com/masshirodev/gpc-ide/releases) to grab the latest pre-built binaries. We provide both installers and portable archives for Windows and Linux.
 
 ## Development
 
