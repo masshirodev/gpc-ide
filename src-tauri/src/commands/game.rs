@@ -85,8 +85,17 @@ pub fn list_games(workspace_paths: Option<Vec<String>>) -> Result<Vec<GameSummar
                     continue;
                 }
 
-                if !game_dir.join("Modules").is_dir() {
-                    continue;
+                // Ensure Modules/ directory exists for modular games
+                let modules_dir = game_dir.join("Modules");
+                if !modules_dir.is_dir() {
+                    if let Err(e) = std::fs::create_dir_all(&modules_dir) {
+                        log::warn!(
+                            "Failed to create Modules dir for {}: {}",
+                            game_dir.display(),
+                            e
+                        );
+                        continue;
+                    }
                 }
                 match parse_game_summary(config_path) {
                     Ok(summary) => games.push(summary),
@@ -146,8 +155,8 @@ pub fn delete_game(game_path: String) -> Result<(), String> {
     if !path.exists() {
         return Err("Game directory not found".to_string());
     }
-    // Safety: require config.toml + Modules/ to confirm it's a real game dir
-    if !path.join("config.toml").exists() || !path.join("Modules").is_dir() {
+    // Safety: require config.toml to confirm it's a real game dir
+    if !path.join("config.toml").exists() {
         return Err("Not a valid game directory".to_string());
     }
     std::fs::remove_dir_all(path)
