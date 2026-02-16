@@ -7,14 +7,18 @@
 		type BottomPanelTab
 	} from '$lib/stores/ui.svelte';
 	import { getDiagnosticsStore, getDiagnosticCounts } from '$lib/stores/diagnostics.svelte';
+	import { getSearchStore, clearSearch } from '$lib/stores/search.svelte';
 	import { clearLogs } from '$lib/stores/logs.svelte';
 	import ProblemsPanel from './ProblemsPanel.svelte';
 	import LogsPanel from './LogsPanel.svelte';
+	import SearchPanel from './SearchPanel.svelte';
 
 	let ui = getUiStore();
 	let diagStore = getDiagnosticsStore();
 	let counts = $derived(getDiagnosticCounts(diagStore.byUri));
+	let searchStore = getSearchStore();
 	let dragging = $state(false);
+	let searchPanel: SearchPanel | undefined = $state();
 
 	function onResizeStart(e: PointerEvent) {
 		e.preventDefault();
@@ -39,6 +43,7 @@
 
 	const tabs: { id: BottomPanelTab; label: string }[] = [
 		{ id: 'problems', label: 'Problems' },
+		{ id: 'search', label: 'Search' },
 		{ id: 'logs', label: 'Logs' }
 	];
 
@@ -46,7 +51,14 @@
 		if (tab.id === 'problems' && counts.total > 0) {
 			return `${tab.label} (${counts.total})`;
 		}
+		if (tab.id === 'search' && searchStore.totalMatches > 0) {
+			return `${tab.label} (${searchStore.totalMatches})`;
+		}
 		return tab.label;
+	}
+
+	export function focusSearch() {
+		searchPanel?.focusSearchInput();
 	}
 </script>
 
@@ -74,8 +86,16 @@
 			{/each}
 			<div class="flex-1"></div>
 
-			<!-- Clear button (logs tab only) -->
-			{#if ui.bottomPanel.activeTab === 'logs'}
+			<!-- Clear button -->
+			{#if ui.bottomPanel.activeTab === 'search'}
+				<button
+					class="px-2 py-1 text-xs text-zinc-500 hover:text-zinc-300"
+					onclick={clearSearch}
+					title="Clear search"
+				>
+					Clear
+				</button>
+			{:else if ui.bottomPanel.activeTab === 'logs'}
 				<button
 					class="px-2 py-1 text-xs text-zinc-500 hover:text-zinc-300"
 					onclick={clearLogs}
@@ -103,6 +123,8 @@
 		<div class="min-h-0 flex-1 overflow-hidden">
 			{#if ui.bottomPanel.activeTab === 'problems'}
 				<ProblemsPanel />
+			{:else if ui.bottomPanel.activeTab === 'search'}
+				<SearchPanel bind:this={searchPanel} />
 			{:else if ui.bottomPanel.activeTab === 'logs'}
 				<LogsPanel />
 			{/if}

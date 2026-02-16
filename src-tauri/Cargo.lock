@@ -1454,6 +1454,7 @@ version = "0.1.0"
 dependencies = [
  "log",
  "notify",
+ "regex",
  "serde",
  "serde_json",
  "tauri",

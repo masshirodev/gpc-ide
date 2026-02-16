@@ -54,6 +54,8 @@ pub fn run() {
             commands::templates::list_templates,
             commands::templates::read_template,
             commands::templates::import_template,
+            commands::search::search_in_files,
+            commands::search::replace_in_file,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

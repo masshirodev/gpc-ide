@@ -15,7 +15,7 @@
         getTab,
         wasRecentlySaved
     } from '$lib/stores/editor.svelte';
-    import { getUiStore, setSidebarCollapsed, toggleBottomPanel, consumeFileNavigation } from '$lib/stores/ui.svelte';
+    import { getUiStore, setSidebarCollapsed, toggleBottomPanel, setBottomPanelOpen, setBottomPanelActiveTab, consumeFileNavigation } from '$lib/stores/ui.svelte';
     import { getLspStore, startLsp, stopLsp, getLspClient } from '$lib/stores/lsp.svelte';
     import { MonacoLspBridge } from '$lib/lsp/MonacoLspBridge';
     import { buildGame, readFileTree, readFile, watchDirectory, deleteFile, deleteGame, regenerateFile, regenerateAll, openInDefaultApp } from '$lib/tauri/commands';
@@ -556,6 +556,11 @@
         if ((e.ctrlKey || e.metaKey) && e.key === 'j') {
             e.preventDefault();
             toggleBottomPanel();
+        }
+        if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'F') {
+            e.preventDefault();
+            setBottomPanelActiveTab('search');
+            setBottomPanelOpen(true);
         }
     }
 

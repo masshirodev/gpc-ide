@@ -221,6 +221,50 @@ export async function importTemplate(
 	});
 }
 
+// === Search Commands ===
+
+export interface SearchMatch {
+	line_number: number;
+	line_content: string;
+	match_start: number;
+	match_end: number;
+}
+
+export interface SearchFileResult {
+	path: string;
+	matches: SearchMatch[];
+}
+
+export async function searchInFiles(
+	directory: string,
+	query: string,
+	caseSensitive: boolean,
+	useRegex: boolean
+): Promise<SearchFileResult[]> {
+	return invoke<SearchFileResult[]>('search_in_files', {
+		directory,
+		query,
+		caseSensitive,
+		useRegex
+	});
+}
+
+export async function replaceInFile(
+	path: string,
+	query: string,
+	replacement: string,
+	caseSensitive: boolean,
+	useRegex: boolean
+): Promise<number> {
+	return invoke<number>('replace_in_file', {
+		path,
+		query,
+		replacement,
+		caseSensitive,
+		useRegex
+	});
+}
+
 // === Opener Commands ===
 
 export async function openInDefaultApp(path: string): Promise<void> {
