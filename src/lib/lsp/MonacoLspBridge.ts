@@ -1,5 +1,6 @@
 import type * as Monaco from 'monaco-editor';
 import type { LspClient, LspDiagnostic, LspRange } from './LspClient';
+import { setDiagnostics as storeDiagnostics, clearAllDiagnostics } from '$lib/stores/diagnostics.svelte';
 
 // LSP CompletionItemKind → Monaco CompletionItemKind
 const COMPLETION_KIND_MAP: Record<number, number> = {
@@ -75,6 +76,7 @@ export class MonacoLspBridge {
         // Register diagnostic handler
         this.client.onDiagnostics((uri, diagnostics) => {
             this.setDiagnostics(uri, diagnostics);
+            storeDiagnostics(uri, diagnostics);
         });
     }
 
@@ -84,6 +86,7 @@ export class MonacoLspBridge {
             d.dispose();
         }
         this.disposables = [];
+        clearAllDiagnostics();
     }
 
     // --- Provider Registration ---

@@ -40,6 +40,8 @@
 	let createError = $state('');
 
 	// Derived
+	let userModules = $derived(availableModules.filter((m) => m.is_user_module));
+	let builtinModules = $derived(availableModules.filter((m) => !m.is_user_module));
 	let needsWeapondata = $derived(
 		availableModules.some(
 			(m) => selectedModuleIds.has(m.id) && m.needs_weapondata
@@ -322,84 +324,96 @@
 				</div>
 			{/if}
 
+			{#snippet moduleItem(module: ModuleSummary)}
+				{@const isSelected = selectedModuleIds.has(module.id)}
+				{@const isAutoRequired = needsWeapondata && module.id === 'weapondata' && !isSelected}
+				<button
+					class="flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left transition-colors
+						{isSelected
+							? 'border border-emerald-700 bg-emerald-900/30'
+							: isAutoRequired
+								? 'border border-amber-800/50 bg-amber-900/10'
+								: 'border border-zinc-800 bg-zinc-800/50 hover:bg-zinc-800'}"
+					onclick={() => toggleModule(module.id)}
+				>
+					<div
+						class="flex h-5 w-5 shrink-0 items-center justify-center rounded border
+							{isSelected
+								? 'border-emerald-500 bg-emerald-600'
+								: isAutoRequired
+									? 'border-amber-600 bg-amber-700'
+									: 'border-zinc-600'}"
+					>
+						{#if isSelected || isAutoRequired}
+							<svg class="h-3 w-3 text-white" viewBox="0 0 20 20" fill="currentColor">
+								<path
+									fill-rule="evenodd"
+									d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+									clip-rule="evenodd"
+								/>
+							</svg>
+						{/if}
+					</div>
+					<div class="flex-1">
+						<div class="flex items-center gap-2">
+							<span class="text-sm font-medium text-zinc-200">
+								{module.display_name}
+							</span>
+							{#if module.has_quick_toggle}
+								<span
+									class="rounded bg-blue-900/50 px-1.5 py-0.5 text-[10px] font-medium uppercase text-blue-400"
+								>
+									QT
+								</span>
+							{/if}
+							{#if isAutoRequired}
+								<span
+									class="rounded bg-amber-900/50 px-1.5 py-0.5 text-[10px] font-medium text-amber-400"
+								>
+									auto-required
+								</span>
+							{/if}
+						</div>
+						{#if module.description}
+							<p class="mt-0.5 text-xs text-zinc-500">
+								{module.description.split('\n')[0]}
+							</p>
+						{/if}
+					</div>
+					<div class="flex items-center gap-2">
+						{#if module.param_count > 0}
+							<span
+								class="rounded bg-zinc-700 px-1.5 py-0.5 text-[10px] text-zinc-400"
+							>
+								{module.param_count} param{module.param_count !== 1 ? 's' : ''}
+							</span>
+						{/if}
+						<span
+							class="rounded px-1.5 py-0.5 text-[10px] font-medium uppercase
+								{module.module_type === 'fgs'
+									? 'bg-cyan-900/50 text-cyan-400'
+									: 'bg-yellow-900/50 text-yellow-400'}"
+						>
+							{module.module_type}
+						</span>
+					</div>
+				</button>
+			{/snippet}
+
 			{#if modulesLoading}
 				<div class="py-8 text-center text-zinc-500">Loading modules...</div>
 			{:else}
 				<div class="space-y-1.5">
-					{#each availableModules as module}
-						{@const isSelected = selectedModuleIds.has(module.id)}
-						{@const isAutoRequired = needsWeapondata && module.id === 'weapondata' && !isSelected}
-						<button
-							class="flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left transition-colors
-								{isSelected
-									? 'border border-emerald-700 bg-emerald-900/30'
-									: isAutoRequired
-										? 'border border-amber-800/50 bg-amber-900/10'
-										: 'border border-zinc-800 bg-zinc-800/50 hover:bg-zinc-800'}"
-							onclick={() => toggleModule(module.id)}
-						>
-							<div
-								class="flex h-5 w-5 shrink-0 items-center justify-center rounded border
-									{isSelected
-										? 'border-emerald-500 bg-emerald-600'
-										: isAutoRequired
-											? 'border-amber-600 bg-amber-700'
-											: 'border-zinc-600'}"
-							>
-								{#if isSelected || isAutoRequired}
-									<svg class="h-3 w-3 text-white" viewBox="0 0 20 20" fill="currentColor">
-										<path
-											fill-rule="evenodd"
-											d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-											clip-rule="evenodd"
-										/>
-									</svg>
-								{/if}
-							</div>
-							<div class="flex-1">
-								<div class="flex items-center gap-2">
-									<span class="text-sm font-medium text-zinc-200">
-										{module.display_name}
-									</span>
-									{#if module.has_quick_toggle}
-										<span
-											class="rounded bg-blue-900/50 px-1.5 py-0.5 text-[10px] font-medium uppercase text-blue-400"
-										>
-											QT
-										</span>
-									{/if}
-									{#if isAutoRequired}
-										<span
-											class="rounded bg-amber-900/50 px-1.5 py-0.5 text-[10px] font-medium text-amber-400"
-										>
-											auto-required
-										</span>
-									{/if}
-								</div>
-								{#if module.description}
-									<p class="mt-0.5 text-xs text-zinc-500">
-										{module.description.split('\n')[0]}
-									</p>
-								{/if}
-							</div>
-							<div class="flex items-center gap-2">
-								{#if module.param_count > 0}
-									<span
-										class="rounded bg-zinc-700 px-1.5 py-0.5 text-[10px] text-zinc-400"
-									>
-										{module.param_count} param{module.param_count !== 1 ? 's' : ''}
-									</span>
-								{/if}
-								<span
-									class="rounded px-1.5 py-0.5 text-[10px] font-medium uppercase
-										{module.module_type === 'fgs'
-											? 'bg-cyan-900/50 text-cyan-400'
-											: 'bg-yellow-900/50 text-yellow-400'}"
-								>
-									{module.module_type}
-								</span>
-							</div>
-						</button>
+					{#if userModules.length > 0}
+						<div class="pb-1 text-xs font-medium uppercase tracking-wider text-zinc-500">Your Modules</div>
+						{#each userModules as module}
+							{@render moduleItem(module)}
+						{/each}
+						<div class="my-2 border-t border-zinc-700"></div>
+						<div class="pb-1 text-xs font-medium uppercase tracking-wider text-zinc-500">Built-in Modules</div>
+					{/if}
+					{#each builtinModules as module}
+						{@render moduleItem(module)}
 					{/each}
 				</div>
 

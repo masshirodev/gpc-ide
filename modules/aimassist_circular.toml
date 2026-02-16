@@ -1,0 +1,41 @@
+[aimassist_circular]
+display_name = "Aim Assist (Circular)"
+id = "aimassist_circular"
+type = "fps"
+description = "Smooth 360-degree circular right-stick movement while ADS.\nUses a 72-point lookup table for precise circular motion to keep aim assist engaged."
+state_display = "AC"
+status_var = "AimCircularStatus"
+has_quick_toggle = true
+conflicts = [
+    "aimassist_square",
+    "aimassist_jitter",
+    "aimassist_polar",
+    "aimassist_leftstick",
+]
+trigger = "if (AimCircularStatus && get_val(PS5_L2)) {\n    combo_run(AimCircular);\n}"
+combo = "const int8 AimCirc_X[] = {\n     0,   9,  17,  26,  34,  43,  50,  58,  64,  70,  76,  81,\n    85,  88,  91,  94,  96,  97,  98,  98,  97,  96,  94,  91,\n    88,  85,  81,  76,  70,  64,  58,  50,  43,  34,  26,  17,\n     9,   0,  -9, -17, -26, -34, -43, -50, -58, -64, -70, -76,\n   -81, -85, -88, -91, -94, -96, -97, -98, -98, -97, -96, -94,\n   -91, -88, -85, -81, -76, -70, -64, -58, -50, -43, -34, -26,\n   -17,  -9\n};\n\nconst int8 AimCirc_Y[] = {\n   100,  99,  98,  96,  94,  91,  88,  85,  81,  76,  70,  64,\n    58,  50,  43,  34,  26,  17,   9,   0,  -9, -17, -26, -34,\n   -43, -50, -58, -64, -70, -76, -81, -85, -88, -91, -94, -96,\n   -98, -99,-100, -99, -98, -96, -94, -91, -88, -85, -81, -76,\n   -70, -64, -58, -50, -43, -34, -26, -17,  -9,   0,   9,  17,\n    26,  34,  43,  50,  58,  64,  70,  76,  81,  85,  88,  91,\n    94,  96\n};\n\ndefine AIMCIRC_STEPS = 72;\n\ncombo AimCircular {\n    set_val(PS5_RX, clamp(get_val(PS5_RX) + (AimCirc_X[AimCirc_Index] * AimCircularSize / 100), -100, 100));\n    set_val(PS5_RY, clamp(get_val(PS5_RY) + (AimCirc_Y[AimCirc_Index] * AimCircularSize / 100), -100, 100));\n    AimCirc_Index = (AimCirc_Index + 1 + AimCircularSpeed) % AIMCIRC_STEPS;\n    wait(10);\n}"
+
+[[aimassist_circular.options]]
+name = "Status"
+var = "AimCircularStatus"
+type = "toggle"
+default = 0
+
+[[aimassist_circular.options]]
+name = "Size"
+var = "AimCircularSize"
+type = "value"
+min = 1
+max = 30
+default = 15
+
+[[aimassist_circular.options]]
+name = "Speed"
+var = "AimCircularSpeed"
+type = "value"
+min = 0
+max = 5
+default = 1
+
+[aimassist_circular.extra_vars]
+AimCirc_Index = "int"

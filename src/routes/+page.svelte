@@ -15,7 +15,7 @@
         getTab,
         wasRecentlySaved
     } from '$lib/stores/editor.svelte';
-    import { getUiStore, setSidebarCollapsed } from '$lib/stores/ui.svelte';
+    import { getUiStore, setSidebarCollapsed, toggleBottomPanel, consumeFileNavigation } from '$lib/stores/ui.svelte';
     import { getLspStore, startLsp, stopLsp, getLspClient } from '$lib/stores/lsp.svelte';
     import { MonacoLspBridge } from '$lib/lsp/MonacoLspBridge';
     import { buildGame, readFileTree, readFile, watchDirectory, deleteFile, deleteGame, regenerateFile, regenerateAll, openInDefaultApp } from '$lib/tauri/commands';
@@ -553,7 +553,20 @@
             e.preventDefault();
             handleBuild();
         }
+        if ((e.ctrlKey || e.metaKey) && e.key === 'j') {
+            e.preventDefault();
+            toggleBottomPanel();
+        }
     }
+
+    // Watch for file navigation requests from the bottom panel (Problems tab)
+    $effect(() => {
+        const nav = consumeFileNavigation();
+        if (nav && store.selectedGame) {
+            activeTab = 'files';
+            openTabAtLine(nav.path, nav.line);
+        }
+    });
 
     function handleCloseTab(e: MouseEvent, path: string) {
         e.stopPropagation();
@@ -737,7 +750,7 @@
 
         {:else if activeTab === 'files'}
             <!-- File Browser - Full Width -->
-            <div class="flex gap-0" style="height: calc(100vh - 140px);">
+            <div class="flex h-full gap-0">
                 <!-- File Tree -->
                 <div class="w-52 shrink-0 border-r border-zinc-800 bg-zinc-900/50 flex flex-col">
                     <!-- File Tree Header -->
@@ -1095,7 +1108,7 @@
                                     </button>
                                 </div>
                             </div>
-                            <div style="height: calc(100vh - 380px);">
+                            <div class="h-96">
                                 <MonacoEditor
                                     value={buildOutputContent}
                                     language="gpc"

@@ -3,6 +3,7 @@
     import favicon from '$lib/assets/favicon.svg';
     import Sidebar from '$lib/components/layout/Sidebar.svelte';
     import StatusBar from '$lib/components/layout/StatusBar.svelte';
+    import BottomPanel from '$lib/components/layout/BottomPanel.svelte';
     import SettingsModal from '$lib/components/layout/SettingsModal.svelte';
     import ToastContainer from '$lib/components/layout/ToastContainer.svelte';
     import { loadGames, selectGame, getGameStore, clearSelection } from '$lib/stores/game.svelte';
@@ -12,6 +13,7 @@
     import { pickWorkspaceDirectory, getDefaultWorkspace, deleteGame } from '$lib/tauri/commands';
     import { ask } from '@tauri-apps/plugin-dialog';
     import { goto } from '$app/navigation';
+    import { page } from '$app/state';
     import { onMount } from 'svelte';
     import type { GameSummary } from '$lib/types/config';
 
@@ -34,6 +36,7 @@
     });
 
     let needsSetup = $derived(settings.workspaces.length === 0);
+    let isScriptView = $derived(page.url.pathname === '/' && !!gameStore.selectedGame);
 
     async function handleSetupPickWorkspace() {
         const path = await pickWorkspaceDirectory();
@@ -75,7 +78,7 @@
 <svelte:head><link rel="icon" href={favicon} /></svelte:head>
 
 <div class="flex h-screen flex-col">
-    <div class="relative flex flex-1 overflow-hidden">
+    <div class="relative flex min-h-0 flex-1 overflow-hidden">
         <div class="flex h-full w-10 shrink-0 flex-col border-r border-zinc-700 bg-zinc-900">
             <button
                 class="flex h-10 items-center justify-center text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
@@ -115,7 +118,10 @@
             {@render children()}
         </main>
     </div>
-    <StatusBar />
+    {#if isScriptView}
+        <BottomPanel />
+    {/if}
+    <StatusBar {isScriptView} />
 </div>
 
 {#if needsSetup}

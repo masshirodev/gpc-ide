@@ -1,0 +1,38 @@
+[aimassist_leftstick]
+display_name = "Aim Assist (Left Stick)"
+id = "aimassist_leftstick"
+type = "fps"
+description = "Rhythmic left-stick movement while ADS to engage rotational aim assist.\nOscillates the left stick in a square pattern to trigger movement-based tracking.\nStops when player is actively moving the left stick."
+state_display = "AL"
+status_var = "AimLSStatus"
+has_quick_toggle = true
+conflicts = [
+    "aimassist_square",
+    "aimassist_jitter",
+    "aimassist_circular",
+    "aimassist_polar",
+]
+trigger = "if (AimLSStatus && get_val(PS5_L2)) {\n    if (abs(get_val(PS5_LX)) > 70 || abs(get_val(PS5_LY)) > 70) {\n        combo_stop(AimLeftStick);\n    } else {\n        combo_run(AimLeftStick);\n    }\n}\nif (!get_val(PS5_L2) && combo_running(AimLeftStick)) {\n    combo_stop(AimLeftStick);\n}"
+combo = "combo AimLeftStick {\n    set_val(PS5_LX, clamp(get_val(PS5_LX) + AimLSStrength, -100, 100));\n    set_val(PS5_LY, get_val(PS5_LY));\n    wait(jitter(AimLSSpeed));\n    set_val(PS5_LX, get_val(PS5_LX));\n    set_val(PS5_LY, clamp(get_val(PS5_LY) - AimLSStrength, -100, 100));\n    wait(jitter(AimLSSpeed));\n    set_val(PS5_LX, clamp(get_val(PS5_LX) - AimLSStrength, -100, 100));\n    set_val(PS5_LY, get_val(PS5_LY));\n    wait(jitter(AimLSSpeed));\n    set_val(PS5_LX, get_val(PS5_LX));\n    set_val(PS5_LY, clamp(get_val(PS5_LY) + AimLSStrength, -100, 100));\n    wait(jitter(AimLSSpeed));\n}"
+
+[[aimassist_leftstick.options]]
+name = "Status"
+var = "AimLSStatus"
+type = "toggle"
+default = 0
+
+[[aimassist_leftstick.options]]
+name = "Strength"
+var = "AimLSStrength"
+type = "value"
+min = 1
+max = 30
+default = 20
+
+[[aimassist_leftstick.options]]
+name = "Speed"
+var = "AimLSSpeed"
+type = "value"
+min = 10
+max = 50
+default = 20

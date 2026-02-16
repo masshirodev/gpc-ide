@@ -1,0 +1,43 @@
+[aimassist_polar]
+display_name = "Aim Assist (Polar)"
+id = "aimassist_polar"
+type = "fps"
+description = "Circular aim assist using POLAR_GHOST for perfectly synced stick movement.\nThe cleanest circular method — adds smooth orbital motion without interfering with manual aim."
+state_display = "AP"
+status_var = "AimPolarStatus"
+has_quick_toggle = true
+conflicts = [
+    "aimassist_square",
+    "aimassist_jitter",
+    "aimassist_circular",
+    "aimassist_leftstick",
+]
+trigger = "if (AimPolarStatus && get_val(PS5_L2)) {\n    combo_run(AimPolar);\n}"
+combo = "define AIMPOL_X_AXIS = 0;\ndefine AIMPOL_Y_AXIS = 1;\n\ncombo AimPolar {\n    AimPol_PolarX = get_val(PS5_RX) + AimPol_ToCart(AimPol_Angle, AimPolarSize, AIMPOL_X_AXIS);\n    AimPol_PolarY = get_val(PS5_RY) + AimPol_ToCart(AimPol_Angle, AimPolarSize, AIMPOL_Y_AXIS);\n    AimPol_Angle = (AimPol_Angle + AimPolarSpeed) % 360;\n    set_val(PS5_RX, clamp(AimPol_PolarX, -100, 100));\n    set_val(PS5_RY, clamp(AimPol_PolarY, -100, 100));\n    wait(10);\n}\n\nfunction AimPol_ToCart(angle_, radius_, axis_) {\n    set_polar2(POLAR_GHOST, angle_, radius_ * 100);\n    if (axis_ == AIMPOL_X_AXIS) {\n        return get_val(ANALOG_GHOSTX);\n    }\n    return get_val(ANALOG_GHOSTY);\n}"
+
+[[aimassist_polar.options]]
+name = "Status"
+var = "AimPolarStatus"
+type = "toggle"
+default = 0
+
+[[aimassist_polar.options]]
+name = "Size"
+var = "AimPolarSize"
+type = "value"
+min = 1
+max = 30
+default = 15
+
+[[aimassist_polar.options]]
+name = "Speed"
+var = "AimPolarSpeed"
+type = "value"
+min = 5
+max = 50
+default = 20
+
+[aimassist_polar.extra_vars]
+AimPol_Angle = "int"
+AimPol_PolarX = "int"
+AimPol_PolarY = "int"

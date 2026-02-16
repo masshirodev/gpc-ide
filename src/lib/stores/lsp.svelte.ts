@@ -1,5 +1,6 @@
 import { LspClient } from '$lib/lsp/LspClient';
 import { getSettings } from '$lib/stores/settings.svelte';
+import { addLog } from '$lib/stores/logs.svelte';
 
 interface LspStore {
     status: 'stopped' | 'starting' | 'running' | 'error';
@@ -41,6 +42,7 @@ export async function startLsp(workspaceRoot: string): Promise<void> {
     client = new LspClient();
     client.onLog((msg) => {
         console.log('[LSP]', msg);
+        addLog('info', 'LSP', msg);
     });
 
     try {

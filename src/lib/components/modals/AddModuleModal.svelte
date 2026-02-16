@@ -99,6 +99,9 @@
         modules.filter(m => m.module_type === gameType || m.module_type === 'all')
     );
 
+    let userModules = $derived(compatibleModules.filter(m => m.is_user_module));
+    let builtinModules = $derived(compatibleModules.filter(m => !m.is_user_module));
+
     let selectedModuleDetails = $derived(
         modules.find(m => m.id === selectedModule)
     );
@@ -139,41 +142,54 @@
                     </div>
                 {/if}
 
+                {#snippet moduleButton(module: ModuleSummary)}
+                    <button
+                        class="w-full rounded border px-4 py-3 text-left transition-colors {selectedModule === module.id
+                            ? 'border-emerald-500 bg-emerald-900/30'
+                            : 'border-zinc-700 bg-zinc-800/50 hover:border-zinc-600 hover:bg-zinc-800'}"
+                        onclick={() => selectedModule = module.id}
+                        disabled={adding}
+                    >
+                        <div class="flex items-start justify-between">
+                            <div class="flex-1">
+                                <div class="flex items-center gap-2">
+                                    <h3 class="font-medium text-zinc-100">{module.display_name}</h3>
+                                    <span class="rounded bg-zinc-700 px-2 py-0.5 text-xs text-zinc-300 uppercase">
+                                        {module.module_type}
+                                    </span>
+                                </div>
+                                <p class="mt-1 text-sm text-zinc-400">{module.description}</p>
+                                {#if module.dependencies && module.dependencies.length > 0}
+                                    <p class="mt-1 text-xs text-amber-400">
+                                        Requires: {module.dependencies.join(', ')}
+                                    </p>
+                                {/if}
+                            </div>
+                            {#if selectedModule === module.id}
+                                <svg class="h-5 w-5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                                </svg>
+                            {/if}
+                        </div>
+                    </button>
+                {/snippet}
+
                 <div>
                     <label class="mb-2 block text-sm text-zinc-300">
                         Select Module
                     </label>
                     <div class="space-y-2">
-                        {#each compatibleModules as module}
-                            <button
-                                class="w-full rounded border px-4 py-3 text-left transition-colors {selectedModule === module.id
-                                    ? 'border-emerald-500 bg-emerald-900/30'
-                                    : 'border-zinc-700 bg-zinc-800/50 hover:border-zinc-600 hover:bg-zinc-800'}"
-                                onclick={() => selectedModule = module.id}
-                                disabled={adding}
-                            >
-                                <div class="flex items-start justify-between">
-                                    <div class="flex-1">
-                                        <div class="flex items-center gap-2">
-                                            <h3 class="font-medium text-zinc-100">{module.display_name}</h3>
-                                            <span class="rounded bg-zinc-700 px-2 py-0.5 text-xs text-zinc-300 uppercase">
-                                                {module.module_type}
-                                            </span>
-                                        </div>
-                                        <p class="mt-1 text-sm text-zinc-400">{module.description}</p>
-                                        {#if module.dependencies && module.dependencies.length > 0}
-                                            <p class="mt-1 text-xs text-amber-400">
-                                                Requires: {module.dependencies.join(', ')}
-                                            </p>
-                                        {/if}
-                                    </div>
-                                    {#if selectedModule === module.id}
-                                        <svg class="h-5 w-5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-                                        </svg>
-                                    {/if}
-                                </div>
-                            </button>
+                        {#if userModules.length > 0}
+                            <div class="pb-1 text-xs font-medium uppercase tracking-wider text-zinc-500">Your Modules</div>
+                            {#each userModules as module}
+                                {@render moduleButton(module)}
+                            {/each}
+                            <div class="my-2 border-t border-zinc-700"></div>
+                            <div class="pb-1 text-xs font-medium uppercase tracking-wider text-zinc-500">Built-in Modules</div>
+                        {/if}
+
+                        {#each builtinModules as module}
+                            {@render moduleButton(module)}
                         {/each}
 
                         {#if compatibleModules.length === 0}

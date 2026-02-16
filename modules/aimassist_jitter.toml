@@ -1,0 +1,42 @@
+[aimassist_jitter]
+display_name = "Aim Assist (Jitter)"
+id = "aimassist_jitter"
+type = "fps"
+description = "Random right-stick jitter while ADS to keep aim assist engaged.\nShakes the stick in a random direction each frame within configurable range."
+state_display = "AJ"
+status_var = "AimJitterStatus"
+has_quick_toggle = true
+conflicts = [
+    "aimassist_square",
+    "aimassist_circular",
+    "aimassist_polar",
+    "aimassist_leftstick",
+]
+trigger = "if (AimJitterStatus && get_val(PS5_L2)) {\n    combo_run(AimJitter);\n}"
+combo = "combo AimJitter {\n    AimJitter_RX = random(inv(AimJitterStrength), AimJitterStrength);\n    AimJitter_RY = random(inv(AimJitterStrength), AimJitterStrength);\n    set_val(PS5_RX, clamp(get_val(PS5_RX) + AimJitter_RX, -100, 100));\n    set_val(PS5_RY, clamp(get_val(PS5_RY) + AimJitter_RY, -100, 100));\n    wait(jitter(AimJitterSpeed));\n}"
+
+[[aimassist_jitter.options]]
+name = "Status"
+var = "AimJitterStatus"
+type = "toggle"
+default = 0
+
+[[aimassist_jitter.options]]
+name = "Strength"
+var = "AimJitterStrength"
+type = "value"
+min = 1
+max = 10
+default = 5
+
+[[aimassist_jitter.options]]
+name = "Speed"
+var = "AimJitterSpeed"
+type = "value"
+min = 10
+max = 50
+default = 20
+
+[aimassist_jitter.extra_vars]
+AimJitter_RX = "int"
+AimJitter_RY = "int"

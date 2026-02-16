@@ -1,21 +1,27 @@
-[aimassist]
-display_name = "Aim Assist"
-id = "aimassist"
+[aimassist_square]
+display_name = "Aim Assist (Square)"
+id = "aimassist_square"
 type = "fps"
-description = "Micro circular stick movement while ADS to engage aim assist.\nRotates the right stick in small increments across 4 angles."
+description = "Micro square stick movement while ADS to engage aim assist.\nRotates the right stick in small increments across 4 angles."
 state_display = "AA"
 status_var = "AimAssistStatus"
 has_quick_toggle = true
+conflicts = [
+    "aimassist_jitter",
+    "aimassist_circular",
+    "aimassist_polar",
+    "aimassist_leftstick",
+]
 trigger = "if (AimAssistStatus && get_val(PS5_L2)) {\n    combo_run(AimAssist);\n}"
 combo = "combo AimAssist {\n    AimAssist_Step = AimAssistStrength;\n    AimAssist_Angle++;\n    if (AimAssist_Angle > 3) {\n        AimAssist_Angle = 0;\n    }\n    if (AimAssist_Angle == 0) {\n        set_val(PS5_RX, clamp(get_val(PS5_RX) + AimAssist_Step, -100, 100));\n    }\n    if (AimAssist_Angle == 1) {\n        set_val(PS5_RY, clamp(get_val(PS5_RY) + AimAssist_Step, -100, 100));\n    }\n    if (AimAssist_Angle == 2) {\n        set_val(PS5_RX, clamp(get_val(PS5_RX) - AimAssist_Step, -100, 100));\n    }\n    if (AimAssist_Angle == 3) {\n        set_val(PS5_RY, clamp(get_val(PS5_RY) - AimAssist_Step, -100, 100));\n    }\n    wait(jitter(AimAssistSpeed));\n}"
 
-[[aimassist.options]]
+[[aimassist_square.options]]
 name = "Status"
 var = "AimAssistStatus"
 type = "toggle"
 default = 0
 
-[[aimassist.options]]
+[[aimassist_square.options]]
 name = "Strength"
 var = "AimAssistStrength"
 type = "value"
@@ -23,7 +29,7 @@ min = 1
 max = 10
 default = 5
 
-[[aimassist.options]]
+[[aimassist_square.options]]
 name = "Speed"
 var = "AimAssistSpeed"
 type = "value"
@@ -31,6 +37,6 @@ min = 10
 max = 50
 default = 20
 
-[aimassist.extra_vars]
+[aimassist_square.extra_vars]
 AimAssist_Step = "int"
 AimAssist_Angle = "int"
