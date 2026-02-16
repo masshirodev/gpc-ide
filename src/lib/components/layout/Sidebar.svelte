@@ -16,7 +16,13 @@
     let types = $derived(Object.keys(grouped).sort());
 </script>
 
-<aside class="flex h-full w-64 flex-col border-r border-zinc-700 bg-zinc-900">
+<aside
+    class="flex h-full w-64 flex-col border-r border-zinc-700 bg-zinc-900"
+    onclick={(e) => {
+        const target = (e.target as HTMLElement).closest('a, button');
+        if (target && !target.matches('[data-no-collapse]')) onCollapse?.();
+    }}
+>
     <div class="flex items-center justify-between border-b border-zinc-700 px-4 py-3">
         <div class="flex items-center gap-2">
             <svg class="h-5 w-5 text-emerald-400" viewBox="0 0 20 20" fill="currentColor">
@@ -29,6 +35,7 @@
         {#if onCollapse}
             <button
                 class="rounded p-1 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300"
+                data-no-collapse
                 onclick={onCollapse}
                 title="Collapse sidebar"
             >
@@ -76,6 +83,7 @@
                             {#if onDeleteGame}
                                 <button
                                     class="rounded p-0.5 text-zinc-600 opacity-0 hover:text-red-400 group-hover:opacity-100"
+                                    data-no-collapse
                                     onclick={(e) => { e.stopPropagation(); onDeleteGame(game); }}
                                     title="Delete game"
                                 >

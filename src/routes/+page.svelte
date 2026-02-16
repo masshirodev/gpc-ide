@@ -189,9 +189,11 @@
         }
     }
 
-    // Auto-collapse sidebar when on files tab, restore when leaving
+    // Auto-collapse sidebar when switching to files tab
     $effect(() => {
-        setSidebarCollapsed(activeTab === 'files');
+        if (activeTab === 'files') {
+            setSidebarCollapsed(true);
+        }
     });
 
     // Load file tree and start LSP when a game is selected
