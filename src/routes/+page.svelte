@@ -564,12 +564,16 @@
         }
     }
 
-    // Watch for file navigation requests from the bottom panel (Problems tab)
+    // Watch for file navigation requests from the bottom panel (Problems/Search tabs)
     $effect(() => {
         const nav = consumeFileNavigation();
         if (nav && store.selectedGame) {
             activeTab = 'files';
-            openTabAtLine(nav.path, nav.line);
+            if (editorStore.activeTabPath === nav.path) {
+                editorComponent?.revealLine(nav.line);
+            } else {
+                openTabAtLine(nav.path, nav.line);
+            }
         }
     });
 
@@ -583,7 +587,7 @@
 
 {#if store.selectedGame && store.selectedConfig}
     <!-- Game Detail View -->
-    <div class="{activeTab === 'files' ? 'h-full' : 'mx-auto max-w-5xl p-6'}">
+    <div class="{activeTab === 'files' ? 'flex h-full flex-col overflow-hidden' : 'mx-auto max-w-5xl p-6'}">
         <div class="mb-4 flex items-center justify-between {activeTab === 'files' ? 'px-4 pt-3' : ''}">
             <div>
                 <h1 class="text-2xl font-bold text-zinc-100">{store.selectedGame.name}</h1>
@@ -755,7 +759,7 @@
 
         {:else if activeTab === 'files'}
             <!-- File Browser - Full Width -->
-            <div class="flex h-full gap-0">
+            <div class="flex min-h-0 flex-1 gap-0">
                 <!-- File Tree -->
                 <div class="w-52 shrink-0 border-r border-zinc-800 bg-zinc-900/50 flex flex-col">
                     <!-- File Tree Header -->

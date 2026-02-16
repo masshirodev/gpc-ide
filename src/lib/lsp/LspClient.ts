@@ -51,14 +51,10 @@ export class LspClient {
             this.handleMessage(raw);
         });
 
-        // Invoke the Rust command to spawn the LSP and send initialize
-        await invoke('lsp_start', {
-            workspaceRoot,
-            customCommand: customCommand || null,
-        });
-
-        // Wait for the initialize response (id: 0 sent by Rust)
-        await new Promise<void>((resolve, reject) => {
+        // Register the pending handler for the initialize response (id: 0)
+        // BEFORE invoking lsp_start, to avoid a race condition where the
+        // embedded in-process LSP responds before the handler is set up.
+        const initPromise = new Promise<void>((resolve, reject) => {
             this.pending.set(0, {
                 resolve: () => {
                     this.initialized = true;
@@ -76,6 +72,15 @@ export class LspClient {
                 }
             }, 10000);
         });
+
+        // Invoke the Rust command to spawn the LSP and send initialize
+        await invoke('lsp_start', {
+            workspaceRoot,
+            customCommand: customCommand || null,
+        });
+
+        // Wait for the initialize response (id: 0 sent by Rust)
+        await initPromise;
 
         // Send initialized notification
         await this.sendNotification('initialized', {});
@@ -335,6 +340,70 @@ export class LspClient {
     async documentSymbols(uri: string): Promise<unknown> {
         return this.sendRequest('textDocument/documentSymbol', {
             textDocument: { uri },
+        });
+    }
+
+    async textDocumentDidSave(uri: string): Promise<void> {
+        await this.sendNotification('textDocument/didSave', {
+            textDocument: { uri },
+        });
+    }
+
+    async rename(
+        uri: string,
+        position: LspPosition,
+        newName: string
+    ): Promise<unknown> {
+        return this.sendRequest('textDocument/rename', {
+            textDocument: { uri },
+            position,
+            newName,
+        });
+    }
+
+    async documentHighlight(
+        uri: string,
+        position: LspPosition
+    ): Promise<unknown> {
+        return this.sendRequest('textDocument/documentHighlight', {
+            textDocument: { uri },
+            position,
+        });
+    }
+
+    async foldingRange(uri: string): Promise<unknown> {
+        return this.sendRequest('textDocument/foldingRange', {
+            textDocument: { uri },
+        });
+    }
+
+    async inlayHint(uri: string, range: LspRange): Promise<unknown> {
+        return this.sendRequest('textDocument/inlayHint', {
+            textDocument: { uri },
+            range,
+        });
+    }
+
+    async semanticTokensFull(uri: string): Promise<unknown> {
+        return this.sendRequest('textDocument/semanticTokens/full', {
+            textDocument: { uri },
+        });
+    }
+
+    async codeLens(uri: string): Promise<unknown> {
+        return this.sendRequest('textDocument/codeLens', {
+            textDocument: { uri },
+        });
+    }
+
+    async documentFormatting(
+        uri: string,
+        tabSize: number,
+        insertSpaces: boolean
+    ): Promise<unknown> {
+        return this.sendRequest('textDocument/formatting', {
+            textDocument: { uri },
+            options: { tabSize, insertSpaces },
         });
     }
 }

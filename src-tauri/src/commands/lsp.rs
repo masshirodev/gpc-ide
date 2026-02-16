@@ -1,3 +1,5 @@
+use crate::lsp::embedded::EmbeddedLspProvider;
+use crate::lsp::provider::LspProviderKind;
 use crate::lsp::stdio::StdioLspProvider;
 use std::sync::Arc;
 use tauri::State;
@@ -5,7 +7,7 @@ use tokio::sync::Mutex;
 
 /// Managed state for the LSP provider
 pub struct LspState {
-    pub provider: Arc<Mutex<Option<StdioLspProvider>>>,
+    pub provider: Arc<Mutex<Option<LspProviderKind>>>,
 }
 
 impl Default for LspState {
@@ -18,9 +20,9 @@ impl Default for LspState {
 
 /// Start the GPC language server.
 ///
-/// Spawns the node process with the bundled server.js, sends the initialize
-/// request. The frontend LspClient handles the initialize response and sends
-/// the initialized notification.
+/// If a custom command is provided (or GPC_LSP_COMMAND env var is set), spawns an
+/// external process via stdio. Otherwise, starts the embedded ersa-lsp-core server
+/// in-process using in-memory channels.
 #[tauri::command]
 pub async fn lsp_start(
     workspace_root: String,
@@ -35,10 +37,17 @@ pub async fn lsp_start(
         let _ = existing.stop().await;
     }
 
-    let (command, args) = resolve_server_command(custom_command)?;
-    let arg_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
-
-    let provider = StdioLspProvider::start(&command, &arg_refs, app_handle).await?;
+    // Determine provider: custom command -> stdio, otherwise -> embedded
+    let provider = if let Some(resolved) = resolve_external_command(custom_command) {
+        let (command, args) = resolved?;
+        let arg_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
+        let stdio = StdioLspProvider::start(&command, &arg_refs, app_handle).await?;
+        LspProviderKind::Stdio(stdio)
+    } else {
+        let features = ersa_lsp_core::lsp::Features::all();
+        let embedded = EmbeddedLspProvider::start(app_handle, features).await?;
+        LspProviderKind::Embedded(embedded)
+    };
 
     // Send initialize request (id: 0)
     let workspace_name = workspace_root
@@ -47,51 +56,8 @@ pub async fn lsp_start(
         .unwrap_or("workspace")
         .to_string();
 
-    let initialize_params = serde_json::json!({
-        "jsonrpc": "2.0",
-        "id": 0,
-        "method": "initialize",
-        "params": {
-            "processId": std::process::id(),
-            "capabilities": {
-                "textDocument": {
-                    "completion": {
-                        "completionItem": {
-                            "snippetSupport": false,
-                            "documentationFormat": ["markdown", "plaintext"]
-                        }
-                    },
-                    "hover": {
-                        "contentFormat": ["markdown", "plaintext"]
-                    },
-                    "signatureHelp": {
-                        "signatureInformation": {
-                            "documentationFormat": ["markdown", "plaintext"]
-                        }
-                    },
-                    "synchronization": {
-                        "didSave": true,
-                        "dynamicRegistration": false
-                    },
-                    "publishDiagnostics": {
-                        "relatedInformation": true
-                    }
-                },
-                "workspace": {
-                    "configuration": true
-                }
-            },
-            "rootUri": format!("file://{}", workspace_root),
-            "workspaceFolders": [{
-                "uri": format!("file://{}", workspace_root),
-                "name": workspace_name
-            }]
-        }
-    });
-
-    provider
-        .send(&initialize_params.to_string())
-        .await?;
+    let initialize_params = build_initialize_params(&workspace_root, &workspace_name);
+    provider.send(&initialize_params.to_string()).await?;
 
     *provider_guard = Some(provider);
     Ok(())
@@ -124,7 +90,7 @@ pub async fn lsp_stop(state: State<'_, LspState>) -> Result<(), String> {
     Ok(())
 }
 
-/// Forward a raw JSON-RPC message to the language server stdin.
+/// Forward a raw JSON-RPC message to the language server.
 #[tauri::command]
 pub async fn lsp_send(message: String, state: State<'_, LspState>) -> Result<(), String> {
     let provider_guard = state.provider.lock().await;
@@ -145,59 +111,122 @@ pub async fn lsp_status(state: State<'_, LspState>) -> Result<bool, String> {
         .unwrap_or(false))
 }
 
-/// Resolve the LSP server command and arguments.
-///
-/// Priority: 1) custom_command from settings, 2) GPC_LSP_COMMAND env var, 3) bundled server.js
-fn resolve_server_command(custom_command: Option<String>) -> Result<(String, Vec<String>), String> {
-    // Check custom command from frontend settings
+/// Returns Some if an external command should be used, None if embedded should be used.
+fn resolve_external_command(
+    custom_command: Option<String>,
+) -> Option<Result<(String, Vec<String>), String>> {
     let custom_str = custom_command
         .filter(|s| !s.trim().is_empty())
         .or_else(|| std::env::var("GPC_LSP_COMMAND").ok());
 
-    if let Some(custom) = custom_str {
+    custom_str.map(|custom| {
         let parts: Vec<String> = custom.split_whitespace().map(String::from).collect();
         if parts.is_empty() {
-            return Err("Custom LSP command is empty".to_string());
+            Err("Custom LSP command is empty".to_string())
+        } else {
+            let command = parts[0].clone();
+            let args = parts[1..].to_vec();
+            Ok((command, args))
         }
-        let command = parts[0].clone();
-        let args = parts[1..].to_vec();
-        return Ok((command, args));
-    }
-
-    // Use bundled server.js
-    let server_path = resolve_bundled_server_path()?;
-    Ok((
-        "node".to_string(),
-        vec![server_path, "--stdio".to_string()],
-    ))
+    })
 }
 
-/// Find the bundled server.js relative to the project root.
-fn resolve_bundled_server_path() -> Result<String, String> {
-    // In development: go from src-tauri/ up to the Frontend/ dir, then lsp-server/server.js
-    let cargo_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-
-    // cargo_dir = Frontend/src-tauri
-    // We want Frontend/lsp-server/server.js
-    let server_path = cargo_dir
-        .parent() // Frontend/
-        .map(|p| p.join("lsp-server").join("server.cjs"));
-
-    if let Some(path) = server_path {
-        if path.exists() {
-            return Ok(path.to_string_lossy().to_string());
+/// Build the JSON-RPC initialize request with full client capabilities.
+fn build_initialize_params(workspace_root: &str, workspace_name: &str) -> serde_json::Value {
+    serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 0,
+        "method": "initialize",
+        "params": {
+            "processId": std::process::id(),
+            "capabilities": {
+                "textDocument": {
+                    "completion": {
+                        "completionItem": {
+                            "snippetSupport": true,
+                            "documentationFormat": ["markdown", "plaintext"]
+                        }
+                    },
+                    "hover": {
+                        "contentFormat": ["markdown", "plaintext"]
+                    },
+                    "signatureHelp": {
+                        "signatureInformation": {
+                            "documentationFormat": ["markdown", "plaintext"],
+                            "parameterInformation": {
+                                "labelOffsetSupport": true
+                            }
+                        }
+                    },
+                    "synchronization": {
+                        "didSave": true,
+                        "dynamicRegistration": false
+                    },
+                    "publishDiagnostics": {
+                        "relatedInformation": true,
+                        "tagSupport": {
+                            "valueSet": [1, 2]
+                        }
+                    },
+                    "definition": {
+                        "dynamicRegistration": false
+                    },
+                    "references": {
+                        "dynamicRegistration": false
+                    },
+                    "documentHighlight": {
+                        "dynamicRegistration": false
+                    },
+                    "documentSymbol": {
+                        "dynamicRegistration": false,
+                        "hierarchicalDocumentSymbolSupport": true
+                    },
+                    "formatting": {
+                        "dynamicRegistration": false
+                    },
+                    "rename": {
+                        "dynamicRegistration": false,
+                        "prepareSupport": false
+                    },
+                    "foldingRange": {
+                        "dynamicRegistration": false,
+                        "lineFoldingOnly": true
+                    },
+                    "semanticTokens": {
+                        "dynamicRegistration": false,
+                        "requests": {
+                            "full": true,
+                            "range": false
+                        },
+                        "tokenTypes": [
+                            "function", "variable", "enumMember", "parameter"
+                        ],
+                        "tokenModifiers": [
+                            "declaration", "readonly"
+                        ],
+                        "formats": ["relative"],
+                        "multilineTokenSupport": false,
+                        "overlappingTokenSupport": false
+                    },
+                    "inlayHint": {
+                        "dynamicRegistration": false
+                    },
+                    "diagnostic": {
+                        "dynamicRegistration": false
+                    },
+                    "codeLens": {
+                        "dynamicRegistration": false
+                    }
+                },
+                "workspace": {
+                    "configuration": true
+                }
+            },
+            "rootUri": format!("file://{}", workspace_root),
+            "workspaceFolders": [{
+                "uri": format!("file://{}", workspace_root),
+                "name": workspace_name
+            }]
         }
-    }
-
-    // Also try relative to the project root (when running as installed app)
-    let alt_path = cargo_dir.join("../lsp-server/server.cjs");
-    if alt_path.exists() {
-        return Ok(alt_path.canonicalize().unwrap().to_string_lossy().to_string());
-    }
-
-    Err(
-        "Could not find bundled GPC language server (lsp-server/server.js). \
-         Set GPC_LSP_COMMAND environment variable to use a custom LSP server."
-            .to_string(),
-    )
+    })
 }

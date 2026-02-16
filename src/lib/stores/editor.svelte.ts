@@ -158,6 +158,13 @@ export async function saveTab(path?: string) {
         tab.originalContent = tab.content;
         tab.dirty = false;
         setTimeout(() => recentWrites.delete(targetPath), 1000);
+
+        // Notify LSP that the document was saved
+        const client = getLspClient();
+        if (client?.isInitialized()) {
+            client.textDocumentDidSave(pathToUri(targetPath));
+        }
+
         addToast(`Saved ${tab.name}`, 'success', 2000);
     } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);

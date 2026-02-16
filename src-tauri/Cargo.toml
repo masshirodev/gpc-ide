@@ -25,9 +25,10 @@ tauri-plugin-opener = "2"
 toml = "0.8"
 toml_edit = "0.22"
 walkdir = "2"
-tokio = { version = "1", features = ["process", "io-util", "sync", "rt"] }
+tokio = { version = "1", features = ["process", "io-util", "sync", "rt", "time"] }
 notify = "7"
 regex = "1"
+ersa_lsp_core = { path = "../../ersa-lsp-core" }
 
 [dev-dependencies]
 tempfile = "3"

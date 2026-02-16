@@ -71,6 +71,13 @@ export class MonacoLspBridge {
             this.registerReferenceProvider(),
             this.registerSignatureHelpProvider(),
             this.registerDocumentSymbolProvider(),
+            this.registerDocumentHighlightProvider(),
+            this.registerRenameProvider(),
+            this.registerFoldingRangeProvider(),
+            this.registerInlayHintsProvider(),
+            this.registerSemanticTokensProvider(),
+            this.registerCodeLensProvider(),
+            this.registerDocumentFormattingProvider(),
         ];
 
         // Register diagnostic handler
@@ -282,6 +289,259 @@ export class MonacoLspBridge {
                 }
             },
         });
+    }
+
+    private registerDocumentHighlightProvider(): Monaco.IDisposable {
+        return this.monaco.languages.registerDocumentHighlightProvider('gpc', {
+            provideDocumentHighlights: async (model, position) => {
+                const uri = pathToUri(model.uri.path);
+                try {
+                    const result = await this.client.documentHighlight(uri, {
+                        line: position.lineNumber - 1,
+                        character: position.column - 1,
+                    });
+                    if (!result) return null;
+
+                    const highlights = result as Array<{
+                        range: LspRange;
+                        kind?: number;
+                    }>;
+                    return highlights.map((h) => ({
+                        range: this.convertRange(h.range),
+                        kind: h.kind,
+                    }));
+                } catch {
+                    return null;
+                }
+            },
+        });
+    }
+
+    private registerRenameProvider(): Monaco.IDisposable {
+        return this.monaco.languages.registerRenameProvider('gpc', {
+            provideRenameEdits: async (model, position, newName) => {
+                const uri = pathToUri(model.uri.path);
+                try {
+                    const result = await this.client.rename(
+                        uri,
+                        {
+                            line: position.lineNumber - 1,
+                            character: position.column - 1,
+                        },
+                        newName
+                    );
+                    if (!result) return null;
+
+                    const workspaceEdit = result as {
+                        changes?: Record<
+                            string,
+                            Array<{ range: LspRange; newText: string }>
+                        >;
+                    };
+
+                    const edits: Monaco.languages.IWorkspaceTextEdit[] = [];
+                    if (workspaceEdit.changes) {
+                        for (const [docUri, textEdits] of Object.entries(
+                            workspaceEdit.changes
+                        )) {
+                            for (const edit of textEdits) {
+                                edits.push({
+                                    resource: this.monaco.Uri.parse(docUri),
+                                    textEdit: {
+                                        range: this.convertRange(edit.range),
+                                        text: edit.newText,
+                                    },
+                                    versionId: undefined,
+                                });
+                            }
+                        }
+                    }
+                    return { edits };
+                } catch {
+                    return null;
+                }
+            },
+        });
+    }
+
+    private registerFoldingRangeProvider(): Monaco.IDisposable {
+        return this.monaco.languages.registerFoldingRangeProvider('gpc', {
+            provideFoldingRanges: async (model) => {
+                const uri = pathToUri(model.uri.path);
+                try {
+                    const result = await this.client.foldingRange(uri);
+                    if (!result) return [];
+
+                    const ranges = result as Array<{
+                        startLine: number;
+                        startCharacter?: number;
+                        endLine: number;
+                        endCharacter?: number;
+                        kind?: string;
+                    }>;
+                    return ranges.map((r) => ({
+                        start: r.startLine + 1,
+                        end: r.endLine + 1,
+                        kind: r.kind
+                            ? new this.monaco.languages.FoldingRangeKind(
+                                  r.kind
+                              )
+                            : undefined,
+                    }));
+                } catch {
+                    return [];
+                }
+            },
+        });
+    }
+
+    private registerInlayHintsProvider(): Monaco.IDisposable {
+        return this.monaco.languages.registerInlayHintsProvider('gpc', {
+            provideInlayHints: async (model, range) => {
+                const uri = pathToUri(model.uri.path);
+                try {
+                    const lspRange: LspRange = {
+                        start: {
+                            line: range.startLineNumber - 1,
+                            character: range.startColumn - 1,
+                        },
+                        end: {
+                            line: range.endLineNumber - 1,
+                            character: range.endColumn - 1,
+                        },
+                    };
+                    const result = await this.client.inlayHint(uri, lspRange);
+                    if (!result) return { hints: [], dispose: () => {} };
+
+                    const hints = result as Array<{
+                        position: { line: number; character: number };
+                        label: string;
+                        kind?: number;
+                        paddingLeft?: boolean;
+                        paddingRight?: boolean;
+                    }>;
+                    return {
+                        hints: hints.map((h) => ({
+                            position: {
+                                lineNumber: h.position.line + 1,
+                                column: h.position.character + 1,
+                            },
+                            label: h.label,
+                            kind: h.kind as Monaco.languages.InlayHintKind,
+                            paddingLeft: h.paddingLeft,
+                            paddingRight: h.paddingRight,
+                        })),
+                        dispose: () => {},
+                    };
+                } catch {
+                    return { hints: [], dispose: () => {} };
+                }
+            },
+        });
+    }
+
+    private registerSemanticTokensProvider(): Monaco.IDisposable {
+        const legend: Monaco.languages.SemanticTokensLegend = {
+            tokenTypes: ['function', 'variable', 'enumMember', 'parameter'],
+            tokenModifiers: ['declaration', 'readonly'],
+        };
+
+        return this.monaco.languages.registerDocumentSemanticTokensProvider(
+            'gpc',
+            {
+                getLegend: () => legend,
+                provideDocumentSemanticTokens: async (model) => {
+                    const uri = pathToUri(model.uri.path);
+                    try {
+                        const result =
+                            await this.client.semanticTokensFull(uri);
+                        if (!result) return null;
+
+                        const tokens = result as {
+                            resultId?: string;
+                            data?: number[];
+                        };
+                        if (!tokens.data || !Array.isArray(tokens.data))
+                            return null;
+
+                        return {
+                            resultId: tokens.resultId,
+                            data: new Uint32Array(tokens.data),
+                        };
+                    } catch {
+                        return null;
+                    }
+                },
+                releaseDocumentSemanticTokens: () => {},
+            }
+        );
+    }
+
+    private registerCodeLensProvider(): Monaco.IDisposable {
+        return this.monaco.languages.registerCodeLensProvider('gpc', {
+            provideCodeLenses: async (model) => {
+                const uri = pathToUri(model.uri.path);
+                try {
+                    const result = await this.client.codeLens(uri);
+                    if (!result)
+                        return { lenses: [], dispose: () => {} };
+
+                    const lenses = result as Array<{
+                        range: LspRange;
+                        command?: {
+                            title: string;
+                            command: string;
+                            arguments?: unknown[];
+                        };
+                    }>;
+                    return {
+                        lenses: lenses.map((lens) => ({
+                            range: this.convertRange(lens.range),
+                            command: lens.command
+                                ? {
+                                      id: lens.command.command,
+                                      title: lens.command.title,
+                                      arguments: lens.command.arguments,
+                                  }
+                                : undefined,
+                        })),
+                        dispose: () => {},
+                    };
+                } catch {
+                    return { lenses: [], dispose: () => {} };
+                }
+            },
+        });
+    }
+
+    private registerDocumentFormattingProvider(): Monaco.IDisposable {
+        return this.monaco.languages.registerDocumentFormattingEditProvider(
+            'gpc',
+            {
+                provideDocumentFormattingEdits: async (model, options) => {
+                    const uri = pathToUri(model.uri.path);
+                    try {
+                        const result = await this.client.documentFormatting(
+                            uri,
+                            options.tabSize,
+                            options.insertSpaces
+                        );
+                        if (!result) return [];
+
+                        const edits = result as Array<{
+                            range: LspRange;
+                            newText: string;
+                        }>;
+                        return edits.map((e) => ({
+                            range: this.convertRange(e.range),
+                            text: e.newText,
+                        }));
+                    } catch {
+                        return [];
+                    }
+                },
+            }
+        );
     }
 
     // --- Diagnostics ---
