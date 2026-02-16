@@ -161,9 +161,14 @@ export interface AddModuleResult {
 
 export async function addModule(
 	gamePath: string,
-	params: AddModuleParams
+	params: AddModuleParams,
+	workspacePaths?: string[]
 ): Promise<AddModuleResult> {
-	return invoke<AddModuleResult>('add_module', { gamePath, params });
+	return invoke<AddModuleResult>('add_module', {
+		gamePath,
+		params,
+		workspacePaths: workspacePaths ?? null
+	});
 }
 
 // === File Watcher Commands ===

@@ -146,10 +146,11 @@
 	async function handleSave() {
 		try {
 			const { save } = await import('@tauri-apps/plugin-dialog');
-			const path = await save({
+			let path = await save({
 				filters: [{ name: 'OLED Project', extensions: ['oled.json'] }]
 			});
 			if (!path) return;
+			if (!path.endsWith('.oled.json')) path += '.oled.json';
 
 			const project: OledProject = {
 				version: 1,

@@ -12,7 +12,11 @@ pub fn create_game(params: CreateGameParams) -> Result<CreateGameResult, String>
 
 /// Add a module to an existing game
 #[tauri::command]
-pub fn add_module(game_path: String, params: AddModuleParams) -> Result<AddModuleResult, String> {
+pub fn add_module(
+    game_path: String,
+    params: AddModuleParams,
+    workspace_paths: Option<Vec<String>>,
+) -> Result<AddModuleResult, String> {
     let root = app_root();
     let game_dir = PathBuf::from(&game_path);
 
@@ -20,8 +24,12 @@ pub fn add_module(game_path: String, params: AddModuleParams) -> Result<AddModul
         return Err(format!("Game directory not found: {}", game_path));
     }
 
-    // Load all modules
-    let all_modules = crate::pipeline::modules::load_all_modules(&root)?;
+    // Load all modules including user modules from workspaces
+    let extra: Vec<PathBuf> = workspace_paths
+        .as_ref()
+        .map(|paths| paths.iter().filter(|p| !p.is_empty()).map(PathBuf::from).collect())
+        .unwrap_or_default();
+    let all_modules = crate::pipeline::modules::load_all_modules_with_paths(&root, &extra)?;
 
     // Find the requested module
     let module = all_modules

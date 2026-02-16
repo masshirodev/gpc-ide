@@ -78,7 +78,7 @@
                 weapon_names: undefined
             };
 
-            const result = await addModule(gamePath, params);
+            const result = await addModule(gamePath, params, settings.workspaces);
 
             if (result.success) {
                 addToast(`Module ${selectedModule} added successfully`, 'success');
