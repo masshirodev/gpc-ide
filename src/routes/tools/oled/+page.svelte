@@ -10,7 +10,6 @@
 	import { shiftPixels } from './drawing';
 	import { createEmptyPixels, clonePixels, invertPixels, pixelsToBase64, base64ToPixels } from './pixels';
 	import type { OledScene, DrawTool, BrushShape, AnimationConfig, OledProject } from './types';
-	import { save, open as openDialog } from '@tauri-apps/plugin-dialog';
 	import { writeFile, readFile } from '$lib/tauri/commands';
 
 	// --- State ---
@@ -146,6 +145,7 @@
 	// --- Save / Load ---
 	async function handleSave() {
 		try {
+			const { save } = await import('@tauri-apps/plugin-dialog');
 			const path = await save({
 				filters: [{ name: 'OLED Project', extensions: ['oled.json'] }]
 			});
@@ -170,6 +170,7 @@
 
 	async function handleLoad() {
 		try {
+			const { open: openDialog } = await import('@tauri-apps/plugin-dialog');
 			const path = await openDialog({
 				filters: [{ name: 'OLED Project', extensions: ['oled.json'] }]
 			});
