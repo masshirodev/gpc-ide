@@ -3,7 +3,7 @@ const BOTTOM_PANEL_MIN_HEIGHT = 100;
 const BOTTOM_PANEL_MAX_HEIGHT = 500;
 const BOTTOM_PANEL_DEFAULT_HEIGHT = 200;
 
-export type BottomPanelTab = 'problems' | 'logs' | 'search';
+export type BottomPanelTab = 'problems' | 'logs' | 'search' | 'references';
 
 interface BottomPanelState {
 	open: boolean;

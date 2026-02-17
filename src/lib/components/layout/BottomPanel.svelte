@@ -9,14 +9,22 @@
 	import { getDiagnosticsStore, getDiagnosticCounts } from '$lib/stores/diagnostics.svelte';
 	import { getSearchStore, clearSearch } from '$lib/stores/search.svelte';
 	import { clearLogs } from '$lib/stores/logs.svelte';
+	import {
+		getReferencesStore,
+		getReferencesCount,
+		clearReferences
+	} from '$lib/stores/references.svelte';
 	import ProblemsPanel from './ProblemsPanel.svelte';
 	import LogsPanel from './LogsPanel.svelte';
 	import SearchPanel from './SearchPanel.svelte';
+	import ReferencesPanel from './ReferencesPanel.svelte';
 
 	let ui = getUiStore();
 	let diagStore = getDiagnosticsStore();
 	let counts = $derived(getDiagnosticCounts(diagStore.byUri));
 	let searchStore = getSearchStore();
+	let refsStore = getReferencesStore();
+	let refsCount = $derived(getReferencesCount());
 	let dragging = $state(false);
 	let searchPanel: SearchPanel | undefined = $state();
 
@@ -44,6 +52,7 @@
 	const tabs: { id: BottomPanelTab; label: string }[] = [
 		{ id: 'problems', label: 'Problems' },
 		{ id: 'search', label: 'Search' },
+		{ id: 'references', label: 'References' },
 		{ id: 'logs', label: 'Logs' }
 	];
 
@@ -53,6 +62,9 @@
 		}
 		if (tab.id === 'search' && searchStore.totalMatches > 0) {
 			return `${tab.label} (${searchStore.totalMatches})`;
+		}
+		if (tab.id === 'references' && refsCount > 0) {
+			return `${tab.label} (${refsCount})`;
 		}
 		return tab.label;
 	}
@@ -70,7 +82,9 @@
 		<!-- Resize handle -->
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
 		<div
-			class="h-1 cursor-row-resize bg-zinc-800 transition-colors hover:bg-emerald-600 {dragging ? 'bg-emerald-600' : ''}"
+			class="h-1 cursor-row-resize bg-zinc-800 transition-colors hover:bg-emerald-600 {dragging
+				? 'bg-emerald-600'
+				: ''}"
 			onpointerdown={onResizeStart}
 		></div>
 
@@ -78,7 +92,10 @@
 		<div class="flex items-center border-b border-zinc-700 bg-zinc-900">
 			{#each tabs as tab}
 				<button
-					class="border-b-2 px-3 py-1 text-xs font-medium transition-colors {ui.bottomPanel.activeTab === tab.id ? 'border-emerald-400 text-zinc-200' : 'border-transparent text-zinc-500 hover:text-zinc-400'}"
+					class="border-b-2 px-3 py-1 text-xs font-medium transition-colors {ui.bottomPanel
+						.activeTab === tab.id
+						? 'border-emerald-400 text-zinc-200'
+						: 'border-transparent text-zinc-500 hover:text-zinc-400'}"
 					onclick={() => setBottomPanelActiveTab(tab.id)}
 				>
 					{tabLabel(tab)}
@@ -92,6 +109,14 @@
 					class="px-2 py-1 text-xs text-zinc-500 hover:text-zinc-300"
 					onclick={clearSearch}
 					title="Clear search"
+				>
+					Clear
+				</button>
+			{:else if ui.bottomPanel.activeTab === 'references'}
+				<button
+					class="px-2 py-1 text-xs text-zinc-500 hover:text-zinc-300"
+					onclick={clearReferences}
+					title="Clear references"
 				>
 					Clear
 				</button>
@@ -125,6 +150,8 @@
 				<ProblemsPanel />
 			{:else if ui.bottomPanel.activeTab === 'search'}
 				<SearchPanel bind:this={searchPanel} />
+			{:else if ui.bottomPanel.activeTab === 'references'}
+				<ReferencesPanel />
 			{:else if ui.bottomPanel.activeTab === 'logs'}
 				<LogsPanel />
 			{/if}
