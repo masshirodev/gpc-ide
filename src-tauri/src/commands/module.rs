@@ -59,8 +59,8 @@ pub fn list_available_modules(
     let all = modules::load_all_modules_with_paths(&root, &extra)?;
     let game_dir = PathBuf::from(&game_path);
 
-    // Get existing modules from Modules/ directory
-    let modules_dir = game_dir.join("Modules");
+    // Get existing modules from modules/ directory
+    let modules_dir = game_dir.join("modules");
     let existing_modules: HashSet<String> = if modules_dir.exists() {
         std::fs::read_dir(&modules_dir)
             .map(|entries| {

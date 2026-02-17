@@ -23,3 +23,12 @@ export function onFileChange(callback: (event: FileChangeEvent) => void): Promis
         callback(event.payload);
     });
 }
+
+/**
+ * Listen for workspace-level file system changes (folder create/remove).
+ */
+export function onWorkspaceChange(callback: (event: FileChangeEvent) => void): Promise<UnlistenFn> {
+    return listen<FileChangeEvent>('fs://workspace-change', (event) => {
+        callback(event.payload);
+    });
+}

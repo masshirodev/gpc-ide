@@ -78,6 +78,7 @@ export interface GameSummary {
 	name: string;
 	path: string;
 	game_type: string;
+	console_type: string;
 	version: number;
 	title: string;
 	module_count: number;

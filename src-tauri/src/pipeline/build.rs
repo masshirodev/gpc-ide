@@ -184,11 +184,13 @@ fn normalize_path(path: &Path) -> PathBuf {
 /// Build a game: preprocess main.gpc and write the output to dist/.
 ///
 /// - `game_dir`: path to the game directory (e.g., Games/Shooter/R6S)
-/// - `project_root`: path to the project root
+/// - `project_root`: path to the project root (for resolving bundled resources)
+/// - `dist_base`: base directory for dist/ output (typically workspace path)
 /// - `verbose`: enable verbose logging
 pub fn build_game(
     game_dir: &Path,
-    project_root: &Path,
+    _project_root: &Path,
+    dist_base: &Path,
     verbose: bool,
 ) -> BuildResult {
     let config_path = game_dir.join("config.toml");
@@ -221,14 +223,14 @@ pub fn build_game(
 
     let resolved_filename = resolve_config_template(&config.filename, &config);
     let output_filename = format!("{}.gpc", resolved_filename);
-    let dist_dir = project_root.join("Dist");
+    let dist_dir = dist_base.join("dist");
 
     // Ensure dist directory exists
     if let Err(e) = std::fs::create_dir_all(&dist_dir) {
         return BuildResult {
             output_path: String::new(),
             success: false,
-            errors: vec![format!("Could not create Dist directory: {}", e)],
+            errors: vec![format!("Could not create dist directory: {}", e)],
             warnings: Vec::new(),
         };
     }
@@ -377,7 +379,7 @@ mod tests {
             return;
         }
 
-        let result = build_game(&r6s_dir, &project_root, false);
+        let result = build_game(&r6s_dir, &project_root, &project_root, false);
         eprintln!("Build result: success={}, output={}", result.success, result.output_path);
         for e in &result.errors {
             eprintln!("  Error: {}", e);

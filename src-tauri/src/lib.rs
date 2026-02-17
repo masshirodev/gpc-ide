@@ -8,6 +8,7 @@ pub fn run() {
     tauri::Builder::default()
         .manage(commands::lsp::LspState::default())
         .manage(commands::watcher::WatcherState::default())
+        .manage(commands::watcher::WorkspaceWatcherState::default())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
@@ -49,6 +50,7 @@ pub fn run() {
             commands::lsp::lsp_status,
             commands::watcher::watch_directory,
             commands::watcher::unwatch_directory,
+            commands::watcher::watch_workspaces,
             commands::workspace::pick_workspace_directory,
             commands::workspace::get_default_workspace,
             commands::templates::list_templates,

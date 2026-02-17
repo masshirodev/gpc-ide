@@ -68,12 +68,14 @@ export async function openTab(path: string) {
         store.tabs = [...store.tabs, tab];
         store.activeTabPath = path;
 
-        // Notify LSP that the document was opened
-        const client = getLspClient();
-        if (client?.isInitialized()) {
-            const uri = pathToUri(path);
-            documentVersions.set(path, 1);
-            client.textDocumentDidOpen(uri, content);
+        // Notify LSP that the document was opened (GPC files only)
+        if (path.endsWith('.gpc')) {
+            const client = getLspClient();
+            if (client?.isInitialized()) {
+                const uri = pathToUri(path);
+                documentVersions.set(path, 1);
+                client.textDocumentDidOpen(uri, content);
+            }
         }
     } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
@@ -108,10 +110,12 @@ export function closeTab(path: string) {
     }
     documentVersions.delete(path);
 
-    // Notify LSP that the document was closed
-    const client = getLspClient();
-    if (client?.isInitialized()) {
-        client.textDocumentDidClose(pathToUri(path));
+    // Notify LSP that the document was closed (GPC files only)
+    if (path.endsWith('.gpc')) {
+        const client = getLspClient();
+        if (client?.isInitialized()) {
+            client.textDocumentDidClose(pathToUri(path));
+        }
     }
 }
 
@@ -126,22 +130,24 @@ export function updateTabContent(path: string, content: string) {
         tab.dirty = content !== tab.originalContent;
     }
 
-    // Debounced LSP didChange notification (150ms)
-    const existing = changeTimers.get(path);
-    if (existing) clearTimeout(existing);
+    // Debounced LSP didChange notification (150ms, GPC files only)
+    if (path.endsWith('.gpc')) {
+        const existing = changeTimers.get(path);
+        if (existing) clearTimeout(existing);
 
-    changeTimers.set(
-        path,
-        setTimeout(() => {
-            changeTimers.delete(path);
-            const client = getLspClient();
-            if (client?.isInitialized()) {
-                const version = (documentVersions.get(path) || 1) + 1;
-                documentVersions.set(path, version);
-                client.textDocumentDidChange(pathToUri(path), version, content);
-            }
-        }, 150)
-    );
+        changeTimers.set(
+            path,
+            setTimeout(() => {
+                changeTimers.delete(path);
+                const client = getLspClient();
+                if (client?.isInitialized()) {
+                    const version = (documentVersions.get(path) || 1) + 1;
+                    documentVersions.set(path, version);
+                    client.textDocumentDidChange(pathToUri(path), version, content);
+                }
+            }, 150)
+        );
+    }
 }
 
 export async function saveTab(path?: string) {
@@ -159,10 +165,12 @@ export async function saveTab(path?: string) {
         tab.dirty = false;
         setTimeout(() => recentWrites.delete(targetPath), 1000);
 
-        // Notify LSP that the document was saved
-        const client = getLspClient();
-        if (client?.isInitialized()) {
-            client.textDocumentDidSave(pathToUri(targetPath));
+        // Notify LSP that the document was saved (GPC files only)
+        if (targetPath.endsWith('.gpc')) {
+            const client = getLspClient();
+            if (client?.isInitialized()) {
+                client.textDocumentDidSave(pathToUri(targetPath));
+            }
         }
 
         addToast(`Saved ${tab.name}`, 'success', 2000);
@@ -182,11 +190,13 @@ export function closeAllTabs() {
         }
     }
 
-    // Notify LSP about all closing documents
+    // Notify LSP about all closing GPC documents
     const client = getLspClient();
     if (client?.isInitialized()) {
         for (const tab of store.tabs) {
-            client.textDocumentDidClose(pathToUri(tab.path));
+            if (tab.path.endsWith('.gpc')) {
+                client.textDocumentDidClose(pathToUri(tab.path));
+            }
         }
     }
 
@@ -216,12 +226,14 @@ export async function reloadTab(path: string) {
         tab.originalContent = content;
         tab.dirty = false;
 
-        // Notify LSP about the change
-        const client = getLspClient();
-        if (client?.isInitialized()) {
-            const version = (documentVersions.get(path) || 1) + 1;
-            documentVersions.set(path, version);
-            client.textDocumentDidChange(pathToUri(path), version, content);
+        // Notify LSP about the change (GPC files only)
+        if (path.endsWith('.gpc')) {
+            const client = getLspClient();
+            if (client?.isInitialized()) {
+                const version = (documentVersions.get(path) || 1) + 1;
+                documentVersions.set(path, version);
+                client.textDocumentDidChange(pathToUri(path), version, content);
+            }
         }
     } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);

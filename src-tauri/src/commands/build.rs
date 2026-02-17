@@ -2,9 +2,9 @@ use crate::commands::game::app_root;
 use crate::pipeline::build::{BuildResult, build_game};
 use std::path::PathBuf;
 
-/// Build a game by preprocessing its main.gpc and writing the output to Dist/
+/// Build a game by preprocessing its main.gpc and writing the output to {workspace}/dist/
 #[tauri::command]
-pub fn build_game_cmd(game_path: String) -> Result<BuildResult, String> {
+pub fn build_game_cmd(game_path: String, workspace_path: Option<String>) -> Result<BuildResult, String> {
     let root = app_root();
     let game_dir = PathBuf::from(&game_path);
 
@@ -12,13 +12,18 @@ pub fn build_game_cmd(game_path: String) -> Result<BuildResult, String> {
         return Err(format!("Game directory not found: {}", game_path));
     }
 
-    let result = build_game(&game_dir, &root, true);
+    // Determine dist base: workspace path if provided, otherwise app root
+    let dist_base = workspace_path
+        .map(PathBuf::from)
+        .unwrap_or_else(|| root.clone());
+
+    let result = build_game(&game_dir, &root, &dist_base, true);
     Ok(result)
 }
 
-/// Get the list of available games that can be built
+/// Get the expected build output path for a game
 #[tauri::command]
-pub fn get_build_output_path(game_path: String) -> Result<String, String> {
+pub fn get_build_output_path(game_path: String, workspace_path: Option<String>) -> Result<String, String> {
     let game_dir = PathBuf::from(&game_path);
     let config_path = game_dir.join("config.toml");
 
@@ -37,7 +42,10 @@ pub fn get_build_output_path(game_path: String) -> Result<String, String> {
         .and_then(|v| v.as_integer())
         .unwrap_or(1);
 
-    let root = app_root();
-    let output_path = root.join("Dist").join(format!("{}{}.gpc", filename, version));
+    let dist_base = workspace_path
+        .map(PathBuf::from)
+        .unwrap_or_else(|| app_root());
+
+    let output_path = dist_base.join("dist").join(format!("{}{}.gpc", filename, version));
     Ok(output_path.to_string_lossy().to_string())
 }

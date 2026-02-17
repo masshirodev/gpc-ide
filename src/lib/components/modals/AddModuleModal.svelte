@@ -23,13 +23,19 @@
     let error = $state('');
     let gameType = $state<string>('fps');
 
+    let searchQuery = $state('');
+    let searchInputEl = $state<HTMLInputElement | null>(null);
+
     // Load modules when modal opens
     $effect(() => {
         if (open) {
             loadData();
+            // Auto-focus search input after a tick
+            setTimeout(() => searchInputEl?.focus(), 50);
         } else {
             selectedModule = '';
             error = '';
+            searchQuery = '';
         }
     });
 
@@ -99,8 +105,17 @@
         modules.filter(m => m.module_type === gameType || m.module_type === 'all')
     );
 
-    let userModules = $derived(compatibleModules.filter(m => m.is_user_module));
-    let builtinModules = $derived(compatibleModules.filter(m => !m.is_user_module));
+    function matchesSearch(m: ModuleSummary, query: string): boolean {
+        if (!query.trim()) return true;
+        const q = query.toLowerCase();
+        return m.display_name.toLowerCase().includes(q) ||
+            m.id.toLowerCase().includes(q) ||
+            (m.description ?? '').toLowerCase().includes(q);
+    }
+
+    let userModules = $derived(compatibleModules.filter(m => m.is_user_module && matchesSearch(m, searchQuery)));
+    let builtinModules = $derived(compatibleModules.filter(m => !m.is_user_module && matchesSearch(m, searchQuery)));
+    let filteredCount = $derived(userModules.length + builtinModules.length);
 
     let selectedModuleDetails = $derived(
         modules.find(m => m.id === selectedModule)
@@ -141,6 +156,14 @@
                         </span>
                     </div>
                 {/if}
+
+                <input
+                    bind:this={searchInputEl}
+                    type="text"
+                    placeholder="Search modules..."
+                    bind:value={searchQuery}
+                    class="w-full rounded border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-200 placeholder-zinc-500 focus:border-emerald-500 focus:outline-none"
+                />
 
                 {#snippet moduleButton(module: ModuleSummary)}
                     <button
@@ -192,9 +215,11 @@
                             {@render moduleButton(module)}
                         {/each}
 
-                        {#if compatibleModules.length === 0}
+                        {#if filteredCount === 0}
                             <p class="text-center text-sm text-zinc-500 py-8">
-                                No compatible modules found for game type: {gameType}
+                                {searchQuery.trim()
+                                    ? `No modules matching "${searchQuery}"`
+                                    : `No compatible modules found for game type: ${gameType}`}
                             </p>
                         {/if}
                     </div>

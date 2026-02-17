@@ -69,7 +69,7 @@ impl Generator {
         let profile_count = config.profile_count.unwrap_or(0);
         let weapons_list = config.weapons.clone().unwrap_or_default();
         let module_params = config.module_params.clone().unwrap_or_default();
-        let include_prefix = "../".repeat(game_depth + 1); // +1 for Modules/ subfolder
+        let include_prefix = "../".repeat(game_depth + 1); // +1 for modules/ subfolder
 
         let mut gen = Self {
             config,
@@ -345,12 +345,12 @@ impl Generator {
         // Generate per-module files
         for i in 0..self.analyzed.len() {
             let (filename, content) = self.generate_module(i);
-            files.push((format!("Modules/{}", filename), content));
+            files.push((format!("modules/{}", filename), content));
         }
 
         // Generate core.gpc
         let core = self.generate_core();
-        files.push(("Modules/core.gpc".to_string(), core));
+        files.push(("modules/core.gpc".to_string(), core));
 
         // Generate main.gpc
         let main = self.generate_main();
@@ -1475,11 +1475,11 @@ impl Generator {
         }
 
         writeln!(out, "// ===== CORE FRAMEWORK =====").unwrap();
-        writeln!(out, "#include \"Modules/core.gpc\"").unwrap();
+        writeln!(out, "#include \"modules/core.gpc\"").unwrap();
         writeln!(out).unwrap();
         writeln!(out, "// ===== MODULES =====").unwrap();
         for module in &self.analyzed {
-            writeln!(out, "#include \"Modules/{}.gpc\"", module.file_id).unwrap();
+            writeln!(out, "#include \"modules/{}.gpc\"", module.file_id).unwrap();
         }
 
         if !post_includes.is_empty() {
@@ -1937,13 +1937,13 @@ mod tests {
         let mut gen = Generator::new(config, modules_metadata, 1);
         let result = gen.generate_all();
 
-        // Should produce: Modules/rapidfire.gpc, Modules/core.gpc, main.gpc
+        // Should produce: modules/rapidfire.gpc, modules/core.gpc, main.gpc
         assert!(result.files.len() >= 3, "Expected at least 3 files, got {}", result.files.len());
 
         let filenames: Vec<&str> = result.files.iter().map(|(p, _)| p.as_str()).collect();
-        assert!(filenames.contains(&"Modules/core.gpc"), "Missing core.gpc");
+        assert!(filenames.contains(&"modules/core.gpc"), "Missing core.gpc");
         assert!(filenames.contains(&"main.gpc"), "Missing main.gpc");
-        assert!(filenames.iter().any(|f| f.starts_with("Modules/") && f != &"Modules/core.gpc"),
+        assert!(filenames.iter().any(|f| f.starts_with("modules/") && f != &"modules/core.gpc"),
             "Missing module .gpc file");
     }
 
@@ -1953,7 +1953,7 @@ mod tests {
         let mut gen = Generator::new(config, HashMap::new(), 1);
         let result = gen.generate_all();
 
-        let core = result.files.iter().find(|(p, _)| p == "Modules/core.gpc").unwrap();
+        let core = result.files.iter().find(|(p, _)| p == "modules/core.gpc").unwrap();
         let content = &core.1;
 
         assert!(content.contains("function _CoreMainMenu()"), "Missing _CoreMainMenu");
@@ -1971,7 +1971,7 @@ mod tests {
         let result = gen.generate_all();
 
         let module_file = result.files.iter()
-            .find(|(p, _)| p.starts_with("Modules/") && p != "Modules/core.gpc")
+            .find(|(p, _)| p.starts_with("modules/") && p != "modules/core.gpc")
             .unwrap();
         let content = &module_file.1;
 
@@ -2040,11 +2040,11 @@ mod tests {
         eprintln!("Generated files: {:?}", filenames);
 
         // Should have: core.gpc, main.gpc, + 8 module files
-        assert!(filenames.contains(&"Modules/core.gpc"));
+        assert!(filenames.contains(&"modules/core.gpc"));
         assert!(filenames.contains(&"main.gpc"));
 
         // Verify core.gpc has expected content
-        let core = &result.files.iter().find(|(p, _)| p == "Modules/core.gpc").unwrap().1;
+        let core = &result.files.iter().find(|(p, _)| p == "modules/core.gpc").unwrap().1;
         assert!(core.contains("MENU_ITEM_COUNT = 8"), "Expected 8 menu items");
         assert!(core.contains("MENU_PAGE_COUNT = 3"), "Expected 3 pages");
         assert!(core.contains("function _CoreSave()"));
@@ -2067,7 +2067,7 @@ mod tests {
 
         // Verify module files have Save/Load
         for (path, content) in &result.files {
-            if path.starts_with("Modules/") && path != "Modules/core.gpc" {
+            if path.starts_with("modules/") && path != "modules/core.gpc" {
                 assert!(content.contains("_Save"), "Module {} missing _Save", path);
                 assert!(content.contains("_Load"), "Module {} missing _Load", path);
             }

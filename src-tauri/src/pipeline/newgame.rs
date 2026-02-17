@@ -113,7 +113,7 @@ pub fn create_game(
     // Create directories
     std::fs::create_dir_all(&game_dir)
         .map_err(|e| format!("Failed to create game directory: {}", e))?;
-    std::fs::create_dir_all(game_dir.join("Modules"))
+    std::fs::create_dir_all(game_dir.join("modules"))
         .map_err(|e| format!("Failed to create Modules directory: {}", e))?;
 
     let mut files_created = Vec::new();

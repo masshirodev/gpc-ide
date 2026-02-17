@@ -144,6 +144,7 @@ pub struct GameSummary {
     pub name: String,
     pub path: String,
     pub game_type: String,
+    pub console_type: String,
     pub version: u32,
     pub title: String,
     pub module_count: usize,

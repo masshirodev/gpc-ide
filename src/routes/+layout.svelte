@@ -10,12 +10,14 @@
     import { getUiStore, toggleSidebar, setSidebarCollapsed } from '$lib/stores/ui.svelte';
     import { getSettings, addWorkspace } from '$lib/stores/settings.svelte';
     import { addToast } from '$lib/stores/toast.svelte';
-    import { pickWorkspaceDirectory, getDefaultWorkspace, deleteGame } from '$lib/tauri/commands';
+    import { pickWorkspaceDirectory, getDefaultWorkspace, deleteGame, watchWorkspaces } from '$lib/tauri/commands';
+    import { onWorkspaceChange } from '$lib/tauri/events';
     import { ask } from '@tauri-apps/plugin-dialog';
     import { goto } from '$app/navigation';
     import { page } from '$app/state';
     import { onMount } from 'svelte';
     import type { GameSummary } from '$lib/types/config';
+    import type { UnlistenFn } from '@tauri-apps/api/event';
 
     let { children } = $props();
     let ui = getUiStore();
@@ -24,14 +26,42 @@
     let settings = $derived($settingsStore);
     let settingsOpen = $state(false);
 
+    let wsUnlisten: UnlistenFn | null = null;
+    let wsRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+
     onMount(() => {
         loadGames(settings.workspaces);
+
+        // Start workspace watcher for auto-refresh
+        const setupWsWatcher = async () => {
+            wsUnlisten = await onWorkspaceChange(() => {
+                // Debounce game list refresh (1s to avoid rapid re-scans)
+                if (wsRefreshTimer) clearTimeout(wsRefreshTimer);
+                wsRefreshTimer = setTimeout(() => {
+                    loadGames(settings.workspaces);
+                }, 1000);
+            });
+            if (settings.workspaces.length > 0) {
+                watchWorkspaces(settings.workspaces).catch((e) =>
+                    console.warn('Workspace watcher setup failed:', e)
+                );
+            }
+        };
+        setupWsWatcher();
+
+        return () => {
+            wsUnlisten?.();
+            if (wsRefreshTimer) clearTimeout(wsRefreshTimer);
+        };
     });
 
-    // Reload games when workspaces change
+    // Reload games and restart workspace watcher when workspaces change
     $effect(() => {
         if (settings.workspaces) {
             loadGames(settings.workspaces);
+            watchWorkspaces(settings.workspaces).catch((e) =>
+                console.warn('Workspace watcher update failed:', e)
+            );
         }
     });
 

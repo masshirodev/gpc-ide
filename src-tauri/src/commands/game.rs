@@ -68,7 +68,7 @@ pub fn list_games(workspace_paths: Option<Vec<String>>) -> Result<Vec<GameSummar
 
         // Games are organized as <Workspace>/<Category>/<GameName>/config.toml
         // or <Workspace>/<GameName>/config.toml
-        // Only include modular games (those with a Modules/ subdirectory)
+        // Only include modular games (those with a modules/ subdirectory)
         for entry in WalkDir::new(&workspace_path)
             .min_depth(1)
             .max_depth(3)
@@ -85,8 +85,8 @@ pub fn list_games(workspace_paths: Option<Vec<String>>) -> Result<Vec<GameSummar
                     continue;
                 }
 
-                // Ensure Modules/ directory exists for modular games
-                let modules_dir = game_dir.join("Modules");
+                // Ensure modules/ directory exists for modular games
+                let modules_dir = game_dir.join("modules");
                 if !modules_dir.is_dir() {
                     if let Err(e) = std::fs::create_dir_all(&modules_dir) {
                         log::warn!(
@@ -127,11 +127,13 @@ fn parse_game_summary(config_path: &Path) -> Result<GameSummary, String> {
     let name = config.name.clone().unwrap_or(folder_name);
 
     let game_type = config.r#type.clone().unwrap_or_else(|| "fps".to_string());
+    let console_type = config.console_type.clone().unwrap_or_else(|| "ps5".to_string());
 
     Ok(GameSummary {
         name,
         path: game_dir.to_string_lossy().to_string(),
         game_type,
+        console_type,
         version: config.version,
         title: config.state_screen.title.clone(),
         module_count: config.menu.len(),

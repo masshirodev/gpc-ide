@@ -146,28 +146,9 @@ pub fn delete_file(file_path: String) -> Result<(), String> {
         return Err("File not found".to_string());
     }
 
-    // Safety check: Only delete files from game directories
-    if !file_path.contains("/Games/") && !file_path.contains("\\Games\\") {
-        return Err("Can only delete files from game directories".to_string());
-    }
-
-    // Safety check: Prevent deleting important files
+    // Safety check: Prevent deleting config.toml (needed for generation)
     let forbidden = vec![
         "config.toml",
-        "main.gpc",
-        "init.gpc",
-        "define.gpc",
-        "menu.gpc",
-        "setting.gpc",
-        "persistence.gpc",
-        "combo.gpc",
-        "keyboard.gpc",
-        "adapters.gpc",
-        "weapon.gpc",
-        "weapondata.gpc",
-        "debug.gpc",
-        "adp.gpc",
-        "recoiltable.gpc",
     ];
 
     if let Some(filename) = path.file_name().and_then(|f| f.to_str()) {
@@ -175,8 +156,8 @@ pub fn delete_file(file_path: String) -> Result<(), String> {
             return Err(format!("Cannot delete protected file: {}", filename));
         }
 
-        // Prevent deleting files in Modules/ directory (these are from modules)
-        if file_path.contains("/Modules/") || file_path.contains("\\Modules\\") {
+        // Prevent deleting files in modules/ directory (these are from modules)
+        if file_path.contains("/modules/") || file_path.contains("\\modules\\") {
             return Err("Cannot delete module files. Remove the module instead.".to_string());
         }
     }
@@ -201,7 +182,7 @@ pub fn regenerate_file(game_path: String, file_path: String) -> Result<String, S
 
     // List of files that can be regenerated
     let regenerable = vec![
-        "Modules/core.gpc",
+        "modules/core.gpc",
         "main.gpc",
         "define.gpc",
         "menu.gpc",
@@ -211,7 +192,7 @@ pub fn regenerate_file(game_path: String, file_path: String) -> Result<String, S
 
     // Check if this file can be regenerated
     let can_regenerate = regenerable.iter().any(|&pattern| {
-        rel_path == pattern || rel_path.starts_with("Modules/") && rel_path.ends_with(".gpc")
+        rel_path == pattern || rel_path.starts_with("modules/") && rel_path.ends_with(".gpc")
     });
 
     if !can_regenerate {

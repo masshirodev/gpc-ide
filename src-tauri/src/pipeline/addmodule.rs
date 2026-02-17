@@ -248,7 +248,7 @@ pub fn add_module(
     if main_path.exists() {
         let main_content = std::fs::read_to_string(&main_path)
             .unwrap_or_default();
-        let include_line = format!("#include \"Modules/{}.gpc\"", params.module_id);
+        let include_line = format!("#include \"modules/{}.gpc\"", params.module_id);
         if !main_content.contains(&include_line) {
             messages.push(format!(
                 "⚠ Add to main.gpc: {}",
@@ -316,8 +316,8 @@ fn generate_module_files(
         let full_path = game_dir.join(&rel_path);
 
         // Write if it's the new module, or core.gpc (which needs updating)
-        let should_write = rel_path == format!("Modules/{}.gpc", new_module_id)
-            || rel_path == "Modules/core.gpc";
+        let should_write = rel_path == format!("modules/{}.gpc", new_module_id)
+            || rel_path == "modules/core.gpc";
 
         if should_write {
             if let Some(parent) = full_path.parent() {
@@ -356,7 +356,7 @@ fn check_conflicts(
     module: &ModuleDefinition,
     all_modules: &[ModuleDefinition],
 ) -> Result<(), String> {
-    let modules_dir = game_dir.join("Modules");
+    let modules_dir = game_dir.join("modules");
     let existing_modules: HashSet<String> = if modules_dir.exists() {
         std::fs::read_dir(&modules_dir)
             .map(|entries| {

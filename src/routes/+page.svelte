@@ -42,6 +42,7 @@
 	import { onMount } from 'svelte';
 	import MonacoEditor from '$lib/components/editor/MonacoEditor.svelte';
 	import RecoilTableEditor from '$lib/components/editor/RecoilTableEditor.svelte';
+	import KeyboardMapperEditor from '$lib/components/editor/KeyboardMapperEditor.svelte';
 	import ConfigEditor from '$lib/components/editor/ConfigEditor.svelte';
 	import PersistencePanel from '$lib/components/persistence/PersistencePanel.svelte';
 	import AddModuleModal from '$lib/components/modals/AddModuleModal.svelte';
@@ -52,6 +53,15 @@
 	import { addToast } from '$lib/stores/toast.svelte';
 	import { getSettings } from '$lib/stores/settings.svelte';
 	import { getRecoilTransfer, clearRecoilTransfer } from '$lib/stores/recoil-transfer.svelte';
+	import {
+		getKeyboardTransfer,
+		clearKeyboardTransfer
+	} from '$lib/stores/keyboard-transfer.svelte';
+	import {
+		type KeyMapping,
+		parseKeyboardMappings,
+		serializeKeyboardMappings
+	} from '$lib/utils/keyboard-parser';
 	import {
 		parseRecoilTable,
 		serializeRecoilTable,
@@ -68,6 +78,9 @@
 	let grouped = $derived(gamesByType(store.games));
 	let types = $derived(Object.keys(grouped).sort());
 	let totalGames = $derived(store.games.length);
+	let gameConsoleType = $derived(
+		(store.selectedGame?.console_type ?? 'ps5') as import('$lib/utils/console-buttons').ConsoleType
+	);
 
 	// Active editor tab
 	let currentEditorTab = $derived(getActiveEditorTab());
@@ -288,13 +301,18 @@
 		}
 	}
 
+	function getWorkspaceForGame(gamePath: string): string | undefined {
+		return settings.workspaces.find((ws) => gamePath.startsWith(ws));
+	}
+
 	async function handleBuild() {
 		if (!store.selectedGame || building) return;
 		building = true;
 		buildResult = null;
 		buildOutputContent = null;
 		try {
-			buildResult = await buildGame(store.selectedGame.path);
+			const workspacePath = getWorkspaceForGame(store.selectedGame.path);
+			buildResult = await buildGame(store.selectedGame.path, workspacePath);
 			if (buildResult.success && buildResult.output_path) {
 				const fileName = buildResult.output_path.split('/').pop() || 'output';
 				addToast(`Build succeeded: ${fileName}`, 'success');
@@ -328,31 +346,14 @@
 	}
 
 	function canDeleteFile(path: string): boolean {
-		// Check if file is in Modules/ directory
-		if (path.includes('/Modules/') || path.includes('\\Modules\\')) {
+		// Check if file is in modules/ directory
+		if (path.includes('/modules/') || path.includes('\\modules\\')) {
 			return false;
 		}
 
-		// Check if file is protected
+		// Only config.toml is protected
 		const filename = path.split('/').pop() || '';
-		const protected_files = [
-			'config.toml',
-			'main.gpc',
-			'init.gpc',
-			'define.gpc',
-			'menu.gpc',
-			'setting.gpc',
-			'persistence.gpc',
-			'combo.gpc',
-			'keyboard.gpc',
-			'adapters.gpc',
-			'weapon.gpc',
-			'weapondata.gpc',
-			'debug.gpc',
-			'adp.gpc',
-			'recoiltable.gpc'
-		];
-		if (protected_files.includes(filename)) {
+		if (filename === 'config.toml') {
 			return false;
 		}
 
@@ -415,7 +416,7 @@
 
 	function canRegenerateFile(path: string): boolean {
 		const regenerable = [
-			'/Modules/core.gpc',
+			'/modules/core.gpc',
 			'/main.gpc',
 			'/define.gpc',
 			'/menu.gpc',
@@ -425,7 +426,7 @@
 
 		return (
 			regenerable.some((pattern) => path.endsWith(pattern)) ||
-			(path.includes('/Modules/') && path.endsWith('.gpc') && !path.endsWith('/core.gpc'))
+			(path.includes('/modules/') && path.endsWith('.gpc') && !path.endsWith('/core.gpc'))
 		);
 	}
 
@@ -521,7 +522,12 @@
 	});
 
 	// Check if current file has a visual editor
-	let hasVisualEditor = $derived(currentEditorTab?.path.endsWith('recoiltable.gpc') ?? false);
+	let hasVisualEditor = $derived(
+		(currentEditorTab?.path.endsWith('recoiltable.gpc') ||
+			currentEditorTab?.path.endsWith('keyboard.gpc')) ??
+			false
+	);
+	let isKeyboardFile = $derived(currentEditorTab?.path.endsWith('keyboard.gpc') ?? false);
 
 	// Check if current file is config.toml
 	let isConfigFile = $derived(currentEditorTab?.path.endsWith('config.toml') ?? false);
@@ -545,6 +551,24 @@
 					const newContent = serializeRecoilTable(tab.content, updated);
 					updateTabContent(filePath, newContent);
 					addToast(`Applied recoil values for weapon #${weaponIndex}`, 'success');
+				}
+			});
+		}
+
+		// Handle return from keyboard mapper tool — apply updated mappings
+		const kbTransfer = getKeyboardTransfer();
+		if (kbTransfer?.returnTo) {
+			const filePath = kbTransfer.returnTo;
+			const newMappings = kbTransfer.mappings;
+			clearKeyboardTransfer();
+
+			openTab(filePath).then(() => {
+				activeTab = 'files';
+				const tab = editorStore.tabs.find((t) => t.path === filePath);
+				if (tab) {
+					const newContent = serializeKeyboardMappings(tab.content, newMappings);
+					updateTabContent(filePath, newContent);
+					addToast(`Applied ${newMappings.length} keyboard mapping(s)`, 'success');
 				}
 			});
 		}
@@ -1116,7 +1140,21 @@
 							{/if}
 
 							<div class="flex-1 overflow-hidden">
-								{#if hasVisualEditor && editorSubTab === 'visual'}
+								{#if hasVisualEditor && editorSubTab === 'visual' && isKeyboardFile}
+									{#key editorStore.activeTabPath}
+										<KeyboardMapperEditor
+											content={currentEditorTab.content}
+											gamePath={store.selectedGame?.path ?? ''}
+											filePath={currentEditorTab.path}
+											consoleType={gameConsoleType}
+											onchange={(v) => {
+												if (editorStore.activeTabPath) {
+													updateTabContent(editorStore.activeTabPath, v);
+												}
+											}}
+										/>
+									{/key}
+								{:else if hasVisualEditor && editorSubTab === 'visual'}
 									{#key editorStore.activeTabPath}
 										<RecoilTableEditor
 											content={currentEditorTab.content}

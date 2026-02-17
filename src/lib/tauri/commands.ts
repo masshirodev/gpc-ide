@@ -93,12 +93,18 @@ export interface BuildResult {
 	warnings: string[];
 }
 
-export async function buildGame(gamePath: string): Promise<BuildResult> {
-	return invoke<BuildResult>('build_game_cmd', { gamePath });
+export async function buildGame(gamePath: string, workspacePath?: string): Promise<BuildResult> {
+	return invoke<BuildResult>('build_game_cmd', {
+		gamePath,
+		workspacePath: workspacePath ?? null
+	});
 }
 
-export async function getBuildOutputPath(gamePath: string): Promise<string> {
-	return invoke<string>('get_build_output_path', { gamePath });
+export async function getBuildOutputPath(gamePath: string, workspacePath?: string): Promise<string> {
+	return invoke<string>('get_build_output_path', {
+		gamePath,
+		workspacePath: workspacePath ?? null
+	});
 }
 
 // === Config Commands ===
@@ -175,6 +181,10 @@ export async function addModule(
 
 export async function watchDirectory(path: string): Promise<void> {
 	return invoke<void>('watch_directory', { path });
+}
+
+export async function watchWorkspaces(paths: string[]): Promise<void> {
+	return invoke<void>('watch_workspaces', { paths });
 }
 
 export async function unwatchDirectory(): Promise<void> {

@@ -112,7 +112,7 @@
     // Load weapon names from weapondata.gpc in the same game directory
     onMount(async () => {
         const candidates = [
-            `${gamePath}/Modules/weapondata.gpc`,
+            `${gamePath}/modules/weapondata.gpc`,
             `${gamePath}/weapondata.gpc`
         ];
         for (const path of candidates) {

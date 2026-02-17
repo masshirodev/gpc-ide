@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-/// Raw module definition as it appears in Pipeline/Modules/*.toml
+/// Raw module definition as it appears in modules/*.toml
 /// Each TOML file has a single top-level key (module name) containing these fields.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModuleDefinition {
