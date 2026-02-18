@@ -25,10 +25,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/checkout@v4
-        with:
-          repository: zKiwiko/ersa-lsp-core
-          path: ../ersa-lsp-core
+      - name: Clone ersa-lsp-core
+        run: git clone https://github.com/zKiwiko/ersa-lsp-core.git ../ersa-lsp-core
 
       - uses: actions/setup-node@v4
         with:
