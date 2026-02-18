@@ -5,6 +5,11 @@ use std::collections::{HashMap, HashSet};
 use std::fmt::Write;
 
 
+/// Strip the .gpc extension from a path for import directives.
+fn strip_gpc_ext(path: &str) -> &str {
+    path.strip_suffix(".gpc").unwrap_or(path)
+}
+
 // Layout constants
 const ITEMS_PER_PAGE: usize = 3;
 const RECT_Y_POSITIONS: [i32; 3] = [12, 28, 44];
@@ -1446,47 +1451,47 @@ impl Generator {
         writeln!(out, "// Uses modular architecture with self-contained modules").unwrap();
         writeln!(out).unwrap();
         writeln!(out, "// ===== COMMON UTILITIES =====").unwrap();
-        writeln!(out, "#include \"common/helper.gpc\"").unwrap();
-        writeln!(out, "#include \"common/text.gpc\"").unwrap();
-        writeln!(out, "#include \"common/scroll.gpc\"").unwrap();
-        writeln!(out, "#include \"common/bitpack.gpc\"").unwrap();
-        writeln!(out, "#include \"common/oled.gpc\"").unwrap();
-        writeln!(out, "#include \"common/control.gpc\"").unwrap();
+        writeln!(out, "import common/helper;").unwrap();
+        writeln!(out, "import common/text;").unwrap();
+        writeln!(out, "import common/scroll;").unwrap();
+        writeln!(out, "import common/bitpack;").unwrap();
+        writeln!(out, "import common/oled;").unwrap();
+        writeln!(out, "import common/control;").unwrap();
 
         // FGS games need fighting game common utilities
         if self.config.r#type.as_deref() == Some("fgs") {
-            writeln!(out, "#include \"common/fgc.gpc\"").unwrap();
+            writeln!(out, "import common/fgc;").unwrap();
         }
 
         writeln!(out).unwrap();
         writeln!(out, "// ===== DRAWING UTILITIES =====").unwrap();
-        writeln!(out, "#include \"drawings/scroll_outer.gpc\"").unwrap();
-        writeln!(out, "#include \"drawings/scroll_current.gpc\"").unwrap();
-        writeln!(out, "#include \"drawings/selector.gpc\"").unwrap();
-        writeln!(out, "#include \"drawings/toggle.gpc\"").unwrap();
+        writeln!(out, "import drawings/scroll_outer;").unwrap();
+        writeln!(out, "import drawings/scroll_current;").unwrap();
+        writeln!(out, "import drawings/selector;").unwrap();
+        writeln!(out, "import drawings/toggle;").unwrap();
         writeln!(out).unwrap();
 
         if !data_includes.is_empty() {
             writeln!(out, "// ===== GAME DATA =====").unwrap();
             for file in &data_includes {
-                writeln!(out, "#include \"{}\"", file).unwrap();
+                writeln!(out, "import {};", strip_gpc_ext(file)).unwrap();
             }
             writeln!(out).unwrap();
         }
 
         writeln!(out, "// ===== CORE FRAMEWORK =====").unwrap();
-        writeln!(out, "#include \"modules/core.gpc\"").unwrap();
+        writeln!(out, "import modules/core;").unwrap();
         writeln!(out).unwrap();
         writeln!(out, "// ===== MODULES =====").unwrap();
         for module in &self.analyzed {
-            writeln!(out, "#include \"modules/{}.gpc\"", module.file_id).unwrap();
+            writeln!(out, "import modules/{};", module.file_id).unwrap();
         }
 
         if !post_includes.is_empty() {
             writeln!(out).unwrap();
             writeln!(out, "// ===== CUSTOM MANUAL INTEGRATION FILES =====").unwrap();
             for file in &post_includes {
-                writeln!(out, "#include \"{}\"", file).unwrap();
+                writeln!(out, "import {};", strip_gpc_ext(file)).unwrap();
             }
         }
 
@@ -1854,6 +1859,7 @@ mod tests {
             name: Some("Test".to_string()),
             username: Some("Mash".to_string()),
             r#type: Some("fps".to_string()),
+            console_type: None,
             profile_count: Some(0),
             weapons: None,
             state_screen: StateScreen {
@@ -1990,9 +1996,9 @@ mod tests {
         let main = result.files.iter().find(|(p, _)| p == "main.gpc").unwrap();
         let content = &main.1;
 
-        assert!(content.contains("#include"), "Missing #include directives");
-        assert!(content.contains("common/helper.gpc"), "Missing common/helper.gpc include");
-        assert!(content.contains("core.gpc"), "Missing core.gpc include");
+        assert!(content.contains("import "), "Missing import directives");
+        assert!(content.contains("import common/helper;"), "Missing common/helper import");
+        assert!(content.contains("import modules/core;"), "Missing modules/core import");
     }
 
     #[test]
@@ -2058,12 +2064,12 @@ mod tests {
         // Check keyboard defines
         assert!(core.contains("KB_QUICK_TOGGLE_AIMASSIST"), "Expected keyboard defines");
 
-        // Verify main.gpc has includes
+        // Verify main.gpc has import directives
         let main = &result.files.iter().find(|(p, _)| p == "main.gpc").unwrap().1;
-        assert!(main.contains("#include"));
-        assert!(main.contains("common/helper.gpc"));
-        assert!(main.contains("common/bitpack.gpc"));
-        assert!(main.contains("core.gpc"));
+        assert!(main.contains("import "));
+        assert!(main.contains("import common/helper;"));
+        assert!(main.contains("import common/bitpack;"));
+        assert!(main.contains("import modules/core;"));
 
         // Verify module files have Save/Load
         for (path, content) in &result.files {

@@ -243,16 +243,16 @@ pub fn add_module(
             .map(|f| format!("Generated: {}", f))
     );
 
-    // Check if main.gpc needs the include
+    // Check if main.gpc needs the import
     let main_path = game_dir.join("main.gpc");
     if main_path.exists() {
         let main_content = std::fs::read_to_string(&main_path)
             .unwrap_or_default();
-        let include_line = format!("#include \"modules/{}.gpc\"", params.module_id);
-        if !main_content.contains(&include_line) {
+        let import_line = format!("import modules/{};", params.module_id);
+        if !main_content.contains(&import_line) {
             messages.push(format!(
                 "⚠ Add to main.gpc: {}",
-                include_line
+                import_line
             ));
         }
     }

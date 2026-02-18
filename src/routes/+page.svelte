@@ -23,7 +23,7 @@
 		setBottomPanelActiveTab,
 		consumeFileNavigation
 	} from '$lib/stores/ui.svelte';
-	import { getLspStore, startLsp, stopLsp, getLspClient } from '$lib/stores/lsp.svelte';
+	import { getLspStore, startLsp, stopLsp, restartLsp, getLspClient } from '$lib/stores/lsp.svelte';
 	import { MonacoLspBridge } from '$lib/lsp/MonacoLspBridge';
 	import {
 		buildGame,
@@ -264,6 +264,22 @@
 
 	function handleEditorReady(editor: import('monaco-editor').editor.IStandaloneCodeEditor) {
 		if (bridge) bridge.setEditor(editor);
+
+		editor.addAction({
+			id: 'gpc.lsp.restart',
+			label: 'GPC: Restart Language Server',
+			run: () => {
+				restartLsp();
+			}
+		});
+
+		editor.addAction({
+			id: 'gpc.lsp.stop',
+			label: 'GPC: Stop Language Server',
+			run: () => {
+				stopLsp();
+			}
+		});
 	}
 
 	async function loadFileTree(gamePath: string) {

@@ -19,7 +19,7 @@ pub struct BuildLogEntry {
     pub message: String,
 }
 
-/// Preprocess a GPC file by recursively expanding #include directives.
+/// Preprocess a GPC file by recursively expanding import directives.
 ///
 /// Returns (processed_content, log_entries, success).
 pub fn preprocess(
@@ -111,7 +111,7 @@ fn preprocess_recursive(
     for (line_num, line) in content.lines().enumerate() {
         let line_num = line_num + 1; // 1-indexed
 
-        // Skip commented lines - don't process their #include directives
+        // Skip commented lines - don't process their import directives
         let trimmed = line.trim_start();
         if trimmed.starts_with("//") {
             output.push_str(line);
@@ -119,12 +119,12 @@ fn preprocess_recursive(
             continue;
         }
 
-        // Check for #include "filename"
-        if let Some(include_path) = parse_include(trimmed) {
-            let full_include_path = normalize_path(&base_dir.join(include_path));
+        // Check for import directive
+        if let Some(import_path) = parse_import(trimmed) {
+            let full_import_path = normalize_path(&base_dir.join(&import_path));
 
             let included_content = preprocess_recursive(
-                &full_include_path,
+                &full_import_path,
                 processed_files,
                 include_stack,
                 logs,
@@ -150,18 +150,54 @@ fn preprocess_recursive(
     output
 }
 
-/// Parse a #include directive and return the included filename.
-fn parse_include(line: &str) -> Option<&str> {
+/// Parse an import directive and return the resolved filename.
+///
+/// Supports:
+///   import common/helper;          -> common/helper.gpc
+///   import "common/helper.gpc";    -> common/helper.gpc
+///   import "common/helper";        -> common/helper.gpc
+///   #include "common/helper.gpc"   -> common/helper.gpc  (legacy)
+fn parse_import(line: &str) -> Option<String> {
     let trimmed = line.trim();
-    if !trimmed.starts_with("#include") {
-        return None;
+
+    // New syntax: import path; or import "path";
+    if trimmed.starts_with("import") && !trimmed.starts_with("import!") {
+        let rest = trimmed["import".len()..].trim();
+
+        // Must end with semicolon
+        if !rest.ends_with(';') {
+            return None;
+        }
+        let path_part = rest[..rest.len() - 1].trim();
+
+        let path = if path_part.starts_with('"') && path_part.ends_with('"') && path_part.len() > 2
+        {
+            // Quoted: import "common/helper.gpc";
+            &path_part[1..path_part.len() - 1]
+        } else if !path_part.is_empty() {
+            // Unquoted: import common/helper;
+            path_part
+        } else {
+            return None;
+        };
+
+        let full_path = if path.ends_with(".gpc") {
+            path.to_string()
+        } else {
+            format!("{}.gpc", path)
+        };
+        return Some(full_path);
     }
-    let rest = trimmed["#include".len()..].trim();
-    if rest.starts_with('"') && rest.ends_with('"') && rest.len() > 2 {
-        Some(&rest[1..rest.len() - 1])
-    } else {
-        None
+
+    // Legacy syntax: #include "filename"
+    if trimmed.starts_with("#include") {
+        let rest = trimmed["#include".len()..].trim();
+        if rest.starts_with('"') && rest.ends_with('"') && rest.len() > 2 {
+            return Some(rest[1..rest.len() - 1].to_string());
+        }
     }
+
+    None
 }
 
 /// Normalize a path (resolve ../ and ./ components) without requiring the file to exist.
@@ -179,6 +215,461 @@ fn normalize_path(path: &Path) -> PathBuf {
         }
     }
     components.iter().collect()
+}
+
+// ============================================================
+// Macro expansion
+// ============================================================
+
+/// A parsed macro definition from `define! name(params) { body }`.
+#[derive(Debug, Clone)]
+struct MacroDef {
+    name: String,
+    params: Vec<String>,
+    body: String,
+    has_placeholder: bool,
+    /// Byte range of the entire `define! ... { ... }` block in the source.
+    byte_range: std::ops::Range<usize>,
+}
+
+/// Return the byte length of the UTF-8 character starting at the given byte.
+fn utf8_char_len(b: u8) -> usize {
+    if b < 0x80 {
+        1
+    } else if b < 0xE0 {
+        2
+    } else if b < 0xF0 {
+        3
+    } else {
+        4
+    }
+}
+
+/// Extract all `define!` macro definitions from fully-preprocessed source.
+fn extract_macro_definitions(source: &str) -> Vec<MacroDef> {
+    let mut macros = Vec::new();
+    let bytes = source.as_bytes();
+    let len = bytes.len();
+    let mut i = 0;
+
+    while i < len {
+        // Skip to potential "define!" keyword (only ASCII, safe to check byte)
+        if bytes[i] > 0x7F || !source[i..].starts_with("define!") {
+            i += utf8_char_len(bytes[i]);
+            continue;
+        }
+
+        // Make sure this isn't inside a comment
+        let line_start = source[..i].rfind('\n').map(|p| p + 1).unwrap_or(0);
+        let before = source[line_start..i].trim_start();
+        if before.starts_with("//") {
+            i += 7;
+            continue;
+        }
+
+        let block_start = i;
+        i += 7; // skip "define!"
+
+        // Skip whitespace to get name
+        while i < len && bytes[i].is_ascii_whitespace() {
+            i += 1;
+        }
+
+        // Parse name (ASCII identifiers only)
+        let name_start = i;
+        while i < len && (bytes[i].is_ascii_alphanumeric() || bytes[i] == b'_') {
+            i += 1;
+        }
+        if i == name_start {
+            continue;
+        }
+        let name = source[name_start..i].to_string();
+
+        // Skip whitespace to opening paren
+        while i < len && bytes[i].is_ascii_whitespace() {
+            i += 1;
+        }
+        if i >= len || bytes[i] != b'(' {
+            continue;
+        }
+        i += 1; // skip '('
+
+        // Parse params until ')'
+        let mut params = Vec::new();
+        loop {
+            while i < len && bytes[i].is_ascii_whitespace() {
+                i += 1;
+            }
+            if i >= len {
+                break;
+            }
+            if bytes[i] == b')' {
+                i += 1;
+                break;
+            }
+            if bytes[i] == b',' {
+                i += 1;
+                continue;
+            }
+            // Skip optional type keyword (e.g., "int")
+            let token_start = i;
+            while i < len && (bytes[i].is_ascii_alphanumeric() || bytes[i] == b'_') {
+                i += 1;
+            }
+            let token = &source[token_start..i];
+
+            // Peek ahead: if there's another identifier after whitespace before , or ),
+            // this token is a type and the next is the param name
+            let saved = i;
+            while i < len && bytes[i].is_ascii_whitespace() {
+                i += 1;
+            }
+            if i < len && (bytes[i].is_ascii_alphabetic() || bytes[i] == b'_') {
+                // Next token is the real param name
+                let pname_start = i;
+                while i < len && (bytes[i].is_ascii_alphanumeric() || bytes[i] == b'_') {
+                    i += 1;
+                }
+                params.push(source[pname_start..i].to_string());
+            } else {
+                // This token is the param name (no type prefix)
+                i = saved;
+                params.push(token.to_string());
+            }
+        }
+
+        // Skip whitespace to opening brace
+        while i < len && bytes[i].is_ascii_whitespace() {
+            i += 1;
+        }
+        if i >= len || bytes[i] != b'{' {
+            continue;
+        }
+
+        // Find matching closing brace (braces are ASCII, safe to scan bytes)
+        let body_start = i + 1;
+        let mut depth = 1;
+        i += 1;
+        while i < len && depth > 0 {
+            match bytes[i] {
+                b'{' => depth += 1,
+                b'}' => depth -= 1,
+                b'/' if i + 1 < len && bytes[i + 1] == b'/' => {
+                    // Skip line comment
+                    while i < len && bytes[i] != b'\n' {
+                        i += 1;
+                    }
+                    continue;
+                }
+                _ => {}
+            }
+            i += 1;
+        }
+
+        if depth != 0 {
+            continue;
+        }
+
+        let body_end = i - 1; // before the closing '}'
+        let body = source[body_start..body_end].to_string();
+        let has_placeholder = body.contains("%0");
+
+        macros.push(MacroDef {
+            name,
+            params,
+            body,
+            has_placeholder,
+            byte_range: block_start..i,
+        });
+    }
+
+    macros
+}
+
+/// Strip macro definitions from the source, returning content without `define!` blocks.
+fn strip_macro_definitions(source: &str, macros: &[MacroDef]) -> String {
+    if macros.is_empty() {
+        return source.to_string();
+    }
+
+    let mut result = String::with_capacity(source.len());
+    let mut pos = 0;
+    for mac in macros {
+        result.push_str(&source[pos..mac.byte_range.start]);
+        pos = mac.byte_range.end;
+        // Skip trailing newline if present
+        if pos < source.len() && source.as_bytes()[pos] == b'\n' {
+            pos += 1;
+        }
+    }
+    result.push_str(&source[pos..]);
+    result
+}
+
+/// Expand macro calls in the source. Returns the expanded content and any errors.
+///
+/// Handles `name(args)!` and `name(args)! { body }` call syntax.
+fn expand_macro_calls(
+    source: &str,
+    macros: &[MacroDef],
+    errors: &mut Vec<String>,
+) -> String {
+    if macros.is_empty() {
+        return source.to_string();
+    }
+
+    let mut result = source.to_string();
+
+    // Iterate expansion passes (macros may produce other macro calls)
+    for _pass in 0..16 {
+        let mut any_expanded = false;
+        let mut new_result = String::with_capacity(result.len());
+        let bytes = result.as_bytes();
+        let len = bytes.len();
+        let mut i = 0;
+
+        while i < len {
+            // Non-ASCII byte: copy full UTF-8 character and continue
+            if bytes[i] > 0x7F {
+                let clen = utf8_char_len(bytes[i]);
+                new_result.push_str(&result[i..i + clen.min(len - i)]);
+                i += clen;
+                continue;
+            }
+
+            // Check if we're in a comment
+            if bytes[i] == b'/' && i + 1 < len && bytes[i + 1] == b'/' {
+                // Copy rest of line (line content may have non-ASCII)
+                let line_end = result[i..].find('\n').map(|p| i + p).unwrap_or(len);
+                new_result.push_str(&result[i..line_end]);
+                i = line_end;
+                continue;
+            }
+
+            // Look for identifier followed by ( ... )!
+            if bytes[i].is_ascii_alphabetic() || bytes[i] == b'_' {
+                let ident_start = i;
+                while i < len && (bytes[i].is_ascii_alphanumeric() || bytes[i] == b'_') {
+                    i += 1;
+                }
+                let ident = &result[ident_start..i];
+
+                // Check if this identifier matches a macro name
+                let mac = macros.iter().find(|m| m.name == ident);
+                if mac.is_none() {
+                    new_result.push_str(ident);
+                    continue;
+                }
+                let mac = mac.unwrap();
+
+                // Skip whitespace
+                let saved_i = i;
+                while i < len && bytes[i].is_ascii_whitespace() && bytes[i] != b'\n' {
+                    i += 1;
+                }
+
+                // Expect '('
+                if i >= len || bytes[i] != b'(' {
+                    new_result.push_str(ident);
+                    i = saved_i;
+                    continue;
+                }
+
+                // Parse arguments inside ( ... )
+                i += 1; // skip '('
+                let args = match parse_balanced_args(&result, &mut i) {
+                    Some(a) => a,
+                    None => {
+                        new_result.push_str(ident);
+                        i = saved_i;
+                        continue;
+                    }
+                };
+
+                // Skip whitespace
+                while i < len && bytes[i].is_ascii_whitespace() && bytes[i] != b'\n' {
+                    i += 1;
+                }
+
+                // Expect '!'
+                if i >= len || bytes[i] != b'!' {
+                    // Not a macro call, just a regular function call
+                    new_result.push_str(ident);
+                    new_result.push('(');
+                    new_result.push_str(&args.join(", "));
+                    new_result.push(')');
+                    continue;
+                }
+                i += 1; // skip '!'
+
+                // Optional body block { ... }
+                let mut caller_body = String::new();
+                let saved_after_bang = i;
+                // Skip whitespace (including newlines) to find optional body
+                while i < len && bytes[i].is_ascii_whitespace() {
+                    i += 1;
+                }
+                if i < len && bytes[i] == b'{' {
+                    i += 1; // skip '{'
+                    let body_start = i;
+                    let mut depth = 1;
+                    while i < len && depth > 0 {
+                        match bytes[i] {
+                            b'{' => depth += 1,
+                            b'}' => depth -= 1,
+                            _ => {}
+                        }
+                        i += 1;
+                    }
+                    if depth == 0 {
+                        caller_body = result[body_start..i - 1].trim().to_string();
+                    }
+                } else {
+                    // No body block
+                    i = saved_after_bang;
+                }
+
+                // Validate: if macro has %0 placeholder, caller must provide a body
+                if mac.has_placeholder && caller_body.is_empty() {
+                    errors.push(format!(
+                        "Macro '{}' requires a body block because it contains a %0 placeholder",
+                        mac.name
+                    ));
+                    new_result.push_str(&format!("/* Error: macro '{}' requires body */", mac.name));
+                    any_expanded = true;
+                    continue;
+                }
+
+                // Validate argument count
+                if args.len() != mac.params.len() && !(args.len() == 1 && args[0].is_empty() && mac.params.is_empty()) {
+                    errors.push(format!(
+                        "Macro '{}' expects {} arguments but got {}",
+                        mac.name,
+                        mac.params.len(),
+                        args.len()
+                    ));
+                }
+
+                // Expand: substitute params and %0
+                let mut expanded = mac.body.clone();
+
+                // Substitute parameters (word-boundary aware)
+                for (idx, param) in mac.params.iter().enumerate() {
+                    if let Some(arg) = args.get(idx) {
+                        expanded = replace_word(&expanded, param, arg.trim());
+                    }
+                }
+
+                // Substitute %0 placeholder with caller body
+                if mac.has_placeholder {
+                    expanded = expanded.replace("%0", &caller_body);
+                }
+
+                new_result.push_str(expanded.trim());
+                any_expanded = true;
+            } else {
+                // ASCII non-identifier character
+                new_result.push(bytes[i] as char);
+                i += 1;
+            }
+        }
+
+        result = new_result;
+        if !any_expanded {
+            break;
+        }
+    }
+
+    result
+}
+
+/// Replace all whole-word occurrences of `word` with `replacement`.
+/// Word boundaries are ASCII identifier chars (alphanumeric + underscore).
+/// Safe for UTF-8: non-ASCII bytes are never word chars, so multi-byte
+/// sequences pass through without being split.
+fn replace_word(source: &str, word: &str, replacement: &str) -> String {
+    let bytes = source.as_bytes();
+    let word_bytes = word.as_bytes();
+    let len = bytes.len();
+    let wlen = word_bytes.len();
+
+    if wlen == 0 || wlen > len {
+        return source.to_string();
+    }
+
+    let mut result = String::with_capacity(len);
+    let mut i = 0;
+
+    fn is_word_char(b: u8) -> bool {
+        b.is_ascii_alphanumeric() || b == b'_'
+    }
+
+    while i <= len - wlen {
+        if &bytes[i..i + wlen] == word_bytes {
+            let before_ok = i == 0 || !is_word_char(bytes[i - 1]);
+            let after_ok = i + wlen >= len || !is_word_char(bytes[i + wlen]);
+            if before_ok && after_ok {
+                result.push_str(replacement);
+                i += wlen;
+                continue;
+            }
+        }
+        // Advance by full UTF-8 character
+        let clen = utf8_char_len(bytes[i]);
+        result.push_str(&source[i..i + clen.min(len - i)]);
+        i += clen;
+    }
+    // Push remaining chars
+    if i < len {
+        result.push_str(&source[i..]);
+    }
+
+    result
+}
+
+/// Parse comma-separated arguments inside parentheses, handling nested parens.
+/// `pos` should point to the first char after the opening '('.
+/// Returns the args and advances `pos` past the closing ')'.
+fn parse_balanced_args(source: &str, pos: &mut usize) -> Option<Vec<String>> {
+    let bytes = source.as_bytes();
+    let len = bytes.len();
+    let mut args = Vec::new();
+    let mut current = String::new();
+    let mut depth = 1;
+
+    while *pos < len && depth > 0 {
+        match bytes[*pos] {
+            b'(' => {
+                depth += 1;
+                current.push('(');
+            }
+            b')' => {
+                depth -= 1;
+                if depth > 0 {
+                    current.push(')');
+                }
+            }
+            b',' if depth == 1 => {
+                args.push(current.trim().to_string());
+                current = String::new();
+            }
+            c => {
+                current.push(c as char);
+            }
+        }
+        *pos += 1;
+    }
+
+    if depth != 0 {
+        return None;
+    }
+
+    let trimmed = current.trim().to_string();
+    if !trimmed.is_empty() || !args.is_empty() {
+        args.push(trimmed);
+    }
+
+    Some(args)
 }
 
 /// Build a game: preprocess main.gpc and write the output to dist/.
@@ -250,7 +741,7 @@ pub fn build_game(
         };
     }
 
-    // Run preprocessor
+    // Run preprocessor (import expansion)
     let (processed, logs, preprocess_success) = preprocess(&main_path, verbose);
 
     let mut errors: Vec<String> = logs
@@ -264,12 +755,19 @@ pub fn build_game(
         .map(|l| l.message.clone())
         .collect();
 
+    // Macro expansion pass
+    let macro_defs = extract_macro_definitions(&processed);
+    let stripped = strip_macro_definitions(&processed, &macro_defs);
+    let mut macro_errors = Vec::new();
+    let expanded = expand_macro_calls(&stripped, &macro_defs, &mut macro_errors);
+    errors.extend(macro_errors);
+
     // Write output
     let header = format!(
         "// GENERATED FILE - DO NOT EDIT\n// Source: {}\n\n",
         main_path.display()
     );
-    let final_content = format!("{}{}", header, processed);
+    let final_content = format!("{}{}", header, expanded);
 
     if let Err(e) = std::fs::write(&output_path, &final_content) {
         errors.push(format!("Could not write output file: {}", e));
@@ -292,16 +790,28 @@ pub fn build_game(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::Write;
 
     #[test]
-    fn test_parse_include() {
-        assert_eq!(parse_include("#include \"foo.gpc\""), Some("foo.gpc"));
-        assert_eq!(parse_include("  #include \"bar.gpc\""), Some("bar.gpc"));
-        assert_eq!(parse_include("#include \"../Common/helper.gpc\""), Some("../Common/helper.gpc"));
-        assert_eq!(parse_include("// #include \"foo.gpc\""), None);
-        assert_eq!(parse_include("int x = 5;"), None);
-        assert_eq!(parse_include("#include"), None);
+    fn test_parse_import() {
+        // New syntax: import path;
+        assert_eq!(parse_import("import foo;"), Some("foo.gpc".to_string()));
+        assert_eq!(parse_import("import common/helper;"), Some("common/helper.gpc".to_string()));
+        assert_eq!(parse_import("  import modules/core;"), Some("modules/core.gpc".to_string()));
+
+        // New syntax: import "path";
+        assert_eq!(parse_import("import \"foo.gpc\";"), Some("foo.gpc".to_string()));
+        assert_eq!(parse_import("import \"common/helper\";"), Some("common/helper.gpc".to_string()));
+
+        // Legacy syntax: #include "path"
+        assert_eq!(parse_import("#include \"foo.gpc\""), Some("foo.gpc".to_string()));
+        assert_eq!(parse_import("  #include \"bar.gpc\""), Some("bar.gpc".to_string()));
+        assert_eq!(parse_import("#include \"../Common/helper.gpc\""), Some("../Common/helper.gpc".to_string()));
+
+        // Negative cases
+        assert_eq!(parse_import("// import foo;"), None);
+        assert_eq!(parse_import("int x = 5;"), None);
+        assert_eq!(parse_import("import;"), None);
+        assert_eq!(parse_import("#include"), None);
     }
 
     #[test]
@@ -317,6 +827,21 @@ mod tests {
         let helper_path = dir.path().join("helper.gpc");
 
         std::fs::write(&helper_path, "int helper_var;\n").unwrap();
+        std::fs::write(&main_path, "import helper;\nint main_var;\n").unwrap();
+
+        let (content, _logs, success) = preprocess(&main_path, false);
+        assert!(success);
+        assert!(content.contains("int helper_var;"));
+        assert!(content.contains("int main_var;"));
+    }
+
+    #[test]
+    fn test_preprocess_legacy_include() {
+        let dir = tempfile::tempdir().unwrap();
+        let main_path = dir.path().join("main.gpc");
+        let helper_path = dir.path().join("helper.gpc");
+
+        std::fs::write(&helper_path, "int helper_var;\n").unwrap();
         std::fs::write(&main_path, "#include \"helper.gpc\"\nint main_var;\n").unwrap();
 
         let (content, _logs, success) = preprocess(&main_path, false);
@@ -326,7 +851,7 @@ mod tests {
     }
 
     #[test]
-    fn test_preprocess_no_double_include() {
+    fn test_preprocess_no_double_import() {
         let dir = tempfile::tempdir().unwrap();
         let main_path = dir.path().join("main.gpc");
         let shared_path = dir.path().join("shared.gpc");
@@ -334,7 +859,7 @@ mod tests {
         std::fs::write(&shared_path, "int shared;\n").unwrap();
         std::fs::write(
             &main_path,
-            "#include \"shared.gpc\"\n#include \"shared.gpc\"\nint main;\n",
+            "import shared;\nimport shared;\nint main;\n",
         )
         .unwrap();
 
@@ -345,16 +870,16 @@ mod tests {
     }
 
     #[test]
-    fn test_preprocess_commented_include_skipped() {
+    fn test_preprocess_commented_import_skipped() {
         let dir = tempfile::tempdir().unwrap();
         let main_path = dir.path().join("main.gpc");
 
-        // commented include should NOT be expanded (file doesn't even exist)
-        std::fs::write(&main_path, "// #include \"nonexistent.gpc\"\nint x;\n").unwrap();
+        // commented import should NOT be expanded (file doesn't even exist)
+        std::fs::write(&main_path, "// import nonexistent;\nint x;\n").unwrap();
 
         let (content, _logs, success) = preprocess(&main_path, false);
         assert!(success);
-        assert!(content.contains("// #include \"nonexistent.gpc\""));
+        assert!(content.contains("// import nonexistent;"));
         assert!(content.contains("int x;"));
     }
 
@@ -363,10 +888,123 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let main_path = dir.path().join("main.gpc");
 
-        std::fs::write(&main_path, "#include \"missing.gpc\"\nint x;\n").unwrap();
+        std::fs::write(&main_path, "import missing;\nint x;\n").unwrap();
 
         let (_content, _logs, success) = preprocess(&main_path, false);
         assert!(!success);
+    }
+
+    #[test]
+    fn test_extract_macro_definitions() {
+        let source = r#"
+int x = 1;
+define! myMacro(a, b) {
+    set_val(a, b);
+}
+int y = 2;
+"#;
+        let macros = extract_macro_definitions(source);
+        assert_eq!(macros.len(), 1);
+        assert_eq!(macros[0].name, "myMacro");
+        assert_eq!(macros[0].params, vec!["a", "b"]);
+        assert!(macros[0].body.contains("set_val(a, b)"));
+        assert!(!macros[0].has_placeholder);
+    }
+
+    #[test]
+    fn test_extract_macro_with_placeholder() {
+        let source = r#"
+define! wrapper() {
+    set_val(TRACE_1, 0x6B);
+    %0
+    set_val(TRACE_3, 0x39);
+}
+"#;
+        let macros = extract_macro_definitions(source);
+        assert_eq!(macros.len(), 1);
+        assert_eq!(macros[0].name, "wrapper");
+        assert!(macros[0].params.is_empty());
+        assert!(macros[0].has_placeholder);
+    }
+
+    #[test]
+    fn test_expand_macro_basic() {
+        let source = "myMacro(TRACE_1, 0x49)!";
+        let macros = vec![MacroDef {
+            name: "myMacro".to_string(),
+            params: vec!["a".to_string(), "b".to_string()],
+            body: "\n    set_val(a, b);\n".to_string(),
+            has_placeholder: false,
+            byte_range: 0..0,
+        }];
+        let mut errors = Vec::new();
+        let result = expand_macro_calls(source, &macros, &mut errors);
+        assert!(errors.is_empty());
+        assert!(result.contains("set_val(TRACE_1, 0x49)"));
+    }
+
+    #[test]
+    fn test_expand_macro_with_placeholder() {
+        let source = "wrapper()! { set_val(TRACE_2, 0x49); }";
+        let macros = vec![MacroDef {
+            name: "wrapper".to_string(),
+            params: vec![],
+            body: "\n    set_val(TRACE_1, 0x6B);\n    %0\n    set_val(TRACE_3, 0x39);\n"
+                .to_string(),
+            has_placeholder: true,
+            byte_range: 0..0,
+        }];
+        let mut errors = Vec::new();
+        let result = expand_macro_calls(source, &macros, &mut errors);
+        assert!(errors.is_empty());
+        assert!(result.contains("set_val(TRACE_1, 0x6B)"));
+        assert!(result.contains("set_val(TRACE_2, 0x49)"));
+        assert!(result.contains("set_val(TRACE_3, 0x39)"));
+    }
+
+    #[test]
+    fn test_expand_macro_no_body_when_no_placeholder() {
+        let source = "simple(5)!";
+        let macros = vec![MacroDef {
+            name: "simple".to_string(),
+            params: vec!["x".to_string()],
+            body: "\n    set_val(TRACE_1, x);\n".to_string(),
+            has_placeholder: false,
+            byte_range: 0..0,
+        }];
+        let mut errors = Vec::new();
+        let result = expand_macro_calls(source, &macros, &mut errors);
+        assert!(errors.is_empty());
+        assert!(result.contains("set_val(TRACE_1, 5)"));
+    }
+
+    #[test]
+    fn test_strip_macro_definitions() {
+        let source = "int x = 1;\ndefine! myMacro(a) {\n    set_val(a, 0);\n}\nint y = 2;\n";
+        let macros = extract_macro_definitions(source);
+        let stripped = strip_macro_definitions(source, &macros);
+        assert!(stripped.contains("int x = 1;"));
+        assert!(stripped.contains("int y = 2;"));
+        assert!(!stripped.contains("define!"));
+    }
+
+    #[test]
+    fn test_full_macro_pipeline() {
+        let source = r#"define! trace(val) {
+    set_val(TRACE_1, val);
+}
+
+trace(0x49)!
+int x = 1;
+"#;
+        let macros = extract_macro_definitions(source);
+        let stripped = strip_macro_definitions(source, &macros);
+        let mut errors = Vec::new();
+        let result = expand_macro_calls(&stripped, &macros, &mut errors);
+        assert!(errors.is_empty());
+        assert!(result.contains("set_val(TRACE_1, 0x49)"));
+        assert!(result.contains("int x = 1;"));
+        assert!(!result.contains("define!"));
     }
 
     #[test]
