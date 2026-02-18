@@ -1,7 +1,7 @@
 ## High Priority
 
-- [ ] Remove scrollbar from the editor file tabs.
-- [ ] Move the module creation to a Tool page, with options to delete, edit and create.
+- [x] Remove scrollbar from the editor file tabs.
+- [x] Move the module creation to a Tool page, with options to delete, edit and create.
 
 ## Medium Priority
 
