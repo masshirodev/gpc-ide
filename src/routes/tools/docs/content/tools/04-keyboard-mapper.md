@@ -1,4 +1,4 @@
-# Keyboard Mapper
+# Keyboard Mapper {ide}
 
 The Keyboard Mapper lets you visually assign keyboard keys to controller inputs for PC gaming with a Cronus Zen. Access it from **Tools > Keyboard Mapper** in the sidebar.
 

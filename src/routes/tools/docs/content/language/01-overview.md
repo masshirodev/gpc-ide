@@ -1,4 +1,4 @@
-# GPC Language Overview
+# GPC Language Overview {language}
 
 GPC (GamePack Composer) is the scripting language used by Cronus Zen devices. It is a C-like language designed for real-time game controller input processing. Anyone from a novice to expert programmer can pick it up quickly, while its C-based syntax makes it familiar to experienced developers.
 
@@ -15,14 +15,14 @@ GPC (GamePack Composer) is the scripting language used by Cronus Zen devices. It
 
 A GPC script must follow this section ordering:
 
-1. **Definitions** (optional) — Named constants via `define`
-2. **Data** (optional) — Read-only byte arrays
-3. **Remapping** (optional) — Input-to-output remaps
-4. **Variables** (optional) — Mutable variable declarations
-5. **Init** (optional) — One-time setup code
-6. **Main** (required) — Continuous execution loop
-7. **Combos** (optional) — Timed action sequences
-8. **Functions** (optional) — Reusable code blocks
+1. **Definitions** {optional} — Named constants via `define`
+2. **Data** {optional} — Read-only byte arrays
+3. **Remapping** {optional} — Input-to-output remaps
+4. **Variables** {optional} — Mutable variable declarations
+5. **Init** {optional} — One-time setup code
+6. **Main** {required} — Continuous execution loop
+7. **Combos** {optional}— Timed action sequences
+8. **Functions** {optional} — Reusable code blocks
 
 ```gpc
 // Definitions
@@ -58,7 +58,7 @@ function myFunction(x, y) {
 }
 ```
 
-## Execution Model
+## Execution Model {zen}
 
 GPC scripts are compiled to bytecode and executed on a stack-based virtual machine (VM):
 
@@ -82,7 +82,7 @@ The VM is optimized for speed with minimal error checking, so understanding the 
 
 Multi-line comments cannot be nested.
 
-## Imports
+## Imports {lsp}
 
 Include other GPC files with the `import` statement:
 

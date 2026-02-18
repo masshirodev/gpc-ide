@@ -1,4 +1,4 @@
-# Modules
+# Modules {ide}
 
 Modules are reusable, self-contained features that can be added to any game. They define their own GPC code, OLED menu entries, configuration options, and persistence variables.
 

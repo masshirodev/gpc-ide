@@ -1,4 +1,4 @@
-# Spray Pattern Tool
+# Spray Pattern Tool {ide}
 
 The Spray Pattern tool lets you visually design recoil compensation patterns by drawing directly on a canvas. Access it from **Tools > Spray Pattern** in the sidebar.
 

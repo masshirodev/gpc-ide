@@ -1,4 +1,4 @@
-# Functions
+# Functions {language}
 
 GPC provides built-in functions for controller I/O, math, combos, OLED display, and more, plus the ability to create your own.
 

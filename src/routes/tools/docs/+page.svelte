@@ -1,5 +1,43 @@
 <script lang="ts">
-	import { marked } from 'marked';
+	import { marked, type TokenizerAndRendererExtension } from 'marked';
+
+	const badgeColors: Record<string, { bg: string; border: string; text: string }> = {
+		lsp: { bg: '#1e3a5f', border: '#3b82f6', text: '#93c5fd' },
+		ide: { bg: '#14532d', border: '#22c55e', text: '#86efac' },
+		language: { bg: '#4a1d96', border: '#8b5cf6', text: '#c4b5fd' },
+		zen: { bg: '#78350f', border: '#f59e0b', text: '#fcd34d' },
+		required: { bg: '#7f1d1d', border: '#ef4444', text: '#fca5a5' },
+		optional: { bg: '#1c1917', border: '#78716c', text: '#d6d3d1' }
+	};
+
+	const defaultBadge = { bg: '#27272a', border: '#52525b', text: '#d4d4d8' };
+
+	const badgeExtension: TokenizerAndRendererExtension = {
+		name: 'badge',
+		level: 'inline',
+		start(src: string) {
+			return src.indexOf('{');
+		},
+		tokenizer(src: string) {
+			const match = src.match(/^\{([a-zA-Z0-9_-]+)\}/);
+			if (match) {
+				return {
+					type: 'badge',
+					raw: match[0],
+					label: match[1]
+				};
+			}
+			return undefined;
+		},
+		renderer(token) {
+			const label = (token as unknown as { label: string }).label;
+			const key = label.toLowerCase();
+			const colors = badgeColors[key] ?? defaultBadge;
+			return `<span class="docs-badge" style="background:${colors.bg};border-color:${colors.border};color:${colors.text}">${label.toUpperCase()}</span>`;
+		}
+	};
+
+	marked.use({ extensions: [badgeExtension] });
 
 	const categoryOrder = ['ide', 'tools', 'language', 'lsp'] as const;
 	const categoryLabels: Record<string, string> = {
@@ -268,5 +306,17 @@
 	:global(.docs-prose hr) {
 		border-color: #3f3f46;
 		margin: 2rem 0;
+	}
+	:global(.docs-badge) {
+		display: inline-flex;
+		align-items: center;
+		padding: 0.0625rem 0.4375rem;
+		border: 1px solid;
+		border-radius: 0.25rem;
+		font-size: 0.6875rem;
+		font-weight: 600;
+		letter-spacing: 0.025em;
+		line-height: 1.5;
+		vertical-align: middle;
 	}
 </style>

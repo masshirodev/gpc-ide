@@ -1,4 +1,4 @@
-# OLED Creator
+# OLED Creator {ide}
 
 The OLED Creator is a pixel art editor for designing custom graphics that display on the Cronus Zen's OLED screen. Access it from **Tools > OLED Creator** in the sidebar.
 

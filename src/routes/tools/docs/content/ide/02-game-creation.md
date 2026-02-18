@@ -1,4 +1,4 @@
-# Game Creation
+# Game Creation {ide}
 
 Games are created using the **Game Wizard**, accessible via the **New Game** button at the bottom of the sidebar.
 

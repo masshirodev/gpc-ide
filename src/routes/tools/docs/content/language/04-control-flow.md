@@ -1,4 +1,4 @@
-# Control Flow
+# Control Flow {language}
 
 GPC provides standard control flow statements similar to C.
 

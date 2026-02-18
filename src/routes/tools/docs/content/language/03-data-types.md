@@ -1,4 +1,4 @@
-# Data Types
+# Data Types {language} {zen}
 
 GPC uses integer-only arithmetic. There are no floating-point types — decimal values are truncated (e.g., 3.4 becomes 3).
 

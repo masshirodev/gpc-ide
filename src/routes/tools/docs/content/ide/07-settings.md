@@ -1,4 +1,4 @@
-# Settings
+# Settings {ide}
 
 Access settings by clicking the **Settings** button in the bottom-left of the sidebar.
 
@@ -25,7 +25,7 @@ Access settings by clicking the **Settings** button in the bottom-left of the si
 
 The LSP (Language Server Protocol) provides real-time code intelligence. If you have a custom build of the GPC language server, you can point the IDE to it here.
 
-## Workspaces
+## Workspaces {required}
 
 Workspaces are directories where your game projects are stored. You can have multiple workspaces.
 

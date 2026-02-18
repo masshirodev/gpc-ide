@@ -1,4 +1,4 @@
-# Combo Maker
+# Combo Maker {ide}
 
 The Combo Maker is a visual sequencer for creating button combo sequences. Access it from **Tools > Combo Maker** in the sidebar.
 

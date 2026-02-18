@@ -1,4 +1,4 @@
-# Configuration
+# Configuration {ide} {required}
 
 Each game's behavior is defined by its `config.toml` file. This file controls everything from button mappings to OLED menu layout to module parameters.
 

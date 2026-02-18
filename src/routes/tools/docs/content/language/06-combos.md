@@ -1,4 +1,4 @@
-# Combos
+# Combos {language}
 
 Combos are the core action mechanism in GPC. A combo is a sequence of pre-programmed instructions executed in order, ideal for setting button outputs for specific durations.
 

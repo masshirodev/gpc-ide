@@ -1,8 +1,8 @@
-# Sections
+# Sections {language}
 
 GPC programs are organized into named sections that must appear in a specific order.
 
-## define
+## define {optional}
 
 The definition section assigns values to named constants. Definitions must appear at the very beginning of the script and cannot be changed at runtime.
 
@@ -13,7 +13,7 @@ define MAX_RECOIL = 100;
 
 Definitions can be used inside the `data` section and anywhere else in the script.
 
-## data
+## data {optional}
 
 The data section stores static, read-only byte values at the beginning of the bytecode's virtual address space. Values are accessed via index-based retrieval.
 
@@ -39,7 +39,7 @@ define myValue = 255;
 data(20, 42, myValue, 100);
 ```
 
-## remap
+## remap {optional}
 
 Remapping redirects controller inputs to different outputs. Remaps are defined before `main` and are applied after each main loop iteration completes.
 
@@ -55,7 +55,7 @@ unmap PS5_TRIANGLE;
 
 > When scripting with remapped buttons, reference the original input identifiers — remaps don't apply until after main finishes.
 
-## Variables
+## Variables {optional}
 
 Variable declarations must appear before `init` and `main`. Variables are global and accessible from any section. They default to 0 if no value is specified.
 
@@ -65,7 +65,7 @@ int counter = 10;
 int values[5];
 ```
 
-## init
+## init {optional}
 
 The `init` section runs once when the script first loads. It's commonly used for console-specific setup and variable initialization.
 
@@ -85,7 +85,7 @@ The init section can execute combos, call functions, and modify variables just l
 
 > You can have multiple `init` sections, the compiler will merge them together at runtime.
 
-## main
+## main {required}
 
 The `main` section is the heart of any GPC script. It is the only required section and runs in a continuous loop. Code executes sequentially from top to bottom — order directly affects outcomes.
 
@@ -107,7 +107,7 @@ Each cycle:
 
 > You can have multiple `main` sections, the compiler will merge them together at runtime.
 
-## combo
+## combo {optional}
 
 `combo` blocks define timed action sequences. They are ideal for setting button outputs for specific durations.
 
@@ -149,7 +149,7 @@ Key points:
 | `wait(ms)`                   | Pause combo for duration (combo-only)         |
 | `call(name)`                 | Run another combo, then resume (combo-only)   |
 
-## function
+## function {optional}
 
 User-defined functions for reusable logic. Functions must be declared last in the script, after main and combo sections.
 

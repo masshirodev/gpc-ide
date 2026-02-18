@@ -1,4 +1,4 @@
-# Building
+# Building {ide}
 
 Building a game compiles your `config.toml` and modules into final `.gpc` output files that can be loaded onto a Cronus Zen device.
 

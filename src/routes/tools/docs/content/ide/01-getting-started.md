@@ -1,4 +1,4 @@
-# Getting Started
+# Getting Started {ide}
 
 GPC IDE is a desktop application for creating, editing, and building Cronus Zen game scripts. It provides a complete workflow from game creation through to compiled `.gpc` output files.
 
