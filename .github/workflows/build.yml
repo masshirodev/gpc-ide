@@ -25,6 +25,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/checkout@v4
+        with:
+          repository: zKiwiko/ersa-lsp-core
+          path: ../ersa-lsp-core
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22
