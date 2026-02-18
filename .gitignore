@@ -34,4 +34,5 @@ yarn.lock
 CLAUDE.md
 
 temp/
+temp/**
 start.sh
