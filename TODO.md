@@ -5,9 +5,9 @@
 
 ## Medium Priority
 
-- [x] Add a References Tab to the bottom panel.
 - [x] Swap to Ari's new LSP server.
 - [x] Change the builder to accomodate new LSP features (imports and macros).
+- [ ] Fix codelens hook into the references panel.
 
 ## Low Priority
 

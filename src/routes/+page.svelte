@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { goto } from '$app/navigation';
 	import { getGameStore, gamesByType, loadGames, clearSelection } from '$lib/stores/game.svelte';
 	import { selectGame } from '$lib/stores/game.svelte';
 	import {
@@ -49,7 +50,6 @@
 	import NewFileModal from '$lib/components/modals/NewFileModal.svelte';
 	import TemplateImportModal from '$lib/components/modals/TemplateImportModal.svelte';
 	import ConfirmDialog from '$lib/components/modals/ConfirmDialog.svelte';
-	import CreateModuleModal from '$lib/components/modals/CreateModuleModal.svelte';
 	import { addToast } from '$lib/stores/toast.svelte';
 	import { getSettings } from '$lib/stores/settings.svelte';
 	import { getRecoilTransfer, clearRecoilTransfer } from '$lib/stores/recoil-transfer.svelte';
@@ -96,8 +96,6 @@
 	let showAddModuleModal = $state(false);
 	let showNewFileModal = $state(false);
 	let showTemplateImportModal = $state(false);
-	let showCreateModuleModal = $state(false);
-
 	// Confirm dialog state
 	let confirmDialog = $state<{
 		open: boolean;
@@ -761,9 +759,9 @@
 							</button>
 							<button
 								class="rounded border border-zinc-600 bg-zinc-800 px-3 py-1 text-xs font-medium text-zinc-300 hover:bg-zinc-700"
-								onclick={() => (showCreateModuleModal = true)}
+								onclick={() => goto('/tools/modules')}
 							>
-								Create Module
+								Module Manager
 							</button>
 						</div>
 					</div>
@@ -1037,7 +1035,7 @@
 					<!-- Editor Tab Bar -->
 					{#if editorStore.tabs.length > 0}
 						<div class="flex items-center border-b border-zinc-800 bg-zinc-900/80">
-							<div class="flex flex-1 overflow-x-auto">
+							<div class="flex flex-1 overflow-x-auto scrollbar-none">
 								{#each editorStore.tabs as tab (tab.path)}
 									<button
 										class="group flex shrink-0 items-center gap-1.5 border-r border-zinc-800 px-3 py-1.5 text-xs transition-colors {editorStore.activeTabPath ===
@@ -1465,14 +1463,6 @@
 		}}
 	/>
 {/if}
-
-<CreateModuleModal
-	open={showCreateModuleModal}
-	onclose={() => (showCreateModuleModal = false)}
-	onsuccess={() => {
-		addToast('User module created. You can now add it to games.', 'success');
-	}}
-/>
 
 <ConfirmDialog
 	open={confirmDialog.open}
