@@ -3,8 +3,12 @@
 	import { getLspStore } from '$lib/stores/lsp.svelte';
 	import { getDiagnosticsStore, getDiagnosticCounts } from '$lib/stores/diagnostics.svelte';
 	import { setBottomPanelActiveTab, setBottomPanelOpen } from '$lib/stores/ui.svelte';
+	import { getVersion } from '@tauri-apps/api/app';
 
 	let { isScriptView = false }: { isScriptView?: boolean } = $props();
+
+	let appVersion = $state('');
+	getVersion().then((v) => (appVersion = v));
 
 	let store = getGameStore();
 	let lspStore = getLspStore();
@@ -59,6 +63,6 @@
 				<span class="text-red-400">LSP Error</span>
 			</span>
 		{/if}
-		<span>GPC IDE v0.1.0</span>
+		<span>GPC IDE {appVersion ? `v${appVersion}` : ''}</span>
 	</div>
 </footer>
