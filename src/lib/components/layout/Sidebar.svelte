@@ -223,6 +223,30 @@
 			Dep Graph
 		</a>
 		<a
+			href="/tools/plugins"
+			class="mb-1 flex items-center gap-2 rounded px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800"
+		>
+			<svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+				<path
+					d="M17 14v6m-3-3h6M6 10h2a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v2a2 2 0 002 2zm10 0h2a2 2 0 002-2V6a2 2 0 00-2-2h-2a2 2 0 00-2 2v2a2 2 0 002 2zM6 20h2a2 2 0 002-2v-2a2 2 0 00-2-2H6a2 2 0 00-2 2v2a2 2 0 002 2z"
+				/>
+			</svg>
+			Plugins
+		</a>
+		<a
+			href="/tools/simulator"
+			class="mb-1 flex items-center gap-2 rounded px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800"
+		>
+			<svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+				<path
+					fill-rule="evenodd"
+					d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z"
+					clip-rule="evenodd"
+				/>
+			</svg>
+			Simulator
+		</a>
+		<a
 			href="/tools/docs"
 			class="mb-1 flex items-center gap-2 rounded px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800"
 		>

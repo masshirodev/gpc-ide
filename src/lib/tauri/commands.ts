@@ -292,6 +292,94 @@ export async function replaceInFile(
 	});
 }
 
+// === Plugin Commands ===
+
+export interface PluginHooks {
+	pre_build?: string;
+	post_build?: string;
+	includes?: string[];
+	extra_vars?: Record<string, string>;
+	extra_defines?: Record<string, string>;
+}
+
+export interface PluginManifest {
+	id: string;
+	name: string;
+	version: string;
+	description?: string;
+	author?: string;
+	homepage?: string;
+	hooks: PluginHooks;
+}
+
+export interface PluginInfo {
+	manifest: PluginManifest;
+	path: string;
+	enabled: boolean;
+}
+
+export async function listPlugins(workspacePaths?: string[]): Promise<PluginInfo[]> {
+	return invoke<PluginInfo[]>('list_plugins', { workspacePaths: workspacePaths ?? null });
+}
+
+export async function togglePlugin(workspacePath: string, pluginId: string, enabled: boolean): Promise<void> {
+	return invoke<void>('toggle_plugin', { workspacePath, pluginId, enabled });
+}
+
+export async function readPluginFile(pluginPath: string, fileName: string): Promise<string> {
+	return invoke<string>('read_plugin_file', { pluginPath, fileName });
+}
+
+export async function createPlugin(
+	workspacePath: string,
+	pluginId: string,
+	pluginName: string,
+	description?: string
+): Promise<string> {
+	return invoke<string>('create_plugin', {
+		workspacePath,
+		pluginId,
+		pluginName,
+		description: description ?? null
+	});
+}
+
+export async function deletePlugin(pluginPath: string): Promise<void> {
+	return invoke<void>('delete_plugin', { pluginPath });
+}
+
+// === History Commands ===
+
+export interface SnapshotMeta {
+	id: string;
+	timestamp: number;
+	label: string | null;
+}
+
+export async function createSnapshot(gamePath: string, label?: string): Promise<SnapshotMeta> {
+	return invoke<SnapshotMeta>('create_snapshot', { gamePath, label: label ?? null });
+}
+
+export async function listSnapshots(gamePath: string): Promise<SnapshotMeta[]> {
+	return invoke<SnapshotMeta[]>('list_snapshots', { gamePath });
+}
+
+export async function getSnapshot(gamePath: string, snapshotId: string): Promise<string> {
+	return invoke<string>('get_snapshot', { gamePath, snapshotId });
+}
+
+export async function rollbackSnapshot(gamePath: string, snapshotId: string): Promise<SnapshotMeta> {
+	return invoke<SnapshotMeta>('rollback_snapshot', { gamePath, snapshotId });
+}
+
+export async function deleteSnapshot(gamePath: string, snapshotId: string): Promise<void> {
+	return invoke<void>('delete_snapshot', { gamePath, snapshotId });
+}
+
+export async function renameSnapshot(gamePath: string, snapshotId: string, label: string): Promise<void> {
+	return invoke<void>('rename_snapshot', { gamePath, snapshotId, label });
+}
+
 // === Opener Commands ===
 
 export async function openInDefaultApp(path: string): Promise<void> {

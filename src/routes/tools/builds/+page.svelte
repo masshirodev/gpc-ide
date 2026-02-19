@@ -1,14 +1,26 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
-	import { readFileTree, readFile, getAppRoot } from '$lib/tauri/commands';
+	import {
+		readFileTree,
+		readFile,
+		getAppRoot,
+		listGames,
+		buildGame,
+		regeneratePreview,
+		regenerateCommit
+	} from '$lib/tauri/commands';
 	import { addToast } from '$lib/stores/toast.svelte';
 	import { getSettings } from '$lib/stores/settings.svelte';
 	import MonacoEditor from '$lib/components/editor/MonacoEditor.svelte';
-	import type { FileTreeEntry } from '$lib/tauri/commands';
+	import type { FileTreeEntry, BuildResult } from '$lib/tauri/commands';
+	import type { GameSummary } from '$lib/types/config';
 
 	let settingsStore = getSettings();
 	let settings = $derived($settingsStore);
+
+	// Active view tab
+	let viewTab = $state<'files' | 'queue'>('files');
 
 	interface BuildFile {
 		name: string;
@@ -24,6 +36,91 @@
 	let copied = $state(false);
 	let searchQuery = $state('');
 
+	// Build queue state
+	interface QueueItem {
+		game: GameSummary;
+		status: 'pending' | 'building' | 'success' | 'error';
+		result?: BuildResult;
+	}
+
+	let allGames = $state<GameSummary[]>([]);
+	let selectedGamePaths = $state<Set<string>>(new Set());
+	let buildQueue = $state<QueueItem[]>([]);
+	let queueRunning = $state(false);
+
+	async function loadAllGames() {
+		try {
+			allGames = await listGames(settings.workspaces.length > 0 ? settings.workspaces : undefined);
+		} catch (e) {
+			addToast(`Failed to list games: ${e}`, 'error');
+		}
+	}
+
+	function toggleGameSelection(path: string) {
+		const next = new Set(selectedGamePaths);
+		if (next.has(path)) {
+			next.delete(path);
+		} else {
+			next.add(path);
+		}
+		selectedGamePaths = next;
+	}
+
+	function selectAllGames() {
+		selectedGamePaths = new Set(allGames.map((g) => g.path));
+	}
+
+	function clearSelection() {
+		selectedGamePaths = new Set();
+	}
+
+	function getWorkspaceForGame(gamePath: string): string | undefined {
+		return settings.workspaces.find((ws) => gamePath.startsWith(ws));
+	}
+
+	async function runBuildQueue() {
+		if (selectedGamePaths.size === 0) return;
+		queueRunning = true;
+		buildQueue = allGames
+			.filter((g) => selectedGamePaths.has(g.path))
+			.map((game) => ({ game, status: 'pending' as const }));
+
+		for (let i = 0; i < buildQueue.length; i++) {
+			buildQueue[i].status = 'building';
+			buildQueue = [...buildQueue]; // trigger reactivity
+			try {
+				// Auto-regenerate before building
+				const diffs = await regeneratePreview(buildQueue[i].game.path);
+				if (diffs.length > 0) {
+					const files = diffs.map((d) => ({ path: d.path, content: d.new_content }));
+					await regenerateCommit(buildQueue[i].game.path, files);
+				}
+				const ws = getWorkspaceForGame(buildQueue[i].game.path);
+				const result = await buildGame(buildQueue[i].game.path, ws);
+				buildQueue[i].status = result.success ? 'success' : 'error';
+				buildQueue[i].result = result;
+			} catch (e) {
+				buildQueue[i].status = 'error';
+				buildQueue[i].result = {
+					output_path: '',
+					success: false,
+					errors: [String(e)],
+					warnings: []
+				};
+			}
+			buildQueue = [...buildQueue];
+		}
+
+		const successes = buildQueue.filter((q) => q.status === 'success').length;
+		const failures = buildQueue.filter((q) => q.status === 'error').length;
+		addToast(
+			`Build queue complete: ${successes} succeeded, ${failures} failed`,
+			failures > 0 ? 'warning' : 'success'
+		);
+		queueRunning = false;
+		await loadBuilds();
+	}
+
 	let filteredFiles = $derived.by(() => {
 		if (!searchQuery.trim()) return files;
 		const q = searchQuery.toLowerCase();
@@ -32,6 +129,7 @@
 
 	onMount(() => {
 		loadBuilds();
+		loadAllGames();
 	});
 
 	async function loadBuilds() {
@@ -146,30 +244,141 @@
 				Dashboard
 			</button>
 			<h1 class="text-sm font-semibold text-zinc-100">Built Games</h1>
+			<div class="ml-4 flex rounded border border-zinc-800">
+				<button
+					class="px-3 py-1 text-xs font-medium transition-colors {viewTab === 'files' ? 'bg-zinc-800 text-zinc-200' : 'text-zinc-500 hover:text-zinc-300'}"
+					onclick={() => (viewTab = 'files')}
+				>
+					Files
+				</button>
+				<button
+					class="px-3 py-1 text-xs font-medium transition-colors {viewTab === 'queue' ? 'bg-zinc-800 text-zinc-200' : 'text-zinc-500 hover:text-zinc-300'}"
+					onclick={() => (viewTab = 'queue')}
+				>
+					Build Queue
+				</button>
+			</div>
 		</div>
-		<button
-			class="flex items-center gap-1.5 rounded border border-zinc-700 px-2.5 py-1 text-xs text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
-			onclick={loadBuilds}
-			disabled={loading}
-		>
-			<svg
-				class="h-3.5 w-3.5 {loading ? 'animate-spin' : ''}"
-				fill="none"
-				viewBox="0 0 24 24"
-				stroke="currentColor"
-			>
-				<path
-					stroke-linecap="round"
-					stroke-linejoin="round"
-					stroke-width="2"
-					d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-				/>
-			</svg>
-			Refresh
-		</button>
+		<div class="flex items-center gap-2">
+			{#if viewTab === 'files'}
+				<button
+					class="flex items-center gap-1.5 rounded border border-zinc-700 px-2.5 py-1 text-xs text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
+					onclick={loadBuilds}
+					disabled={loading}
+				>
+					<svg
+						class="h-3.5 w-3.5 {loading ? 'animate-spin' : ''}"
+						fill="none"
+						viewBox="0 0 24 24"
+						stroke="currentColor"
+					>
+						<path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							stroke-width="2"
+							d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+						/>
+					</svg>
+					Refresh
+				</button>
+			{/if}
+		</div>
 	</div>
 
 	<!-- Main Content -->
+	{#if viewTab === 'queue'}
+		<!-- Build Queue View -->
+		<div class="flex flex-1 flex-col overflow-hidden p-4">
+			<div class="mb-4 flex items-center justify-between">
+				<div class="flex items-center gap-3">
+					<button
+						class="rounded bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
+						onclick={runBuildQueue}
+						disabled={queueRunning || selectedGamePaths.size === 0}
+					>
+						{queueRunning ? 'Building...' : `Build ${selectedGamePaths.size} Game${selectedGamePaths.size !== 1 ? 's' : ''}`}
+					</button>
+					<button
+						class="rounded border border-zinc-700 px-2.5 py-1.5 text-xs text-zinc-400 hover:bg-zinc-800"
+						onclick={selectAllGames}
+						disabled={queueRunning}
+					>
+						Select All
+					</button>
+					<button
+						class="rounded border border-zinc-700 px-2.5 py-1.5 text-xs text-zinc-400 hover:bg-zinc-800"
+						onclick={clearSelection}
+						disabled={queueRunning}
+					>
+						Clear
+					</button>
+				</div>
+				<span class="text-xs text-zinc-500">{allGames.length} games available</span>
+			</div>
+
+			<div class="flex-1 overflow-y-auto">
+				{#if allGames.length === 0}
+					<div class="rounded-lg border border-zinc-800 bg-zinc-900 p-6 text-center text-sm text-zinc-500">
+						No games found. Create a game first.
+					</div>
+				{:else}
+					<div class="space-y-1">
+						{#each allGames as game}
+							{@const queueItem = buildQueue.find((q) => q.game.path === game.path)}
+							<div
+								class="flex items-center gap-3 rounded border px-3 py-2 transition-colors {selectedGamePaths.has(game.path) ? 'border-emerald-800 bg-emerald-950/20' : 'border-zinc-800 bg-zinc-900 hover:border-zinc-700'}"
+							>
+								<input
+									type="checkbox"
+									checked={selectedGamePaths.has(game.path)}
+									onchange={() => toggleGameSelection(game.path)}
+									disabled={queueRunning}
+									class="accent-emerald-500"
+								/>
+								<div class="flex-1">
+									<div class="text-sm font-medium text-zinc-200">{game.name}</div>
+									<div class="text-xs text-zinc-500">{game.path}</div>
+								</div>
+								<span class="rounded bg-zinc-800 px-1.5 py-0.5 text-xs text-zinc-400 uppercase">{game.game_type}</span>
+								<span class="text-xs text-zinc-500">v{game.version}</span>
+								{#if queueItem}
+									{#if queueItem.status === 'building'}
+										<div class="h-4 w-4 animate-spin rounded-full border-2 border-emerald-400 border-t-transparent"></div>
+									{:else if queueItem.status === 'success'}
+										<svg class="h-4 w-4 text-emerald-400" viewBox="0 0 20 20" fill="currentColor">
+											<path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+										</svg>
+									{:else if queueItem.status === 'error'}
+										<svg class="h-4 w-4 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+											<path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
+										</svg>
+									{/if}
+								{/if}
+							</div>
+						{/each}
+					</div>
+				{/if}
+
+				{#if buildQueue.length > 0 && !queueRunning}
+					<div class="mt-4 rounded border border-zinc-800 bg-zinc-900 p-3">
+						<h3 class="mb-2 text-xs font-semibold text-zinc-400 uppercase">Results</h3>
+						{#each buildQueue as item}
+							<div class="flex items-center justify-between py-1 text-xs">
+								<span class="text-zinc-300">{item.game.name}</span>
+								{#if item.status === 'success'}
+									<span class="text-emerald-400">Success</span>
+								{:else if item.status === 'error'}
+									<span class="text-red-400" title={item.result?.errors.join(', ')}>
+										Failed: {item.result?.errors[0]?.slice(0, 60)}
+									</span>
+								{/if}
+							</div>
+						{/each}
+					</div>
+				{/if}
+			</div>
+		</div>
+	{:else}
 	<div class="flex flex-1 overflow-hidden">
 		<!-- Left Panel: File List -->
 		<div class="flex w-72 shrink-0 flex-col border-r border-zinc-800">
@@ -320,4 +529,5 @@
 			{/if}
 		</div>
 	</div>
+	{/if}
 </div>

@@ -9,6 +9,8 @@
 
 - [ ] Fix codelens hook into the references panel.
 - [ ] Remove module from the script button.
+- [ ] Tree view icons.
+- [ ] Themes should reflect on the tree view too.
 
 ## Low Priority
 
@@ -42,16 +44,16 @@
 
 ### Version Control
 
-- [ ] Game config version history — lightweight snapshotting of game configs (config.toml + module state) on each build; diff between versions, rollback to previous snapshots.
+- [x] Game config version history — lightweight snapshotting of game configs (config.toml) with create, preview, rollback, rename, and delete. Auto-snapshots current state before rollback.
 
 ### Simulation
 
-- [ ] GPC runtime simulator — basic simulator showing button output timing diagrams for mock inputs; even simplified visualization (turbo/rapidfire timing) would help debug without a device.
+- [x] GPC runtime simulator — combo simulator with step-through execution, playback controls, speed adjustment, loop support, and visual output state display.
 
 ### Batch Operations
 
-- [ ] Multi-game build queue — build multiple games in sequence or parallel with a queue UI and progress tracking.
+- [x] Multi-game build queue — build multiple games in sequence from the Built Games tool with auto-regeneration, progress tracking, and result summary.
 
 ### Extensibility
 
-- [ ] Plugin / extension system — formalize the existing `/tools/*` routing into a plugin API; let users write custom tools or modules that plug into the IDE with community contribution support.
+- [x] Plugin / extension system — TOML-based plugin manifests in workspace `plugins/` directories with hooks for pre/post build, includes, extra vars/defines. Plugin manager UI for create, enable/disable, delete, and manifest viewing.

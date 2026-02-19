@@ -60,6 +60,17 @@ pub fn run() {
             commands::templates::import_template,
             commands::search::search_in_files,
             commands::search::replace_in_file,
+            commands::plugins::list_plugins,
+            commands::plugins::toggle_plugin,
+            commands::plugins::read_plugin_file,
+            commands::plugins::create_plugin,
+            commands::plugins::delete_plugin,
+            commands::history::create_snapshot,
+            commands::history::list_snapshots,
+            commands::history::get_snapshot,
+            commands::history::rollback_snapshot,
+            commands::history::delete_snapshot,
+            commands::history::rename_snapshot,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

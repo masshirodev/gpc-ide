@@ -37,10 +37,16 @@
 		regenerateAll,
 		regeneratePreview,
 		regenerateCommit,
-		openInDefaultApp
+		openInDefaultApp,
+		createSnapshot,
+		listSnapshots,
+		getSnapshot,
+		rollbackSnapshot,
+		deleteSnapshot,
+		renameSnapshot
 	} from '$lib/tauri/commands';
 	import { onFileChange } from '$lib/tauri/events';
-	import type { BuildResult, FileTreeEntry, FileDiff } from '$lib/tauri/commands';
+	import type { BuildResult, FileTreeEntry, FileDiff, SnapshotMeta } from '$lib/tauri/commands';
 	import type { UnlistenFn } from '@tauri-apps/api/event';
 	import { onMount } from 'svelte';
 	import MonacoEditor from '$lib/components/editor/MonacoEditor.svelte';
@@ -160,7 +166,106 @@
 	let expandedDirs = $state<Set<string>>(new Set());
 
 	// Page tab state
-	let activeTab = $state<'overview' | 'files' | 'build' | 'persistence'>('overview');
+	let activeTab = $state<'overview' | 'files' | 'build' | 'persistence' | 'history'>('overview');
+
+	// History state
+	let snapshots = $state<SnapshotMeta[]>([]);
+	let snapshotsLoading = $state(false);
+	let snapshotPreview = $state<{ id: string; content: string } | null>(null);
+	let renamingSnapshotId = $state<string | null>(null);
+	let renameLabel = $state('');
+
+	async function loadSnapshots() {
+		if (!store.selectedGame) return;
+		snapshotsLoading = true;
+		try {
+			snapshots = await listSnapshots(store.selectedGame.path);
+		} catch (e) {
+			addToast(`Failed to load snapshots: ${e}`, 'error');
+		} finally {
+			snapshotsLoading = false;
+		}
+	}
+
+	async function handleCreateSnapshot() {
+		if (!store.selectedGame) return;
+		try {
+			const meta = await createSnapshot(store.selectedGame.path, 'Manual snapshot');
+			addToast('Snapshot created', 'success');
+			await loadSnapshots();
+		} catch (e) {
+			addToast(`Failed to create snapshot: ${e}`, 'error');
+		}
+	}
+
+	async function handleRollback(snapshotId: string) {
+		if (!store.selectedGame) return;
+		const confirmed = await showConfirm({
+			title: 'Rollback Config',
+			message: 'Restore this snapshot? Your current config will be auto-saved first.',
+			confirmLabel: 'Rollback',
+			variant: 'warning'
+		});
+		if (!confirmed) return;
+		try {
+			await rollbackSnapshot(store.selectedGame.path, snapshotId);
+			// Reload the game config
+			await selectGame(store.selectedGame);
+			await loadSnapshots();
+			addToast('Config restored from snapshot', 'success');
+		} catch (e) {
+			addToast(`Rollback failed: ${e}`, 'error');
+		}
+	}
+
+	async function handleDeleteSnapshot(snapshotId: string) {
+		if (!store.selectedGame) return;
+		const confirmed = await showConfirm({
+			title: 'Delete Snapshot',
+			message: 'Delete this snapshot? This cannot be undone.',
+			confirmLabel: 'Delete',
+			variant: 'danger'
+		});
+		if (!confirmed) return;
+		try {
+			await deleteSnapshot(store.selectedGame.path, snapshotId);
+			if (snapshotPreview?.id === snapshotId) snapshotPreview = null;
+			await loadSnapshots();
+			addToast('Snapshot deleted', 'success');
+		} catch (e) {
+			addToast(`Failed to delete snapshot: ${e}`, 'error');
+		}
+	}
+
+	async function handlePreviewSnapshot(snapshotId: string) {
+		if (!store.selectedGame) return;
+		if (snapshotPreview?.id === snapshotId) {
+			snapshotPreview = null;
+			return;
+		}
+		try {
+			const content = await getSnapshot(store.selectedGame.path, snapshotId);
+			snapshotPreview = { id: snapshotId, content };
+		} catch (e) {
+			addToast(`Failed to load snapshot: ${e}`, 'error');
+		}
+	}
+
+	async function handleRenameSnapshot(snapshotId: string) {
+		if (!store.selectedGame || !renameLabel.trim()) return;
+		try {
+			await renameSnapshot(store.selectedGame.path, snapshotId, renameLabel.trim());
+			renamingSnapshotId = null;
+			renameLabel = '';
+			await loadSnapshots();
+		} catch (e) {
+			addToast(`Failed to rename snapshot: ${e}`, 'error');
+		}
+	}
+
+	function formatSnapshotDate(ts: number): string {
+		return new Date(ts * 1000).toLocaleString();
+	}
 
 	// Track which game we loaded the file tree for to avoid re-loading
 	let lastLoadedGamePath = $state<string | null>(null);
@@ -233,6 +338,13 @@
 	$effect(() => {
 		if (activeTab === 'files') {
 			setSidebarCollapsed(true);
+		}
+	});
+
+	// Load snapshots when history tab is selected
+	$effect(() => {
+		if (activeTab === 'history' && store.selectedGame) {
+			loadSnapshots();
 		}
 	});
 
@@ -857,7 +969,7 @@
 
 		<!-- Tab Bar -->
 		<div class="mb-4 flex gap-1 border-b border-zinc-800 {activeTab === 'files' ? 'px-4' : ''}">
-			{#each ['overview', 'files', 'persistence', 'build'] as tab}
+			{#each ['overview', 'files', 'persistence', 'build', 'history'] as tab}
 				<button
 					class="border-b-2 px-4 py-2 text-sm font-medium transition-colors"
 					class:border-emerald-400={activeTab === tab}
@@ -873,7 +985,9 @@
 							? 'Files'
 							: tab === 'build'
 								? 'Build'
-								: 'Persistence'}
+								: tab === 'history'
+									? 'History'
+									: 'Persistence'}
 					{#if tab === 'build' && buildResult}
 						<span
 							class="ml-1 inline-block h-2 w-2 rounded-full"
@@ -1569,6 +1683,113 @@
 		{:else if activeTab === 'persistence'}
 			<!-- Persistence / Bitpacking Panel -->
 			<PersistencePanel config={store.selectedConfig} gamePath={store.selectedGame.path} />
+		{:else if activeTab === 'history'}
+			<!-- Config History Panel -->
+			<div class="space-y-4">
+				<div class="flex items-center justify-between">
+					<h2 class="text-sm font-semibold tracking-wider text-zinc-400 uppercase">
+						Config Snapshots
+					</h2>
+					<button
+						class="rounded bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-500"
+						onclick={handleCreateSnapshot}
+					>
+						Create Snapshot
+					</button>
+				</div>
+
+				{#if snapshotsLoading}
+					<div class="rounded-lg border border-zinc-800 bg-zinc-900 p-6 text-center text-sm text-zinc-500">
+						Loading snapshots...
+					</div>
+				{:else if snapshots.length === 0}
+					<div class="rounded-lg border border-zinc-800 bg-zinc-900 p-6 text-center text-sm text-zinc-500">
+						No snapshots yet. Create one to save the current config state.
+					</div>
+				{:else}
+					<div class="space-y-2">
+						{#each snapshots as snapshot}
+							<div class="rounded-lg border border-zinc-800 bg-zinc-900 p-3">
+								<div class="flex items-center justify-between">
+									<div>
+										{#if renamingSnapshotId === snapshot.id}
+											<form
+												class="flex items-center gap-2"
+												onsubmit={(e) => {
+													e.preventDefault();
+													handleRenameSnapshot(snapshot.id);
+												}}
+											>
+												<input
+													class="rounded border border-zinc-700 bg-zinc-800 px-2 py-0.5 text-sm text-zinc-200"
+													bind:value={renameLabel}
+													placeholder="Snapshot label"
+												/>
+												<button
+													type="submit"
+													class="text-xs text-emerald-400 hover:text-emerald-300"
+												>
+													Save
+												</button>
+												<button
+													type="button"
+													class="text-xs text-zinc-500 hover:text-zinc-300"
+													onclick={() => (renamingSnapshotId = null)}
+												>
+													Cancel
+												</button>
+											</form>
+										{:else}
+											<button
+												class="text-sm font-medium text-zinc-200 hover:text-zinc-100"
+												onclick={() => {
+													renamingSnapshotId = snapshot.id;
+													renameLabel = snapshot.label ?? '';
+												}}
+												title="Click to rename"
+											>
+												{snapshot.label ?? 'Unnamed snapshot'}
+											</button>
+										{/if}
+										<div class="text-xs text-zinc-500">{formatSnapshotDate(snapshot.timestamp)}</div>
+									</div>
+									<div class="flex items-center gap-2">
+										<button
+											class="rounded border border-zinc-700 px-2 py-1 text-xs text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
+											onclick={() => handlePreviewSnapshot(snapshot.id)}
+										>
+											{snapshotPreview?.id === snapshot.id ? 'Hide' : 'Preview'}
+										</button>
+										<button
+											class="rounded border border-zinc-700 px-2 py-1 text-xs text-amber-400 hover:bg-amber-900/30 hover:text-amber-300"
+											onclick={() => handleRollback(snapshot.id)}
+										>
+											Rollback
+										</button>
+										<button
+											class="rounded border border-zinc-700 px-2 py-1 text-xs text-red-400 hover:bg-red-900/30 hover:text-red-300"
+											onclick={() => handleDeleteSnapshot(snapshot.id)}
+										>
+											Delete
+										</button>
+									</div>
+								</div>
+								{#if snapshotPreview?.id === snapshot.id}
+									<div class="mt-3 overflow-hidden rounded border border-zinc-800">
+										<div class="h-80">
+											<MonacoEditor
+												value={snapshotPreview.content}
+												language="ini"
+												readonly={true}
+											/>
+										</div>
+									</div>
+								{/if}
+							</div>
+						{/each}
+					</div>
+				{/if}
+			</div>
 		{/if}
 	</div>
 {:else}

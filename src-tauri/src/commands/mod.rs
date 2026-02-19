@@ -6,5 +6,7 @@ pub mod module;
 pub mod templates;
 pub mod watcher;
 pub mod wizard;
+pub mod history;
+pub mod plugins;
 pub mod search;
 pub mod workspace;
