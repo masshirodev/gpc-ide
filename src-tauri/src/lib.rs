@@ -46,6 +46,7 @@ pub fn run() {
             commands::config::regenerate_all,
             commands::config::regenerate_preview,
             commands::config::regenerate_commit,
+            commands::config::remove_module,
             commands::lsp::lsp_start,
             commands::lsp::lsp_stop,
             commands::lsp::lsp_send,
@@ -71,6 +72,7 @@ pub fn run() {
             commands::history::rollback_snapshot,
             commands::history::delete_snapshot,
             commands::history::rename_snapshot,
+            commands::obfuscate::obfuscate_gpc,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

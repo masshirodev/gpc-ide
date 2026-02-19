@@ -570,33 +570,50 @@ export class MonacoLspBridge {
 
 		// Parse locations from the command arguments
 		// Typical shape: [uri, position, Location[]]
-		const locations = (args && args.length >= 3 ? args[2] : []) as Array<{
-			uri: string;
-			range: LspRange;
-		}>;
+		let locations: Array<{ uri: string; range: LspRange }> = [];
+		if (args && args.length >= 3 && Array.isArray(args[2])) {
+			locations = args[2] as Array<{ uri: string; range: LspRange }>;
+		} else if (args && args.length >= 1 && Array.isArray(args[0])) {
+			// Some LSPs send locations as the first argument
+			locations = args[0] as Array<{ uri: string; range: LspRange }>;
+		}
 
-		// Determine definition: the first location is typically the definition site
-		const symbol =
-			model.getWordAtPosition({
-				lineNumber: (locations[0]?.range?.start?.line ?? 0) + 1,
-				column: (locations[0]?.range?.start?.character ?? 0) + 1
-			})?.word ?? '';
+		// Determine symbol name from model or fall back to parsing title
+		let symbol = '';
+		if (locations.length > 0 && locations[0]?.range?.start) {
+			symbol =
+				model.getWordAtPosition({
+					lineNumber: (locations[0].range.start.line ?? 0) + 1,
+					column: (locations[0].range.start.character ?? 0) + 1
+				})?.word ?? '';
+		}
+		if (!symbol) {
+			// Fall back to extracting symbol from the codelens title
+			// (the line where the codelens sits likely defines the symbol)
+			const lensLine = model.getLineContent(1);
+			const match = lensLine?.match(/\b(\w+)\s*\(/);
+			if (match) symbol = match[1];
+		}
 
 		let definition: ReferenceLocation | null = null;
 		const refs: ReferenceLocation[] = [];
 
 		for (const loc of locations) {
-			const refLoc = this.toLspRefLocation(loc);
-			refs.push(refLoc);
+			if (loc && loc.uri && loc.range) {
+				const refLoc = this.toLspRefLocation(loc);
+				refs.push(refLoc);
+			}
 		}
 
 		// Try to find the definition among references
 		// (the position from the CodeLens args[1] points to the definition)
-		if (args && args.length >= 2) {
+		if (args && args.length >= 2 && args[1] && typeof args[1] === 'object') {
 			const defPos = args[1] as { lineNumber?: number; line?: number; character?: number };
-			const defLine = defPos.lineNumber ?? (defPos.line ?? 0) + 1;
-			const defCol = (defPos.character ?? 0) + 1;
+			const defLine = defPos.lineNumber ?? (defPos.line != null ? defPos.line + 1 : 0);
+			const defCol = defPos.character != null ? defPos.character + 1 : 1;
 			definition = refs.find((r) => r.line === defLine && r.column === defCol) ?? refs[0] ?? null;
+		} else if (refs.length > 0) {
+			definition = refs[0];
 		}
 
 		this.pendingCodeLensRefs.set(refKey, { symbol, definition, references: refs });
@@ -675,6 +692,12 @@ export class MonacoLspBridge {
 				linePreview = model.getLineContent(line).trim();
 				break;
 			}
+		}
+
+		// Fallback: show file basename + line number when model isn't open
+		if (!linePreview) {
+			const basename = path.split('/').pop() ?? path;
+			linePreview = `${basename}:${line}`;
 		}
 
 		return { uri: loc.uri, path, line, column, endLine, endColumn, linePreview };

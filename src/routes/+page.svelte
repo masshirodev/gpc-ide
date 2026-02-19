@@ -37,6 +37,7 @@
 		regenerateAll,
 		regeneratePreview,
 		regenerateCommit,
+		removeModule,
 		openInDefaultApp,
 		createSnapshot,
 		listSnapshots,
@@ -84,6 +85,32 @@
 	let lspStore = getLspStore();
 	let settingsStore = getSettings();
 	let settings = $derived($settingsStore);
+
+	// Theme accent colors for tree view
+	interface ThemeAccent {
+		bg: string;
+		text: string;
+		bgHover: string;
+		treeBg: string;
+		treeBorder: string;
+		treeHover: string;
+		treeHeaderBg: string;
+		tabBarBg: string;
+		tabActiveBg: string;
+		tabInactiveBg: string;
+	}
+	const themeAccents: Record<string, ThemeAccent> = {
+		'gpc-dark':         { bg: 'rgba(6, 78, 59, 0.3)',       text: '#34d399',  bgHover: 'rgba(6, 78, 59, 0.2)',       treeBg: '#0c0c0c', treeBorder: '#1f1f1f', treeHover: '#1a1a1a', treeHeaderBg: '#0a0a0a', tabBarBg: '#111111', tabActiveBg: '#0a0a0a', tabInactiveBg: '#111111' },
+		'atom-one-dark':    { bg: 'rgba(40, 80, 180, 0.2)',     text: '#528bff',  bgHover: 'rgba(40, 80, 180, 0.15)',    treeBg: '#21252b', treeBorder: '#333842', treeHover: '#2c313c', treeHeaderBg: '#282c34', tabBarBg: '#21252b', tabActiveBg: '#282c34', tabInactiveBg: '#21252b' },
+		'monokai':          { bg: 'rgba(166, 226, 46, 0.12)',   text: '#a6e22e',  bgHover: 'rgba(166, 226, 46, 0.08)',   treeBg: '#1e1f1c', treeBorder: '#3b3a32', treeHover: '#3e3d32', treeHeaderBg: '#272822', tabBarBg: '#1e1f1c', tabActiveBg: '#272822', tabInactiveBg: '#1e1f1c' },
+		'kanagawa':         { bg: 'rgba(127, 180, 202, 0.15)',  text: '#7fb4ca',  bgHover: 'rgba(127, 180, 202, 0.1)',   treeBg: '#1a1a22', treeBorder: '#2a2a37', treeHover: '#2a2a37', treeHeaderBg: '#1f1f28', tabBarBg: '#1a1a22', tabActiveBg: '#1f1f28', tabInactiveBg: '#1a1a22' },
+		'dracula':          { bg: 'rgba(189, 147, 249, 0.15)',  text: '#bd93f9',  bgHover: 'rgba(189, 147, 249, 0.1)',   treeBg: '#21222c', treeBorder: '#44475a', treeHover: '#44475a', treeHeaderBg: '#282a36', tabBarBg: '#21222c', tabActiveBg: '#282a36', tabInactiveBg: '#21222c' },
+		'gruvbox-dark':     { bg: 'rgba(184, 187, 38, 0.15)',   text: '#b8bb26',  bgHover: 'rgba(184, 187, 38, 0.1)',    treeBg: '#1d2021', treeBorder: '#3c3836', treeHover: '#3c3836', treeHeaderBg: '#282828', tabBarBg: '#1d2021', tabActiveBg: '#282828', tabInactiveBg: '#1d2021' },
+		'nord':             { bg: 'rgba(136, 192, 208, 0.15)',  text: '#88c0d0',  bgHover: 'rgba(136, 192, 208, 0.1)',   treeBg: '#272c36', treeBorder: '#3b4252', treeHover: '#3b4252', treeHeaderBg: '#2e3440', tabBarBg: '#272c36', tabActiveBg: '#2e3440', tabInactiveBg: '#272c36' },
+		'catppuccin-mocha': { bg: 'rgba(203, 166, 247, 0.15)',  text: '#cba6f7',  bgHover: 'rgba(203, 166, 247, 0.1)',   treeBg: '#181825', treeBorder: '#313244', treeHover: '#313244', treeHeaderBg: '#1e1e2e', tabBarBg: '#181825', tabActiveBg: '#1e1e2e', tabInactiveBg: '#181825' }
+	};
+	let themeAccent = $derived(themeAccents[settings.editorTheme] ?? themeAccents['gpc-dark']);
+
 	let grouped = $derived(gamesByType(store.games));
 	let types = $derived(Object.keys(grouped).sort());
 	let totalGames = $derived(store.games.length);
@@ -448,7 +475,7 @@
 		return settings.workspaces.find((ws) => gamePath.startsWith(ws));
 	}
 
-	async function handleBuild() {
+	async function handleBuild(autoBuild = true) {
 		if (!store.selectedGame || building) return;
 		buildDiffLoading = true;
 		buildResult = null;
@@ -459,8 +486,12 @@
 		try {
 			const diffs = await regeneratePreview(store.selectedGame.path);
 			if (diffs.length === 0) {
-				// No changes needed, proceed directly to build
-				await executeBuild();
+				if (autoBuild) {
+					// No changes needed, proceed directly to build
+					await executeBuild();
+				} else {
+					addToast('No file changes detected', 'info');
+				}
 			} else {
 				buildDiffs = diffs;
 				buildDiffMode = true;
@@ -604,6 +635,28 @@
 		}
 	}
 
+	async function handleRemoveModule(index: number, name: string) {
+		if (!store.selectedGame) return;
+
+		const confirmed = await showConfirm({
+			title: 'Remove Module',
+			message: `Remove "${name}" from this game? This will delete the menu item, module parameters, and associated module file.`,
+			confirmLabel: 'Remove',
+			variant: 'danger'
+		});
+		if (!confirmed) return;
+
+		try {
+			const result = await removeModule(store.selectedGame.path, index);
+			addToast(`Module removed (${result.length} files affected)`, 'success');
+			await selectGame(store.selectedGame);
+			await loadFileTree(store.selectedGame.path);
+		} catch (e) {
+			const msg = e instanceof Error ? e.message : String(e);
+			addToast(`Failed to remove module: ${msg}`, 'error');
+		}
+	}
+
 	function canRegenerateFile(path: string): boolean {
 		const regenerable = [
 			'/modules/core.gpc',
@@ -621,31 +674,60 @@
 	}
 
 	let regenerating = $state(false);
+	let regenFileDiff = $state<FileDiff | null>(null);
+	let regenFileLoading = $state(false);
+	let regenDiffLines = $derived(
+		regenFileDiff
+			? computeLineDiff(regenFileDiff.old_content.split('\n'), regenFileDiff.new_content.split('\n'))
+			: []
+	);
 
 	async function handleRegenerateFile() {
-		if (!currentEditorTab || !store.selectedGame || regenerating) return;
+		if (!currentEditorTab || !store.selectedGame || regenerating || regenFileLoading) return;
 
-		const confirmed = await showConfirm({
-			title: 'Regenerate',
-			message: 'Regenerate this file? Any custom changes will be lost.',
-			confirmLabel: 'Regenerate',
-			variant: 'warning'
-		});
-		if (!confirmed) return;
+		try {
+			regenFileLoading = true;
+			const filePath = currentEditorTab.path;
+			const diffs = await regeneratePreview(store.selectedGame.path);
+			const diff = diffs.find((d) => filePath.endsWith(d.path) || d.path.endsWith(filePath.split('/').slice(-2).join('/')));
+
+			if (!diff) {
+				addToast('No changes detected for this file', 'info');
+				return;
+			}
+
+			regenFileDiff = diff;
+		} catch (e) {
+			const msg = e instanceof Error ? e.message : String(e);
+			addToast(`Failed to preview regeneration: ${msg}`, 'error');
+		} finally {
+			regenFileLoading = false;
+		}
+	}
+
+	function handleRegenCancel() {
+		regenFileDiff = null;
+	}
+
+	async function handleRegenCommit() {
+		if (!regenFileDiff || !store.selectedGame) return;
 
 		try {
 			regenerating = true;
-			const filePath = currentEditorTab.path;
+			const files = [{ path: regenFileDiff.path, content: regenFileDiff.new_content }];
+			await regenerateCommit(store.selectedGame.path, files);
 
-			// Regenerate the file
-			await regenerateFile(store.selectedGame.path, filePath);
+			const filePath = regenFileDiff.path;
+			regenFileDiff = null;
 
-			// Reload the file content from disk to get the updated version
-			const newContent = await readFile(filePath);
-
-			// Close and reopen the tab to force editor refresh
-			closeTab(filePath);
-			await openTab(filePath);
+			// Reload the tab if open
+			const fullPath = `${store.selectedGame.path}/${filePath}`;
+			const tab = getTab(fullPath);
+			if (tab) {
+				closeTab(fullPath);
+				await openTab(fullPath);
+			}
+			await loadFileTree(store.selectedGame.path);
 
 			addToast('File regenerated successfully', 'success');
 		} catch (e) {
@@ -674,6 +756,23 @@
 	}
 
 	// --- Build error → editor navigation ---
+
+	function getFileIconColor(name: string): string {
+		const ext = name.split('.').pop()?.toLowerCase();
+		switch (ext) {
+			case 'gpc':
+				return 'text-emerald-400';
+			case 'toml':
+				return 'text-amber-400';
+			case 'txt':
+			case 'md':
+				return 'text-blue-400';
+			case 'json':
+				return 'text-yellow-400';
+			default:
+				return 'text-zinc-500';
+		}
+	}
 
 	interface BuildErrorLink {
 		path: string;
@@ -887,7 +986,8 @@
 		}
 		if ((e.ctrlKey || e.metaKey) && e.key === 'b') {
 			e.preventDefault();
-			handleBuild();
+			activeTab = 'build';
+			handleBuild(false);
 		}
 		if ((e.ctrlKey || e.metaKey) && e.key === 'j') {
 			e.preventDefault();
@@ -1001,7 +1101,7 @@
 
 		{#if profileCount > 0}
 			<!-- Profile Selector -->
-			<div class="flex items-center gap-2 border-b border-zinc-800 px-4 py-2">
+			<div class="mb-4 flex items-center gap-2 border-b border-zinc-800 px-4 py-2">
 				<span class="text-xs font-medium text-zinc-500">Profile:</span>
 				<div class="flex gap-1">
 					{#each Array.from({ length: profileCount }, (_, i) => i) as i}
@@ -1044,31 +1144,45 @@
 						</div>
 					</div>
 					<div class="space-y-2">
-						{#each store.selectedConfig.menu as item}
-							<button
-								class="flex w-full cursor-pointer items-center justify-between rounded bg-zinc-800/50 px-3 py-2 transition-colors hover:bg-zinc-700/50"
-								onclick={() => {
-									if (store.selectedGame) {
-										const configPath = `${store.selectedGame.path}/config.toml`;
-										openTab(configPath);
-										activeTab = 'files';
-										configSubTab = 'gui';
-									}
-								}}
-							>
-								<span class="text-sm text-zinc-200">{item.name}</span>
-								<div class="flex items-center gap-2">
-									{#if item.profile_aware && profileCount > 0}
-										<span class="rounded bg-blue-900/50 px-1.5 py-0.5 text-xs text-blue-400" title="This setting is per-profile">P</span>
-									{/if}
-									<span class="rounded bg-zinc-700 px-1.5 py-0.5 text-xs text-zinc-300">
-										{item.type}
-									</span>
-									{#if item.state_display}
-										<span class="text-xs text-zinc-500">{item.state_display}</span>
-									{/if}
-								</div>
-							</button>
+						{#each store.selectedConfig.menu as item, index}
+							<div class="group flex items-center gap-1 rounded bg-zinc-800/50 transition-colors hover:bg-zinc-700/50">
+								<button
+									class="flex flex-1 cursor-pointer items-center justify-between px-3 py-2"
+									onclick={() => {
+										if (store.selectedGame) {
+											const configPath = `${store.selectedGame.path}/config.toml`;
+											openTab(configPath);
+											activeTab = 'files';
+											configSubTab = 'gui';
+										}
+									}}
+								>
+									<span class="text-sm text-zinc-200">{item.name}</span>
+									<div class="flex items-center gap-2">
+										{#if item.profile_aware && profileCount > 0}
+											<span class="rounded bg-blue-900/50 px-1.5 py-0.5 text-xs text-blue-400" title="This setting is per-profile">P</span>
+										{/if}
+										<span class="rounded bg-zinc-700 px-1.5 py-0.5 text-xs text-zinc-300">
+											{item.type}
+										</span>
+										{#if item.state_display}
+											<span class="text-xs text-zinc-500">{item.state_display}</span>
+										{/if}
+									</div>
+								</button>
+								<button
+									class="mr-2 rounded p-1 text-zinc-600 opacity-0 transition-opacity group-hover:opacity-100 hover:text-red-400"
+									onclick={(e) => {
+										e.stopPropagation();
+										handleRemoveModule(index, item.name);
+									}}
+									title="Remove module"
+								>
+									<svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+									</svg>
+								</button>
+							</div>
 						{/each}
 					</div>
 				</div>
@@ -1135,9 +1249,9 @@
 			<!-- File Browser - Full Width -->
 			<div class="flex min-h-0 flex-1 gap-0">
 				<!-- File Tree -->
-				<div class="flex w-52 shrink-0 flex-col border-r border-zinc-800 bg-zinc-900/50">
+				<div class="file-tree flex w-52 shrink-0 flex-col" style="background: {themeAccent.treeBg}; border-right: 1px solid {themeAccent.treeBorder}; --tree-hover: {themeAccent.treeHover}; --tree-border: {themeAccent.treeBorder}">
 					<!-- File Tree Header -->
-					<div class="border-b border-zinc-800 p-2">
+					<div class="p-2" style="border-bottom: 1px solid {themeAccent.treeBorder}; background: {themeAccent.treeHeaderBg}">
 						<div class="flex gap-1">
 							<button
 								class="flex-1 rounded border border-emerald-600/50 bg-emerald-600/10 px-2 py-1.5 text-xs font-medium text-emerald-400 hover:border-emerald-500 hover:bg-emerald-600/20"
@@ -1168,10 +1282,17 @@
 							{#if entry.is_dir}
 								<div class="mb-0.5">
 									<button
-										class="flex w-full items-center gap-1 rounded px-2 py-1 text-left text-xs font-medium text-zinc-400 hover:bg-zinc-800 hover:text-zinc-300"
+										class="tree-item flex w-full items-center gap-1.5 rounded px-2 py-1 text-left text-xs font-medium text-zinc-400 hover:text-zinc-300"
 										onclick={() => toggleDir(entry.path)}
 									>
-										<span class="text-[10px]">{expandedDirs.has(entry.path) ? '▼' : '▶'}</span>
+										<svg class="h-3.5 w-3.5 shrink-0 text-amber-500/70" fill="currentColor" viewBox="0 0 20 20">
+											{#if expandedDirs.has(entry.path)}
+												<path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v1H8.586A2 2 0 006.9 9.7L2 14V6z" />
+												<path fill-rule="evenodd" d="M4 9.5a.5.5 0 01.5-.42h13a.5.5 0 01.49.58l-1.33 8a.5.5 0 01-.49.42H3.33a.5.5 0 01-.49-.58L4 9.5z" clip-rule="evenodd" />
+											{:else}
+												<path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" />
+											{/if}
+										</svg>
 										{entry.name}
 									</button>
 									{#if expandedDirs.has(entry.path) && entry.children}
@@ -1179,30 +1300,34 @@
 											{#if child.is_dir}
 												<div class="ml-2">
 													<button
-														class="flex w-full items-center gap-1 rounded px-2 py-1 text-left text-xs text-zinc-400 hover:bg-zinc-800 hover:text-zinc-300"
+														class="tree-item flex w-full items-center gap-1.5 rounded px-2 py-1 text-left text-xs text-zinc-400 hover:text-zinc-300"
 														onclick={() => toggleDir(child.path)}
 													>
-														<span class="text-[10px]"
-															>{expandedDirs.has(child.path) ? '▼' : '▶'}</span
-														>
+														<svg class="h-3.5 w-3.5 shrink-0 text-amber-500/70" fill="currentColor" viewBox="0 0 20 20">
+															{#if expandedDirs.has(child.path)}
+																<path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v1H8.586A2 2 0 006.9 9.7L2 14V6z" />
+																<path fill-rule="evenodd" d="M4 9.5a.5.5 0 01.5-.42h13a.5.5 0 01.49.58l-1.33 8a.5.5 0 01-.49.42H3.33a.5.5 0 01-.49-.58L4 9.5z" clip-rule="evenodd" />
+															{:else}
+																<path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2-2V6z" />
+															{/if}
+														</svg>
 														{child.name}
 													</button>
 													{#if expandedDirs.has(child.path) && child.children}
 														{#each child.children as grandchild}
 															{#if !grandchild.is_dir}
 																<div
-																	class="group flex items-center rounded hover:bg-zinc-800 {editorStore.activeTabPath ===
-																	grandchild.path
-																		? 'bg-emerald-900/30'
-																		: ''}"
+																	class="tree-item group flex items-center rounded"
+																	style={editorStore.activeTabPath === grandchild.path ? `background: ${themeAccent.bg}` : ''}
 																>
 																	<button
-																		class="flex-1 py-0.5 pr-2 pl-6 text-left text-xs {editorStore.activeTabPath ===
-																		grandchild.path
-																			? 'text-emerald-400'
-																			: 'text-zinc-300'}"
+																		class="flex flex-1 items-center gap-1.5 py-0.5 pr-2 pl-6 text-left text-xs {editorStore.activeTabPath === grandchild.path ? '' : 'text-zinc-300'}"
+																		style={editorStore.activeTabPath === grandchild.path ? `color: ${themeAccent.text}` : ''}
 																		onclick={() => handleFileClick(grandchild.path)}
 																	>
+																		<svg class="h-3 w-3 shrink-0 {editorStore.activeTabPath === grandchild.path ? '' : getFileIconColor(grandchild.name)}" style={editorStore.activeTabPath === grandchild.path ? `color: ${themeAccent.text}` : ''} fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+																			<path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+																		</svg>
 																		{grandchild.name}
 																	</button>
 																	{#if canDeleteFile(grandchild.path)}
@@ -1211,18 +1336,8 @@
 																			onclick={(e) => handleDeleteFile(e, grandchild.path)}
 																			title="Delete file"
 																		>
-																			<svg
-																				class="h-3 w-3"
-																				fill="none"
-																				viewBox="0 0 24 24"
-																				stroke="currentColor"
-																			>
-																				<path
-																					stroke-linecap="round"
-																					stroke-linejoin="round"
-																					stroke-width="2"
-																					d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-																				/>
+																			<svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+																				<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
 																			</svg>
 																		</button>
 																	{/if}
@@ -1233,18 +1348,17 @@
 												</div>
 											{:else}
 												<div
-													class="group flex items-center rounded hover:bg-zinc-800 {editorStore.activeTabPath ===
-													child.path
-														? 'bg-emerald-900/30'
-														: ''}"
+													class="tree-item group flex items-center rounded"
+													style={editorStore.activeTabPath === child.path ? `background: ${themeAccent.bg}` : ''}
 												>
 													<button
-														class="flex-1 py-0.5 pr-2 pl-5 text-left text-xs {editorStore.activeTabPath ===
-														child.path
-															? 'text-emerald-400'
-															: 'text-zinc-300'}"
+														class="flex flex-1 items-center gap-1.5 py-0.5 pr-2 pl-5 text-left text-xs {editorStore.activeTabPath === child.path ? '' : 'text-zinc-300'}"
+														style={editorStore.activeTabPath === child.path ? `color: ${themeAccent.text}` : ''}
 														onclick={() => handleFileClick(child.path)}
 													>
+														<svg class="h-3 w-3 shrink-0 {editorStore.activeTabPath === child.path ? '' : getFileIconColor(child.name)}" style={editorStore.activeTabPath === child.path ? `color: ${themeAccent.text}` : ''} fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+															<path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+														</svg>
 														{child.name}
 													</button>
 													{#if canDeleteFile(child.path)}
@@ -1253,18 +1367,8 @@
 															onclick={(e) => handleDeleteFile(e, child.path)}
 															title="Delete file"
 														>
-															<svg
-																class="h-3 w-3"
-																fill="none"
-																viewBox="0 0 24 24"
-																stroke="currentColor"
-															>
-																<path
-																	stroke-linecap="round"
-																	stroke-linejoin="round"
-																	stroke-width="2"
-																	d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-																/>
+															<svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+																<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
 															</svg>
 														</button>
 													{/if}
@@ -1275,18 +1379,17 @@
 								</div>
 							{:else}
 								<div
-									class="group flex items-center rounded hover:bg-zinc-800 {editorStore.activeTabPath ===
-									entry.path
-										? 'bg-emerald-900/30'
-										: ''}"
+									class="tree-item group flex items-center rounded"
+									style={editorStore.activeTabPath === entry.path ? `background: ${themeAccent.bg}` : ''}
 								>
 									<button
-										class="flex-1 px-2 py-0.5 text-left text-xs {editorStore.activeTabPath ===
-										entry.path
-											? 'text-emerald-400'
-											: 'text-zinc-300'}"
+										class="flex flex-1 items-center gap-1.5 px-2 py-0.5 text-left text-xs {editorStore.activeTabPath === entry.path ? '' : 'text-zinc-300'}"
+										style={editorStore.activeTabPath === entry.path ? `color: ${themeAccent.text}` : ''}
 										onclick={() => handleFileClick(entry.path)}
 									>
+										<svg class="h-3 w-3 shrink-0 {editorStore.activeTabPath === entry.path ? '' : getFileIconColor(entry.name)}" style={editorStore.activeTabPath === entry.path ? `color: ${themeAccent.text}` : ''} fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+											<path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+										</svg>
 										{entry.name}
 									</button>
 									{#if canDeleteFile(entry.path)}
@@ -1296,12 +1399,7 @@
 											title="Delete file"
 										>
 											<svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-												<path
-													stroke-linecap="round"
-													stroke-linejoin="round"
-													stroke-width="2"
-													d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-												/>
+												<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
 											</svg>
 										</button>
 									{/if}
@@ -1315,14 +1413,12 @@
 				<div class="flex flex-1 flex-col overflow-hidden">
 					<!-- Editor Tab Bar -->
 					{#if editorStore.tabs.length > 0}
-						<div class="flex items-center border-b border-zinc-800 bg-zinc-900/80">
+						<div class="flex items-center" style="background: {themeAccent.tabBarBg}; border-bottom: 1px solid {themeAccent.treeBorder}">
 							<div class="flex flex-1 overflow-x-auto scrollbar-none">
 								{#each editorStore.tabs as tab (tab.path)}
 									<button
-										class="group flex shrink-0 items-center gap-1.5 border-r border-zinc-800 px-3 py-1.5 text-xs transition-colors {editorStore.activeTabPath ===
-										tab.path
-											? 'bg-zinc-950 text-zinc-200'
-											: 'bg-zinc-900/50 text-zinc-500 hover:text-zinc-300'}"
+										class="group flex shrink-0 items-center gap-1.5 px-3 py-1.5 text-xs transition-colors {editorStore.activeTabPath === tab.path ? 'text-zinc-200' : 'text-zinc-500 hover:text-zinc-300'}"
+										style="background: {editorStore.activeTabPath === tab.path ? themeAccent.tabActiveBg : themeAccent.tabInactiveBg}; border-right: 1px solid {themeAccent.treeBorder}"
 										onclick={() => activateTab(tab.path)}
 										onauxclick={(e) => {
 											if (e.button === 1) {
@@ -1337,7 +1433,8 @@
 										{/if}
 										<!-- svelte-ignore a11y_click_events_have_key_events -->
 										<span
-											class="ml-1 rounded p-0.5 text-[10px] text-zinc-600 opacity-0 group-hover:opacity-100 hover:bg-zinc-700 hover:text-zinc-300"
+											class="ml-1 rounded p-0.5 text-[10px] text-zinc-600 opacity-0 group-hover:opacity-100 hover:text-zinc-300"
+											style="--tree-hover: {themeAccent.treeHover}"
 											role="button"
 											tabindex="-1"
 											onclick={(e) => handleCloseTab(e, tab.path)}
@@ -1368,10 +1465,10 @@
 									<button
 										class="px-3 py-1.5 text-xs text-blue-400 hover:text-blue-300 disabled:opacity-50"
 										onclick={handleRegenerateFile}
-										disabled={regenerating}
+										disabled={regenerating || regenFileLoading}
 										title="Regenerate this file from config.toml"
 									>
-										{regenerating ? 'Regenerating...' : 'Regenerate'}
+										{regenFileLoading ? 'Loading diff...' : regenerating ? 'Regenerating...' : 'Regenerate'}
 									</button>
 								{/if}
 								{#if currentEditorTab?.dirty}
@@ -1391,41 +1488,33 @@
 					<div class="flex flex-1 flex-col overflow-hidden">
 						{#if currentEditorTab}
 							{#if hasVisualEditor || isConfigFile}
-								<div class="flex border-b border-zinc-800 bg-zinc-900/50">
+								<div class="flex" style="background: {themeAccent.tabBarBg}; border-bottom: 1px solid {themeAccent.treeBorder}">
 									{#if hasVisualEditor}
 										<button
-											class="px-4 py-1.5 text-xs font-medium transition-colors {editorSubTab ===
-											'visual'
-												? 'border-b-2 border-emerald-400 text-emerald-400'
-												: 'text-zinc-500 hover:text-zinc-300'}"
+											class="px-4 py-1.5 text-xs font-medium transition-colors {editorSubTab === 'visual' ? '' : 'text-zinc-500 hover:text-zinc-300'}"
+											style={editorSubTab === 'visual' ? `color: ${themeAccent.text}; border-bottom: 2px solid ${themeAccent.text}` : ''}
 											onclick={() => (editorSubTab = 'visual')}
 										>
 											Visual
 										</button>
 										<button
-											class="px-4 py-1.5 text-xs font-medium transition-colors {editorSubTab ===
-											'code'
-												? 'border-b-2 border-emerald-400 text-emerald-400'
-												: 'text-zinc-500 hover:text-zinc-300'}"
+											class="px-4 py-1.5 text-xs font-medium transition-colors {editorSubTab === 'code' ? '' : 'text-zinc-500 hover:text-zinc-300'}"
+											style={editorSubTab === 'code' ? `color: ${themeAccent.text}; border-bottom: 2px solid ${themeAccent.text}` : ''}
 											onclick={() => (editorSubTab = 'code')}
 										>
 											Code
 										</button>
 									{:else if isConfigFile}
 										<button
-											class="px-4 py-1.5 text-xs font-medium transition-colors {configSubTab ===
-											'gui'
-												? 'border-b-2 border-emerald-400 text-emerald-400'
-												: 'text-zinc-500 hover:text-zinc-300'}"
+											class="px-4 py-1.5 text-xs font-medium transition-colors {configSubTab === 'gui' ? '' : 'text-zinc-500 hover:text-zinc-300'}"
+											style={configSubTab === 'gui' ? `color: ${themeAccent.text}; border-bottom: 2px solid ${themeAccent.text}` : ''}
 											onclick={() => (configSubTab = 'gui')}
 										>
 											GUI
 										</button>
 										<button
-											class="px-4 py-1.5 text-xs font-medium transition-colors {configSubTab ===
-											'editor'
-												? 'border-b-2 border-emerald-400 text-emerald-400'
-												: 'text-zinc-500 hover:text-zinc-300'}"
+											class="px-4 py-1.5 text-xs font-medium transition-colors {configSubTab === 'editor' ? '' : 'text-zinc-500 hover:text-zinc-300'}"
+											style={configSubTab === 'editor' ? `color: ${themeAccent.text}; border-bottom: 2px solid ${themeAccent.text}` : ''}
 											onclick={() => (configSubTab = 'editor')}
 										>
 											Editor
@@ -1523,7 +1612,7 @@
 						</button>
 						<button
 							class="rounded bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
-							onclick={handleBuild}
+							onclick={() => handleBuild()}
 							disabled={building || buildDiffLoading}
 						>
 							{buildDiffLoading ? 'Checking...' : building ? 'Building...' : 'Build Game'}
@@ -1833,17 +1922,17 @@
 						<div class="grid gap-2">
 							{#each grouped[type] as game}
 								<div
-									class="group flex items-center justify-between rounded-lg border border-zinc-800 bg-zinc-900 p-3 text-left transition-colors hover:border-zinc-700 hover:bg-zinc-800"
+									class="group flex items-center rounded-lg border border-zinc-800 bg-zinc-900 p-3 text-left transition-colors hover:border-zinc-700 hover:bg-zinc-800"
 								>
 									<button
-										class="flex flex-1 items-center justify-between"
+										class="flex min-w-0 flex-1 items-center justify-between gap-3"
 										onclick={() => selectGame(game)}
 									>
-										<div>
-											<div class="font-medium text-zinc-200">{game.name}</div>
-											<div class="text-xs text-zinc-500">{game.title}</div>
+										<div class="min-w-0 text-left">
+											<div class="truncate font-medium text-zinc-200">{game.name}</div>
+											<div class="truncate text-xs text-zinc-500">{game.title}</div>
 										</div>
-										<div class="flex items-center gap-3">
+										<div class="flex shrink-0 items-center gap-3">
 											<span
 												class="rounded bg-zinc-800 px-1.5 py-0.5 text-xs text-zinc-400 uppercase"
 											>
@@ -1853,7 +1942,7 @@
 										</div>
 									</button>
 									<button
-										class="ml-2 rounded p-1.5 text-zinc-600 opacity-0 group-hover:opacity-100 hover:bg-zinc-700 hover:text-red-400"
+										class="ml-2 shrink-0 rounded p-1.5 text-zinc-600 opacity-0 group-hover:opacity-100 hover:bg-zinc-700 hover:text-red-400"
 										onclick={(e) => handleDeleteGameFromDashboard(e, game)}
 										title="Delete game"
 									>
@@ -1923,3 +2012,78 @@
 	onconfirm={confirmDialog.onconfirm}
 	oncancel={confirmDialogCancel}
 />
+
+<!-- Regenerate File Diff Modal -->
+{#if regenFileDiff}
+	<!-- svelte-ignore a11y_no_static_element_interactions -->
+	<div
+		class="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+		onmousedown={(e) => { if (e.target === e.currentTarget) handleRegenCancel(); }}
+		onkeydown={(e) => { if (e.key === 'Escape') handleRegenCancel(); }}
+	>
+		<div class="flex max-h-[80vh] w-[800px] max-w-[90vw] flex-col rounded-lg border border-zinc-700 bg-zinc-900 shadow-2xl">
+			<!-- Header -->
+			<div class="flex items-center justify-between border-b border-zinc-800 px-4 py-3">
+				<h2 class="text-sm font-semibold text-zinc-200">
+					Regenerate: {regenFileDiff.path.split('/').pop()}
+				</h2>
+				<button
+					class="rounded p-1 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
+					onclick={handleRegenCancel}
+				>
+					<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+					</svg>
+				</button>
+			</div>
+
+			<!-- Diff Content -->
+			<div class="flex-1 overflow-auto">
+				<div class="bg-zinc-950 p-0 font-mono text-xs">
+					<table class="w-full border-collapse">
+						{#each regenDiffLines as line}
+							<tr class={line.type === 'removed' ? 'bg-red-950/40' : line.type === 'added' ? 'bg-emerald-950/40' : ''}>
+								<td class="select-none px-2 py-0 text-right text-zinc-700 {line.type === 'removed' ? 'text-red-800' : line.type === 'added' ? 'text-emerald-800' : ''}" style="width: 3rem">
+									{line.oldNum ?? ''}
+								</td>
+								<td class="select-none px-2 py-0 text-right text-zinc-700 {line.type === 'removed' ? 'text-red-800' : line.type === 'added' ? 'text-emerald-800' : ''}" style="width: 3rem">
+									{line.newNum ?? ''}
+								</td>
+								<td class="select-none px-1 py-0 {line.type === 'removed' ? 'text-red-500' : line.type === 'added' ? 'text-emerald-500' : 'text-zinc-700'}" style="width: 1rem">
+									{line.type === 'removed' ? '-' : line.type === 'added' ? '+' : ' '}
+								</td>
+								<td class="whitespace-pre py-0 pr-4 {line.type === 'removed' ? 'text-red-300/80' : line.type === 'added' ? 'text-emerald-300/80' : 'text-zinc-400'}">
+									{line.text}
+								</td>
+							</tr>
+						{/each}
+					</table>
+				</div>
+			</div>
+
+			<!-- Footer -->
+			<div class="flex items-center justify-end gap-2 border-t border-zinc-800 px-4 py-3">
+				<button
+					class="rounded bg-zinc-800 px-4 py-1.5 text-xs font-medium text-zinc-300 hover:bg-zinc-700"
+					onclick={handleRegenCancel}
+				>
+					Cancel
+				</button>
+				<button
+					class="rounded bg-emerald-600 px-4 py-1.5 text-xs font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
+					onclick={handleRegenCommit}
+					disabled={regenerating}
+				>
+					{regenerating ? 'Committing...' : 'Commit'}
+				</button>
+			</div>
+		</div>
+	</div>
+{/if}
+
+<style>
+	/* Theme-aware tree view hover */
+	:global(.file-tree) .tree-item:hover {
+		background: var(--tree-hover) !important;
+	}
+</style>

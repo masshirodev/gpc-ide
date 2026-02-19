@@ -361,3 +361,128 @@ pub fn regenerate_all(game_path: String) -> Result<Vec<String>, String> {
 
     Ok(written)
 }
+
+/// Remove a module from a game's config and delete its associated files
+#[tauri::command]
+pub fn remove_module(game_path: String, menu_index: usize) -> Result<Vec<String>, String> {
+    let game_dir = PathBuf::from(&game_path);
+    let config_path = game_dir.join("config.toml");
+    let config_content = std::fs::read_to_string(&config_path)
+        .map_err(|e| format!("Failed to read config.toml: {}", e))?;
+
+    let mut doc: toml_edit::DocumentMut = config_content
+        .parse()
+        .map_err(|e| format!("Failed to parse config.toml: {}", e))?;
+
+    let mut removed_files = Vec::new();
+
+    // Get the menu item info before removing
+    let module_id = doc
+        .get("menu")
+        .and_then(|v| v.as_array_of_tables())
+        .and_then(|arr| arr.get(menu_index))
+        .and_then(|item| item.get("module").and_then(|v| v.as_str()))
+        .map(|s| s.to_string());
+
+    // Collect variable names from menu item options (to clean up extra_vars)
+    let option_vars: Vec<String> = doc
+        .get("menu")
+        .and_then(|v| v.as_array_of_tables())
+        .and_then(|arr| arr.get(menu_index))
+        .and_then(|item| item.get("options").and_then(|v| v.as_array_of_tables()))
+        .map(|opts| {
+            opts.iter()
+                .filter_map(|opt| opt.get("var").and_then(|v| v.as_str()).map(|s| s.to_string()))
+                .collect()
+        })
+        .unwrap_or_default();
+
+    // Also get status_var
+    let status_var: Option<String> = doc
+        .get("menu")
+        .and_then(|v| v.as_array_of_tables())
+        .and_then(|arr| arr.get(menu_index))
+        .and_then(|item| item.get("status_var").and_then(|v| v.as_str()))
+        .map(|s| s.to_string());
+
+    // Remove the menu entry
+    if let Some(menu_arr) = doc.get_mut("menu").and_then(|v| v.as_array_of_tables_mut()) {
+        if menu_index < menu_arr.len() {
+            menu_arr.remove(menu_index);
+        } else {
+            return Err(format!("Menu index {} out of range", menu_index));
+        }
+    } else {
+        return Err("No menu section found in config".to_string());
+    }
+
+    // Remove module_params section if module_id exists
+    if let Some(ref mid) = module_id {
+        if let Some(mp) = doc.get_mut("module_params").and_then(|v| v.as_table_mut()) {
+            mp.remove(mid);
+        }
+
+        // Remove keyboard quick_toggle entry
+        if let Some(kb) = doc.get_mut("keyboard").and_then(|v| v.as_table_mut()) {
+            let qt_key = format!("quick_toggle_{}", mid);
+            kb.remove(&qt_key);
+        }
+    }
+
+    // Remove extra_vars entries for option variables
+    if let Some(ev) = doc.get_mut("extra_vars").and_then(|v| v.as_table_mut()) {
+        for var in &option_vars {
+            ev.remove(var);
+        }
+        if let Some(ref sv) = status_var {
+            ev.remove(sv);
+        }
+    }
+
+    // Write updated config
+    std::fs::write(&config_path, doc.to_string())
+        .map_err(|e| format!("Failed to write config.toml: {}", e))?;
+    removed_files.push("config.toml".to_string());
+
+    // Delete module GPC file if module_id exists
+    if let Some(ref mid) = module_id {
+        let module_file = game_dir.join(format!("modules/{}.gpc", mid));
+        if module_file.exists() {
+            std::fs::remove_file(&module_file)
+                .map_err(|e| format!("Failed to delete module file: {}", e))?;
+            removed_files.push(format!("modules/{}.gpc", mid));
+        }
+    }
+
+    // Regenerate core.gpc since module list changed
+    let updated_content = std::fs::read_to_string(&config_path)
+        .map_err(|e| format!("Failed to re-read config.toml: {}", e))?;
+    let game_config: GameConfig = toml::from_str(&updated_content)
+        .map_err(|e| format!("Failed to parse updated config.toml: {}", e))?;
+
+    let root = app_root();
+    let all_modules = modules::load_all_modules(&root)?;
+    let modules_metadata: HashMap<String, crate::models::module::ModuleDefinition> = all_modules
+        .iter()
+        .map(|m| (m.id.clone(), m.clone()))
+        .collect();
+
+    let game_depth = game_dir
+        .strip_prefix(game_dir.parent().unwrap())
+        .ok()
+        .and_then(|p| p.components().count().checked_sub(1))
+        .unwrap_or(1);
+
+    let mut generator = Generator::new(game_config, modules_metadata, game_depth);
+    let result = generator.generate_all();
+
+    // Only regenerate core.gpc
+    if let Some(core_content) = result.files.iter().find(|(p, _)| p == "modules/core.gpc") {
+        let core_path = game_dir.join("modules/core.gpc");
+        std::fs::write(&core_path, &core_content.1)
+            .map_err(|e| format!("Failed to regenerate core.gpc: {}", e))?;
+        removed_files.push("modules/core.gpc (regenerated)".to_string());
+    }
+
+    Ok(removed_files)
+}

@@ -167,6 +167,10 @@ export async function regenerateCommit(
 	return invoke<string[]>('regenerate_commit', { gamePath, files });
 }
 
+export async function removeModule(gamePath: string, menuIndex: number): Promise<string[]> {
+	return invoke<string[]>('remove_module', { gamePath, menuIndex });
+}
+
 // === Add Module Commands ===
 
 export interface AddModuleParams {
@@ -378,6 +382,26 @@ export async function deleteSnapshot(gamePath: string, snapshotId: string): Prom
 
 export async function renameSnapshot(gamePath: string, snapshotId: string, label: string): Promise<void> {
 	return invoke<void>('rename_snapshot', { gamePath, snapshotId, label });
+}
+
+// === Obfuscation Commands ===
+
+export interface ObfuscateStats {
+	identifiers_renamed: number;
+	comments_removed: number;
+	strings_encoded: number;
+	dead_code_blocks: number;
+	lines_before: number;
+	lines_after: number;
+}
+
+export interface ObfuscateResult {
+	output: string;
+	stats: ObfuscateStats;
+}
+
+export async function obfuscateGpc(source: string, level: number): Promise<ObfuscateResult> {
+	return invoke<ObfuscateResult>('obfuscate_gpc', { source, level });
 }
 
 // === Opener Commands ===

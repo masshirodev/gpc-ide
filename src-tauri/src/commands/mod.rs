@@ -3,6 +3,7 @@ pub mod config;
 pub mod game;
 pub mod lsp;
 pub mod module;
+pub mod obfuscate;
 pub mod templates;
 pub mod watcher;
 pub mod wizard;
