@@ -199,6 +199,30 @@
 			Built Games
 		</a>
 		<a
+			href="/tools/snippets"
+			class="mb-1 flex items-center gap-2 rounded px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800"
+		>
+			<svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+				<path
+					d="M12.316 3.051a1 1 0 01.633 1.265l-4 12a1 1 0 11-1.898-.632l4-12a1 1 0 011.265-.633zM5.707 6.293a1 1 0 010 1.414L3.414 10l2.293 2.293a1 1 0 11-1.414 1.414l-3-3a1 1 0 010-1.414l3-3a1 1 0 011.414 0zm8.586 0a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 11-1.414-1.414L16.586 10l-2.293-2.293a1 1 0 010-1.414z"
+				/>
+			</svg>
+			Snippets
+		</a>
+		<a
+			href="/tools/depgraph"
+			class="mb-1 flex items-center gap-2 rounded px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800"
+		>
+			<svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+				<path
+					fill-rule="evenodd"
+					d="M17 10a.75.75 0 01-.75.75H5.612l4.158 3.96a.75.75 0 11-1.04 1.08l-5.5-5.25a.75.75 0 010-1.08l5.5-5.25a.75.75 0 011.04 1.08L5.612 9.25H16.25A.75.75 0 0117 10z"
+					clip-rule="evenodd"
+				/>
+			</svg>
+			Dep Graph
+		</a>
+		<a
 			href="/tools/docs"
 			class="mb-1 flex items-center gap-2 rounded px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800"
 		>

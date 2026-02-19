@@ -91,6 +91,61 @@
         config.menu = items;
     }
 
+    // Drag-and-drop reordering
+    let dragIndex = $state<number | null>(null);
+    let dropIndex = $state<number | null>(null);
+
+    function handleDragStart(index: number, e: DragEvent) {
+        dragIndex = index;
+        if (e.dataTransfer) {
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', String(index));
+        }
+    }
+
+    function handleDragOver(index: number, e: DragEvent) {
+        e.preventDefault();
+        if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+        if (dragIndex !== null && index !== dragIndex) {
+            dropIndex = index;
+        }
+    }
+
+    function handleDrop(index: number, e: DragEvent) {
+        e.preventDefault();
+        if (!config || dragIndex === null || dragIndex === index) return;
+
+        const items = [...config.menu];
+        const [dragged] = items.splice(dragIndex, 1);
+        items.splice(index, 0, dragged);
+        config.menu = items;
+
+        // Update expanded state to follow the moved items
+        const newExpanded = new Set<number>();
+        for (const oldIdx of expandedMenuItems) {
+            if (oldIdx === dragIndex) {
+                newExpanded.add(index);
+            } else {
+                let adjusted = oldIdx;
+                if (dragIndex < index) {
+                    if (oldIdx > dragIndex && oldIdx <= index) adjusted--;
+                } else {
+                    if (oldIdx >= index && oldIdx < dragIndex) adjusted++;
+                }
+                newExpanded.add(adjusted);
+            }
+        }
+        expandedMenuItems = newExpanded;
+
+        dragIndex = null;
+        dropIndex = null;
+    }
+
+    function handleDragEnd() {
+        dragIndex = null;
+        dropIndex = null;
+    }
+
     // Validation helpers
     function validateVersion(val: string): number {
         const num = parseInt(val);
@@ -278,27 +333,46 @@
                 {#if config.menu.length > 0}
                     <div class="space-y-2">
                         {#each config.menu as item, index}
-                            <div class="rounded border border-zinc-700 bg-zinc-800/50">
+                            <div
+                                class="rounded border bg-zinc-800/50 transition-colors {dragIndex === index ? 'border-emerald-500 opacity-50' : dropIndex === index ? 'border-emerald-500/50 bg-emerald-900/10' : 'border-zinc-700'}"
+                                draggable="true"
+                                ondragstart={(e) => handleDragStart(index, e)}
+                                ondragover={(e) => handleDragOver(index, e)}
+                                ondrop={(e) => handleDrop(index, e)}
+                                ondragend={handleDragEnd}
+                                ondragleave={() => { if (dropIndex === index) dropIndex = null; }}
+                                role="listitem"
+                            >
                                 <!-- Menu Item Header -->
                                 <div class="flex items-center justify-between p-3">
-                                    <button
-                                        class="flex flex-1 items-center gap-2 text-left"
-                                        onclick={() => toggleMenuItem(index)}
-                                    >
-                                        <svg
-                                            class="h-4 w-4 text-zinc-400 transition-transform {expandedMenuItems.has(index) ? 'rotate-90' : ''}"
-                                            fill="none"
-                                            viewBox="0 0 24 24"
-                                            stroke="currentColor"
+                                    <div class="flex flex-1 items-center gap-2">
+                                        <!-- Drag handle -->
+                                        <div class="cursor-grab text-zinc-600 hover:text-zinc-400 active:cursor-grabbing" title="Drag to reorder">
+                                            <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
+                                                <circle cx="9" cy="6" r="1.5" /><circle cx="15" cy="6" r="1.5" />
+                                                <circle cx="9" cy="12" r="1.5" /><circle cx="15" cy="12" r="1.5" />
+                                                <circle cx="9" cy="18" r="1.5" /><circle cx="15" cy="18" r="1.5" />
+                                            </svg>
+                                        </div>
+                                        <button
+                                            class="flex flex-1 items-center gap-2 text-left"
+                                            onclick={() => toggleMenuItem(index)}
                                         >
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-                                        </svg>
-                                        <span class="font-medium text-zinc-200">{item.name}</span>
-                                        <span class="rounded bg-zinc-700 px-2 py-0.5 text-xs text-zinc-300">{item.type}</span>
-                                        {#if item.state_display}
-                                            <span class="text-xs text-zinc-500">{item.state_display}</span>
-                                        {/if}
-                                    </button>
+                                            <svg
+                                                class="h-4 w-4 text-zinc-400 transition-transform {expandedMenuItems.has(index) ? 'rotate-90' : ''}"
+                                                fill="none"
+                                                viewBox="0 0 24 24"
+                                                stroke="currentColor"
+                                            >
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                                            </svg>
+                                            <span class="font-medium text-zinc-200">{item.name}</span>
+                                            <span class="rounded bg-zinc-700 px-2 py-0.5 text-xs text-zinc-300">{item.type}</span>
+                                            {#if item.state_display}
+                                                <span class="text-xs text-zinc-500">{item.state_display}</span>
+                                            {/if}
+                                        </button>
+                                    </div>
                                     <div class="flex items-center gap-1">
                                         <button
                                             class="rounded p-1 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200 disabled:opacity-30"

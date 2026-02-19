@@ -150,6 +150,23 @@ export async function regenerateAll(gamePath: string): Promise<string[]> {
 	return invoke<string[]>('regenerate_all', { gamePath });
 }
 
+export interface FileDiff {
+	path: string;
+	old_content: string;
+	new_content: string;
+}
+
+export async function regeneratePreview(gamePath: string): Promise<FileDiff[]> {
+	return invoke<FileDiff[]>('regenerate_preview', { gamePath });
+}
+
+export async function regenerateCommit(
+	gamePath: string,
+	files: { path: string; content: string }[]
+): Promise<string[]> {
+	return invoke<string[]>('regenerate_commit', { gamePath, files });
+}
+
 // === Add Module Commands ===
 
 export interface AddModuleParams {

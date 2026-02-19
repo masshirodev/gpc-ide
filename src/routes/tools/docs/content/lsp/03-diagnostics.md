@@ -1,4 +1,4 @@
-# Diagnostics
+# Diagnostics {lsp}
 
 The GPC language server performs real-time error checking and reports problems as you type.
 

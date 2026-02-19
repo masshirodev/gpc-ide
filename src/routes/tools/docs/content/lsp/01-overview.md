@@ -1,4 +1,4 @@
-# LSP Overview
+# LSP Overview {lsp}
 
 GPC IDE includes a Language Server Protocol (LSP) integration that provides real-time code intelligence for the GPC language.
 

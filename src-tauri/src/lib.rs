@@ -44,6 +44,8 @@ pub fn run() {
             commands::config::delete_file,
             commands::config::regenerate_file,
             commands::config::regenerate_all,
+            commands::config::regenerate_preview,
+            commands::config::regenerate_commit,
             commands::lsp::lsp_start,
             commands::lsp::lsp_stop,
             commands::lsp::lsp_send,

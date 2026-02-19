@@ -1,4 +1,4 @@
-# LSP Features
+# LSP Features {lsp}
 
 The GPC language server provides a comprehensive set of code intelligence features.
 

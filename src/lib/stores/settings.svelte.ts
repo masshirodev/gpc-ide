@@ -1,5 +1,14 @@
 import { writable } from 'svelte/store';
 
+export interface Snippet {
+    id: string;
+    name: string;
+    description: string;
+    code: string;
+    tags: string[];
+    createdAt: number;
+}
+
 interface AppSettings {
     username: string;
     customLspCommand: string;
@@ -9,6 +18,7 @@ interface AppSettings {
     editorTheme: string;
     workspaces: string[];
     customGameTypes: string[];
+    snippets: Snippet[];
 }
 
 const BUILTIN_GAME_TYPES = ['fps', 'tps', 'fgs'];
@@ -22,6 +32,7 @@ const DEFAULTS: AppSettings = {
     editorTheme: 'gpc-dark',
     workspaces: [],
     customGameTypes: [],
+    snippets: [],
 };
 
 const STORAGE_KEY = 'gpc-ide-settings';
@@ -99,6 +110,41 @@ export function addGameType(type: string) {
 export function removeGameType(type: string) {
     store.update(current => {
         const updated = { ...current, customGameTypes: current.customGameTypes.filter(t => t !== type) };
+        persist(updated);
+        return updated;
+    });
+}
+
+// === Snippet Management ===
+
+export function addSnippet(snippet: Omit<Snippet, 'id' | 'createdAt'>): Snippet {
+    const newSnippet: Snippet = {
+        ...snippet,
+        id: crypto.randomUUID(),
+        createdAt: Date.now(),
+    };
+    store.update(current => {
+        const updated = { ...current, snippets: [...current.snippets, newSnippet] };
+        persist(updated);
+        return updated;
+    });
+    return newSnippet;
+}
+
+export function updateSnippet(id: string, partial: Partial<Omit<Snippet, 'id' | 'createdAt'>>) {
+    store.update(current => {
+        const updated = {
+            ...current,
+            snippets: current.snippets.map(s => s.id === id ? { ...s, ...partial } : s),
+        };
+        persist(updated);
+        return updated;
+    });
+}
+
+export function removeSnippet(id: string) {
+    store.update(current => {
+        const updated = { ...current, snippets: current.snippets.filter(s => s.id !== id) };
         persist(updated);
         return updated;
     });

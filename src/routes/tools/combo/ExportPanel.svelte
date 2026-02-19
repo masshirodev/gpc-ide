@@ -4,6 +4,9 @@
 	import { addToast } from '$lib/stores/toast.svelte';
 	import { saveUserModule, listModules } from '$lib/tauri/commands';
 	import { getSettings } from '$lib/stores/settings.svelte';
+	import { getGameStore } from '$lib/stores/game.svelte';
+	import { setComboTransfer } from '$lib/stores/combo-transfer.svelte';
+	import { goto } from '$app/navigation';
 	import {
 		CONSOLE_TYPES,
 		CONSOLE_LABELS,
@@ -54,6 +57,23 @@
 		} catch {
 			addToast('Failed to copy', 'error');
 		}
+	}
+
+	let gameStore = getGameStore();
+
+	function sendToGame() {
+		if (!gameStore.selectedGame) {
+			addToast('No game selected. Select a game in the sidebar first.', 'error');
+			return;
+		}
+		const code = exportComboGPC(project, exportConsole);
+		const name = project.name.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() || 'combo';
+		setComboTransfer({
+			comboName: name,
+			gpcCode: code,
+			returnTo: gameStore.selectedGame.path
+		});
+		goto('/');
 	}
 
 	async function saveAsModule() {
@@ -195,6 +215,21 @@
 				Saves to: {settings.workspaces[0]}/modules/
 			</div>
 		{/if}
+	{/if}
+
+	<!-- Send to Game -->
+	<button
+		class="w-full rounded border border-blue-600 bg-blue-600/10 px-3 py-1.5 text-xs font-medium text-blue-400 hover:bg-blue-600/20"
+		onclick={sendToGame}
+	>
+		Send to Game
+	</button>
+	{#if gameStore.selectedGame}
+		<div class="truncate text-xs text-zinc-600" title={gameStore.selectedGame.name}>
+			Game: {gameStore.selectedGame.name}
+		</div>
+	{:else}
+		<div class="text-xs text-zinc-600">No game selected</div>
 	{/if}
 
 	<!-- Output -->

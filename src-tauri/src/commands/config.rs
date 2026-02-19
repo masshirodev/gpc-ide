@@ -240,6 +240,83 @@ pub fn regenerate_file(game_path: String, file_path: String) -> Result<String, S
     Ok(file_content)
 }
 
+/// Preview regeneration — returns diffs without writing files
+#[tauri::command]
+pub fn regenerate_preview(game_path: String) -> Result<Vec<FileDiff>, String> {
+    let game_dir = PathBuf::from(&game_path);
+
+    let config_path = game_dir.join("config.toml");
+    let config_content = std::fs::read_to_string(&config_path)
+        .map_err(|e| format!("Failed to read config.toml: {}", e))?;
+    let game_config: GameConfig = toml::from_str(&config_content)
+        .map_err(|e| format!("Failed to parse config.toml: {}", e))?;
+
+    let root = app_root();
+    let all_modules = modules::load_all_modules(&root)?;
+    let modules_metadata: HashMap<String, crate::models::module::ModuleDefinition> = all_modules
+        .iter()
+        .map(|m| (m.id.clone(), m.clone()))
+        .collect();
+
+    let game_depth = game_dir
+        .strip_prefix(game_dir.parent().unwrap())
+        .ok()
+        .and_then(|p| p.components().count().checked_sub(1))
+        .unwrap_or(1);
+
+    let mut generator = Generator::new(game_config, modules_metadata, game_depth);
+    let result = generator.generate_all();
+
+    let mut diffs = Vec::new();
+    for (rel_path, new_content) in &result.files {
+        let full_path = game_dir.join(rel_path);
+        let old_content = std::fs::read_to_string(&full_path).unwrap_or_default();
+
+        if old_content != *new_content {
+            diffs.push(FileDiff {
+                path: rel_path.clone(),
+                old_content,
+                new_content: new_content.clone(),
+            });
+        }
+    }
+
+    Ok(diffs)
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct FileDiff {
+    pub path: String,
+    pub old_content: String,
+    pub new_content: String,
+}
+
+/// Commit regenerated files — writes specific files with provided content
+#[tauri::command]
+pub fn regenerate_commit(game_path: String, files: Vec<FileWrite>) -> Result<Vec<String>, String> {
+    let game_dir = PathBuf::from(&game_path);
+    let mut written = Vec::new();
+
+    for file in &files {
+        let full_path = game_dir.join(&file.path);
+        if let Some(parent) = full_path.parent() {
+            std::fs::create_dir_all(parent)
+                .map_err(|e| format!("Failed to create directory: {}", e))?;
+        }
+        std::fs::write(&full_path, &file.content)
+            .map_err(|e| format!("Failed to write {}: {}", file.path, e))?;
+        written.push(file.path.clone());
+    }
+
+    Ok(written)
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct FileWrite {
+    pub path: String,
+    pub content: String,
+}
+
 /// Regenerate all generated files from config.toml
 #[tauri::command]
 pub fn regenerate_all(game_path: String) -> Result<Vec<String>, String> {
