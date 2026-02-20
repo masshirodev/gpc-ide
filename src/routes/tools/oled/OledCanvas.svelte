@@ -1,8 +1,9 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { OLED_WIDTH, OLED_HEIGHT, type DrawTool, type BrushShape } from './types';
+	import { OLED_WIDTH, OLED_HEIGHT, type DrawTool, type BrushShape, type TextState } from './types';
 	import { getPixel, setPixel, clonePixels } from './pixels';
-	import { applyBrush, drawBresenhamLine, drawRect, drawEllipse, floodFill } from './drawing';
+	import { applyBrush, drawBresenhamLine, drawRect, drawEllipse, floodFill, drawText } from './drawing';
+	import { getFont } from './fonts';
 
 	interface Props {
 		pixels: Uint8Array;
@@ -10,11 +11,13 @@
 		brush: BrushShape;
 		filled: boolean;
 		version: number;
+		textState: TextState;
 		onBeforeDraw: () => void;
 		onDraw: (pixels: Uint8Array) => void;
+		onTextOriginSet: (x: number, y: number) => void;
 	}
 
-	let { pixels, tool, brush, filled, version, onBeforeDraw, onDraw }: Props = $props();
+	let { pixels, tool, brush, filled, version, textState, onBeforeDraw, onDraw, onTextOriginSet }: Props = $props();
 
 	let canvas: HTMLCanvasElement;
 	let container: HTMLDivElement;
@@ -102,8 +105,39 @@
 			OLED_HEIGHT * cellSize + 1
 		);
 
+		// Draw text preview
+		if (tool === 'text' && textState.originX >= 0 && textState.text) {
+			const font = getFont(textState.fontSize);
+			const previewBuf = clonePixels(displayPixels);
+			drawText(previewBuf, textState.text, textState.originX, textState.originY, font, true);
+			// Re-render with text overlay in preview color
+			for (let y = 0; y < OLED_HEIGHT; y++) {
+				for (let x = 0; x < OLED_WIDTH; x++) {
+					if (getPixel(previewBuf, x, y) && !getPixel(displayPixels, x, y)) {
+						ctx.fillStyle = 'rgba(16, 185, 129, 0.6)';
+						ctx.fillRect(offsetX + x * cellSize, offsetY + y * cellSize, cellSize, cellSize);
+					}
+				}
+			}
+		}
+
+		// Draw text origin marker
+		if (tool === 'text' && textState.originX >= 0) {
+			const mx = offsetX + textState.originX * cellSize;
+			const my = offsetY + textState.originY * cellSize;
+			ctx.strokeStyle = '#10b981';
+			ctx.lineWidth = 1;
+			// Crosshair
+			ctx.beginPath();
+			ctx.moveTo(mx - 4, my);
+			ctx.lineTo(mx + 4, my);
+			ctx.moveTo(mx, my - 4);
+			ctx.lineTo(mx, my + 4);
+			ctx.stroke();
+		}
+
 		// Draw brush preview on hover
-		if (hoverX >= 0 && hoverY >= 0 && !isDrawing) {
+		if (hoverX >= 0 && hoverY >= 0 && !isDrawing && tool !== 'text') {
 			drawBrushPreview(hoverX, hoverY);
 		}
 
@@ -161,6 +195,12 @@
 		if (e.button !== 0 && e.button !== 2) return;
 		const [px, py] = canvasToPixel(e);
 		if (!isInBounds(px, py)) return;
+
+		if (tool === 'text') {
+			onTextOriginSet(px, py);
+			draw();
+			return;
+		}
 
 		drawValue = e.button === 0; // left = white, right = black
 		isDrawing = true;
@@ -273,6 +313,7 @@
 		void version;
 		void pixels;
 		void previewPixels;
+		void textState;
 		draw();
 	});
 </script>
@@ -284,7 +325,7 @@
 	<canvas
 		bind:this={canvas}
 		class="block"
-		style:cursor={tool === 'fill' ? 'crosshair' : 'default'}
+		style:cursor={tool === 'fill' || tool === 'text' ? 'crosshair' : 'default'}
 		onmousedown={handleMouseDown}
 		onmousemove={handleMouseMove}
 		onmouseup={handleMouseUp}

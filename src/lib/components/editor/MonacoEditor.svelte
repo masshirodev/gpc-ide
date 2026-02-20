@@ -38,6 +38,16 @@
 		}
 	});
 
+	// Sync value prop changes for readonly editors
+	$effect(() => {
+		const v = value;
+		if (editor && readonly && editor.getValue() !== v) {
+			suppressChangeEvent = true;
+			editor.setValue(v);
+			suppressChangeEvent = false;
+		}
+	});
+
 	onMount(() => {
 		initMonaco();
 		return () => {

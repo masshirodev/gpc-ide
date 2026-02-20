@@ -7,9 +7,10 @@
 	import ImportModal from './ImportModal.svelte';
 	import { addToast } from '$lib/stores/toast.svelte';
 	import { PixelHistory } from './history';
-	import { shiftPixels } from './drawing';
+	import { shiftPixels, drawText } from './drawing';
 	import { createEmptyPixels, clonePixels, invertPixels, pixelsToBase64, base64ToPixels } from './pixels';
-	import type { OledScene, DrawTool, BrushShape, AnimationConfig, OledProject } from './types';
+	import { getFont } from './fonts';
+	import type { OledScene, DrawTool, BrushShape, AnimationConfig, OledProject, TextState } from './types';
 	import { writeFile, readFile } from '$lib/tauri/commands';
 
 	// --- State ---
@@ -26,6 +27,7 @@
 	let brush = $state<BrushShape>({ type: 'square', width: 1, height: 1 });
 	let shapeFilled = $state(true);
 	let animationConfig = $state<AnimationConfig>({ frameDelayMs: 500, loop: true });
+	let textState = $state<TextState>({ text: '', fontSize: '5x7', originX: -1, originY: -1 });
 	let showImport = $state(false);
 	let showExport = $state(false);
 	let pixelVersion = $state(0);
@@ -142,6 +144,25 @@
 		addToast('Image imported', 'success', 2000);
 	}
 
+	// --- Text tool ---
+	function handleTextOriginSet(x: number, y: number) {
+		textState = { ...textState, originX: x, originY: y };
+	}
+
+	function handleTextChange(state: TextState) {
+		textState = state;
+	}
+
+	function handleTextApply() {
+		if (!textState.text || textState.originX < 0) return;
+		handleBeforeDraw();
+		const font = getFont(textState.fontSize);
+		const updated = clonePixels(activeScene.pixels);
+		drawText(updated, textState.text, textState.originX, textState.originY, font, true);
+		handleDraw(updated);
+		textState = { ...textState, text: '', originX: -1, originY: -1 };
+	}
+
 	// --- Save / Load ---
 	async function handleSave() {
 		try {
@@ -215,12 +236,13 @@
 			handleClear();
 		} else if (!e.ctrlKey && !e.altKey) {
 			switch (e.key.toLowerCase()) {
-				case 'p': tool = 'pen'; break;
-				case 'e': tool = 'eraser'; break;
-				case 'l': tool = 'line'; break;
-				case 'r': tool = 'rect'; break;
-				case 'o': tool = 'ellipse'; break;
-				case 'g': tool = 'fill'; break;
+				case 'p': tool = 'pen'; textState = { ...textState, originX: -1, originY: -1 }; break;
+				case 'e': tool = 'eraser'; textState = { ...textState, originX: -1, originY: -1 }; break;
+				case 'l': tool = 'line'; textState = { ...textState, originX: -1, originY: -1 }; break;
+				case 'r': tool = 'rect'; textState = { ...textState, originX: -1, originY: -1 }; break;
+				case 'o': tool = 'ellipse'; textState = { ...textState, originX: -1, originY: -1 }; break;
+				case 'g': tool = 'fill'; textState = { ...textState, originX: -1, originY: -1 }; break;
+				case 't': tool = 'text'; break;
 				case '[':
 					brush = { ...brush, width: Math.max(1, brush.width - 1), height: Math.max(1, brush.height - 1) };
 					break;
@@ -284,6 +306,9 @@
 				<kbd class="rounded bg-zinc-800 px-1 py-0.5 text-zinc-400">E</kbd> eraser
 			</span>
 			<span>
+				<kbd class="rounded bg-zinc-800 px-1 py-0.5 text-zinc-400">T</kbd> text
+			</span>
+			<span>
 				<kbd class="rounded bg-zinc-800 px-1 py-0.5 text-zinc-400">Ctrl+Z</kbd> undo
 			</span>
 		</div>
@@ -297,9 +322,15 @@
 				{tool}
 				{brush}
 				filled={shapeFilled}
-				onToolChange={(t) => (tool = t)}
+				{textState}
+				onToolChange={(t) => {
+					if (t !== 'text') textState = { ...textState, originX: -1, originY: -1 };
+					tool = t;
+				}}
 				onBrushChange={(b) => (brush = b)}
 				onFilledChange={(f) => (shapeFilled = f)}
+				onTextChange={handleTextChange}
+				onTextApply={handleTextApply}
 				onClear={handleClear}
 				onInvert={handleInvert}
 				onShift={handleShift}
@@ -334,8 +365,10 @@
 					{brush}
 					filled={shapeFilled}
 					version={pixelVersion}
+					{textState}
 					onBeforeDraw={handleBeforeDraw}
 					onDraw={handleDraw}
+					onTextOriginSet={handleTextOriginSet}
 				/>
 			</div>
 

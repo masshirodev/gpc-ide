@@ -1,5 +1,6 @@
 import { OLED_WIDTH, OLED_HEIGHT, type BrushShape } from './types';
 import { getPixel, setPixel } from './pixels';
+import type { BitmapFont } from './fonts';
 
 export function applyBrush(
 	pixels: Uint8Array,
@@ -211,4 +212,40 @@ export function shiftPixels(
 		}
 	}
 	return result;
+}
+
+export function drawText(
+	pixels: Uint8Array,
+	text: string,
+	originX: number,
+	originY: number,
+	font: BitmapFont,
+	value: boolean
+): void {
+	const charPitch = font.width + font.spacing;
+	for (let i = 0; i < text.length; i++) {
+		const charX = originX + i * charPitch;
+		// Skip characters entirely off-screen to the right
+		if (charX >= OLED_WIDTH) break;
+		// Skip characters entirely off-screen to the left
+		if (charX + font.width < 0) continue;
+
+		const code = text.charCodeAt(i);
+		const glyph = font.data.get(code);
+		if (!glyph) continue;
+
+		for (let row = 0; row < font.height; row++) {
+			const py = originY + row;
+			if (py < 0 || py >= OLED_HEIGHT) continue;
+			const rowBits = glyph[row];
+			for (let col = 0; col < font.width; col++) {
+				const px = charX + col;
+				if (px < 0 || px >= OLED_WIDTH) continue;
+				// MSB = leftmost pixel
+				if (rowBits & (1 << (font.width - 1 - col))) {
+					setPixel(pixels, px, py, value);
+				}
+			}
+		}
+	}
 }

@@ -1,21 +1,26 @@
 <script lang="ts">
-	import type { DrawTool, BrushShape } from './types';
+	import type { DrawTool, BrushShape, TextState, FontSize } from './types';
 
 	interface Props {
 		tool: DrawTool;
 		brush: BrushShape;
 		filled: boolean;
+		textState: TextState;
 		onToolChange: (tool: DrawTool) => void;
 		onBrushChange: (brush: BrushShape) => void;
 		onFilledChange: (filled: boolean) => void;
+		onTextChange: (state: TextState) => void;
+		onTextApply: () => void;
 		onClear: () => void;
 		onInvert: () => void;
 		onShift: (dx: number, dy: number) => void;
 		onImport: () => void;
 	}
 
-	let { tool, brush, filled, onToolChange, onBrushChange, onFilledChange, onClear, onInvert, onShift, onImport }: Props =
+	let { tool, brush, filled, textState, onToolChange, onBrushChange, onFilledChange, onTextChange, onTextApply, onClear, onInvert, onShift, onImport }: Props =
 		$props();
+
+	const fontSizes: FontSize[] = ['3x5', '5x7', '8x8'];
 
 	const tools: { id: DrawTool; label: string; key: string; icon: string }[] = [
 		{ id: 'pen', label: 'Pen', key: 'P', icon: 'M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z' },
@@ -23,7 +28,8 @@
 		{ id: 'line', label: 'Line', key: 'L', icon: 'M4 20L20 4' },
 		{ id: 'rect', label: 'Rect', key: 'R', icon: 'M5 3h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2z' },
 		{ id: 'ellipse', label: 'Ellipse', key: 'O', icon: 'M12 6a8 4 0 100 12 8 4 0 000-12z' },
-		{ id: 'fill', label: 'Fill', key: 'G', icon: 'M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12V9' }
+		{ id: 'fill', label: 'Fill', key: 'G', icon: 'M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12V9' },
+		{ id: 'text', label: 'Text', key: 'T', icon: 'M4 6h16M4 6v2m16-2v2M7 6v12m0 0h2m-2 0H5m12-12v12m0 0h2m-2 0h-2' }
 	];
 </script>
 
@@ -122,6 +128,57 @@
 				>
 					Outline
 				</button>
+			</div>
+		</div>
+	{/if}
+
+	<!-- Text Settings -->
+	{#if tool === 'text'}
+		<div>
+			<h3 class="mb-2 text-xs font-medium uppercase tracking-wider text-zinc-500">Text</h3>
+			<div class="space-y-2">
+				<input
+					type="text"
+					class="w-full rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm text-zinc-200 placeholder-zinc-600 focus:border-emerald-600 focus:outline-none"
+					placeholder="Type text..."
+					value={textState.text}
+					oninput={(e) => onTextChange({ ...textState, text: e.currentTarget.value })}
+					onkeydown={(e) => {
+						if (e.key === 'Enter' && textState.text && textState.originX >= 0) {
+							e.preventDefault();
+							onTextApply();
+						}
+					}}
+				/>
+				<div>
+					<span class="text-xs text-zinc-400">Font Size</span>
+					<div class="mt-1 flex gap-1">
+						{#each fontSizes as size}
+							<button
+								class="flex-1 rounded px-2 py-1 text-xs {textState.fontSize === size
+									? 'bg-emerald-600/20 text-emerald-400'
+									: 'text-zinc-400 hover:bg-zinc-800'}"
+								onclick={() => onTextChange({ ...textState, fontSize: size })}
+							>
+								{size}
+							</button>
+						{/each}
+					</div>
+				</div>
+				{#if textState.originX < 0}
+					<p class="text-xs text-zinc-500">Click on canvas to place text</p>
+				{:else}
+					<p class="text-xs text-zinc-500">
+						Position: {textState.originX}, {textState.originY}
+					</p>
+					<button
+						class="w-full rounded bg-emerald-600/20 px-2 py-1.5 text-xs text-emerald-400 hover:bg-emerald-600/30 disabled:opacity-40 disabled:hover:bg-emerald-600/20"
+						disabled={!textState.text}
+						onclick={onTextApply}
+					>
+						Apply Text (Enter)
+					</button>
+				{/if}
 			</div>
 		</div>
 	{/if}
