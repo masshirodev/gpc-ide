@@ -73,6 +73,13 @@ pub fn run() {
             commands::history::delete_snapshot,
             commands::history::rename_snapshot,
             commands::obfuscate::obfuscate_gpc,
+            commands::flow::save_flow_graph,
+            commands::flow::load_flow_graph,
+            commands::flow::delete_flow_graph,
+            commands::flow::list_chunks,
+            commands::flow::save_chunk,
+            commands::flow::delete_chunk,
+            commands::flow::get_chunk,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

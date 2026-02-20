@@ -126,15 +126,11 @@
 
 <div class="flex h-screen flex-col bg-zinc-950">
 	<div class="flex items-center gap-3 border-b border-zinc-800 px-5 py-3">
-		<a href="/" class="text-zinc-500 hover:text-zinc-300">
-			<svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-				<path
-					stroke-linecap="round"
-					stroke-linejoin="round"
-					stroke-width="2"
-					d="M10 19l-7-7m0 0l7-7m-7 7h18"
-				/>
+		<a href="/" class="flex items-center gap-1.5 text-sm text-zinc-400 hover:text-zinc-200">
+			<svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+				<path fill-rule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clip-rule="evenodd" />
 			</svg>
+			Back
 		</a>
 		<h1 class="text-lg font-semibold text-zinc-100">Documentation</h1>
 	</div>

@@ -96,18 +96,11 @@
 	<!-- Header -->
 	<div class="flex items-center justify-between border-b border-zinc-800 px-4 py-3">
 		<div class="flex items-center gap-3">
-			<a
-				href="/"
-				class="rounded p-1 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
-				title="Back to dashboard"
-			>
-				<svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-					<path
-						fill-rule="evenodd"
-						d="M17 10a.75.75 0 01-.75.75H5.612l4.158 3.96a.75.75 0 11-1.04 1.08l-5.5-5.25a.75.75 0 010-1.08l5.5-5.25a.75.75 0 011.04 1.08L5.612 9.25H16.25A.75.75 0 0117 10z"
-						clip-rule="evenodd"
-					/>
+			<a href="/" class="flex items-center gap-1.5 text-sm text-zinc-400 hover:text-zinc-200">
+				<svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+					<path fill-rule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clip-rule="evenodd" />
 				</svg>
+				Back
 			</a>
 			<div>
 				<h1 class="text-lg font-semibold">Code Obfuscator</h1>

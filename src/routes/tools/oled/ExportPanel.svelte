@@ -2,6 +2,7 @@
 	import type { ExportFormat, OledScene, AnimationConfig } from './types';
 	import { exportScene, exportAnimation } from './export';
 	import { addToast } from '$lib/stores/toast.svelte';
+	import MiniMonaco from '$lib/components/editor/MiniMonaco.svelte';
 
 	interface Props {
 		scenes: OledScene[];
@@ -68,10 +69,8 @@
 		{/if}
 	</div>
 
-	<div class="flex min-h-0 flex-1 flex-col">
-		<pre
-			class="flex-1 overflow-auto rounded border border-zinc-700 bg-zinc-900 p-2 font-mono text-[10px] leading-tight text-zinc-300"
-		>{output}</pre>
+	<div class="flex min-h-0 flex-1 flex-col overflow-hidden rounded border border-zinc-700">
+		<MiniMonaco value={output} language="gpc" readonly={true} label="OLED Export" />
 	</div>
 
 	<button

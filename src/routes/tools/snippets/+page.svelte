@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { getSettings, addSnippet, updateSnippet, removeSnippet } from '$lib/stores/settings.svelte';
+	import { getSettings, addSnippet, updateSnippet, removeSnippet, getAllSnippets, isBuiltinSnippet } from '$lib/stores/settings.svelte';
 	import type { Snippet } from '$lib/stores/settings.svelte';
 	import { addToast } from '$lib/stores/toast.svelte';
 	import MonacoEditor from '$lib/components/editor/MonacoEditor.svelte';
@@ -18,10 +18,12 @@
 	let newCode = $state('');
 	let newTags = $state('');
 
+	let allSnippets = $derived(getAllSnippets(settings));
+
 	let filteredSnippets = $derived.by(() => {
 		const q = searchQuery.toLowerCase().trim();
-		if (!q) return settings.snippets;
-		return settings.snippets.filter(
+		if (!q) return allSnippets;
+		return allSnippets.filter(
 			(s) =>
 				s.name.toLowerCase().includes(q) ||
 				s.description.toLowerCase().includes(q) ||
@@ -127,18 +129,15 @@
 	<!-- Header -->
 	<div class="flex items-center justify-between border-b border-zinc-800 px-6 py-4">
 		<div class="flex items-center gap-4">
-			<a href="/" class="text-zinc-400 hover:text-zinc-200" title="Back">
-				<svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-					<path
-						fill-rule="evenodd"
-						d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z"
-						clip-rule="evenodd"
-					/>
+			<a href="/" class="flex items-center gap-1.5 text-sm text-zinc-400 hover:text-zinc-200">
+				<svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+					<path fill-rule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clip-rule="evenodd" />
 				</svg>
+				Back
 			</a>
 			<h1 class="text-2xl font-bold">Snippet Library</h1>
 			<span class="rounded bg-zinc-800 px-2 py-0.5 text-xs text-zinc-400">
-				{settings.snippets.length} snippet{settings.snippets.length !== 1 ? 's' : ''}
+				{allSnippets.length} snippet{allSnippets.length !== 1 ? 's' : ''}
 			</span>
 		</div>
 		<div class="flex gap-2">
@@ -184,7 +183,12 @@
 							editing = false;
 						}}
 					>
+						<div class="flex items-center gap-1.5">
 						<span class="text-sm font-medium text-zinc-200">{snippet.name}</span>
+						{#if isBuiltinSnippet(snippet.id)}
+							<span class="rounded bg-blue-900/50 px-1.5 py-0.5 text-[10px] text-blue-400">built-in</span>
+						{/if}
+					</div>
 						{#if snippet.description}
 							<span class="truncate text-xs text-zinc-500">{snippet.description}</span>
 						{/if}
@@ -303,18 +307,20 @@
 							>
 								Copy
 							</button>
-							<button
-								class="rounded border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-800"
-								onclick={() => (editing = true)}
-							>
-								Edit
-							</button>
-							<button
-								class="rounded border border-red-800 px-3 py-1.5 text-xs text-red-400 hover:bg-red-900/30"
-								onclick={() => handleDelete(selectedSnippet!.id)}
-							>
-								Delete
-							</button>
+							{#if !isBuiltinSnippet(selectedSnippet!.id)}
+								<button
+									class="rounded border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-800"
+									onclick={() => (editing = true)}
+								>
+									Edit
+								</button>
+								<button
+									class="rounded border border-red-800 px-3 py-1.5 text-xs text-red-400 hover:bg-red-900/30"
+									onclick={() => handleDelete(selectedSnippet!.id)}
+								>
+									Delete
+								</button>
+							{/if}
 						{/if}
 					</div>
 				</div>

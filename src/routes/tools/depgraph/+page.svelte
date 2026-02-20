@@ -116,14 +116,11 @@
 	<!-- Header -->
 	<div class="flex items-center justify-between border-b border-zinc-800 px-6 py-4">
 		<div class="flex items-center gap-4">
-			<a href="/" class="text-zinc-400 hover:text-zinc-200" title="Back">
-				<svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-					<path
-						fill-rule="evenodd"
-						d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z"
-						clip-rule="evenodd"
-					/>
+			<a href="/" class="flex items-center gap-1.5 text-sm text-zinc-400 hover:text-zinc-200">
+				<svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+					<path fill-rule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clip-rule="evenodd" />
 				</svg>
+				Back
 			</a>
 			<h1 class="text-2xl font-bold">Module Dependency Graph</h1>
 		</div>

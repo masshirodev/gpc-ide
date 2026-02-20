@@ -229,20 +229,12 @@
 	<!-- Top Bar -->
 	<div class="flex items-center justify-between border-b border-zinc-800 px-4 py-2.5">
 		<div class="flex items-center gap-3">
-			<button
-				class="flex items-center gap-1.5 rounded px-2 py-1 text-xs text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
-				onclick={() => goto('/')}
-			>
-				<svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-					<path
-						stroke-linecap="round"
-						stroke-linejoin="round"
-						stroke-width="2"
-						d="M15 19l-7-7 7-7"
-					/>
+			<a href="/" class="flex items-center gap-1.5 text-sm text-zinc-400 hover:text-zinc-200">
+				<svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+					<path fill-rule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clip-rule="evenodd" />
 				</svg>
-				Dashboard
-			</button>
+				Back
+			</a>
 			<h1 class="text-sm font-semibold text-zinc-100">Built Games</h1>
 			<div class="ml-4 flex rounded border border-zinc-800">
 				<button

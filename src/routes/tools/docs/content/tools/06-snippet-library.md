@@ -41,6 +41,10 @@ Click **Copy** to copy the snippet's code to your clipboard for pasting into you
 
 Click **Delete** to remove a snippet permanently.
 
+## Built-in Snippets
+
+The library includes a set of read-only **built-in snippets** with common GPC patterns. These are marked with a "built-in" badge in the list and cannot be edited or deleted. They serve as reference examples and ready-to-use code blocks.
+
 ## Import / Export
 
 - **Import**: Load snippets from a JSON file — supports single or array format

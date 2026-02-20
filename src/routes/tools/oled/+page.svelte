@@ -5,6 +5,9 @@
 	import PreviewPanel from './PreviewPanel.svelte';
 	import ExportPanel from './ExportPanel.svelte';
 	import ImportModal from './ImportModal.svelte';
+	import AnimationPresetsModal from './AnimationPresetsModal.svelte';
+	import FontEditor from './FontEditor.svelte';
+	import SequencerPanel from './SequencerPanel.svelte';
 	import { addToast } from '$lib/stores/toast.svelte';
 	import { PixelHistory } from './history';
 	import { shiftPixels, drawText } from './drawing';
@@ -30,6 +33,9 @@
 	let textState = $state<TextState>({ text: '', fontSize: '5x7', originX: -1, originY: -1 });
 	let showImport = $state(false);
 	let showExport = $state(false);
+	let showPresets = $state(false);
+	let showFontEditor = $state(false);
+	let showSequencer = $state(false);
 	let pixelVersion = $state(0);
 
 	// Per-scene history
@@ -216,6 +222,15 @@
 		}
 	}
 
+	// --- Animation presets ---
+	function handleInsertPresetScenes(newScenes: import('./types').OledScene[]) {
+		scenes = [...scenes, ...newScenes];
+		activeSceneId = newScenes[0].id;
+		pixelVersion++;
+		showPresets = false;
+		addToast(`Inserted ${newScenes.length} animation scenes`, 'success', 2000);
+	}
+
 	// --- Keyboard shortcuts ---
 	function handleKeydown(e: KeyboardEvent) {
 		if ((e.target as HTMLElement)?.tagName === 'INPUT' || (e.target as HTMLElement)?.tagName === 'SELECT') return;
@@ -296,6 +311,27 @@
 			>
 				Export
 			</button>
+			<span class="mx-1 text-zinc-700">|</span>
+			<button
+				class="rounded px-3 py-1 text-xs text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
+				onclick={() => (showPresets = true)}
+			>
+				Presets
+			</button>
+			<button
+				class="rounded px-3 py-1 text-xs text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
+				onclick={() => (showFontEditor = true)}
+			>
+				Fonts
+			</button>
+			<button
+				class="rounded px-3 py-1 text-xs {showSequencer
+					? 'bg-emerald-600/20 text-emerald-400'
+					: 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'}"
+				onclick={() => (showSequencer = !showSequencer)}
+			>
+				Sequencer
+			</button>
 		</div>
 
 		<div class="flex items-center gap-2 text-xs text-zinc-600">
@@ -372,13 +408,21 @@
 				/>
 			</div>
 
-			<!-- Export panel (right sidebar) -->
+			<!-- Right sidebar panels -->
 			{#if showExport}
 				<div class="w-80 shrink-0 overflow-y-auto border-l border-zinc-800 p-3">
 					<ExportPanel
 						{scenes}
 						{activeSceneId}
 						animation={animationConfig}
+					/>
+				</div>
+			{:else if showSequencer}
+				<div class="w-80 shrink-0 border-l border-zinc-800">
+					<SequencerPanel
+						{scenes}
+						animation={animationConfig}
+						onClose={() => (showSequencer = false)}
 					/>
 				</div>
 			{/if}
@@ -390,4 +434,15 @@
 	open={showImport}
 	onApply={handleImportApply}
 	onCancel={() => (showImport = false)}
+/>
+
+<AnimationPresetsModal
+	open={showPresets}
+	onInsert={handleInsertPresetScenes}
+	onCancel={() => (showPresets = false)}
+/>
+
+<FontEditor
+	open={showFontEditor}
+	onClose={() => (showFontEditor = false)}
 />

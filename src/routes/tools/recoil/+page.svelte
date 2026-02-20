@@ -3,6 +3,7 @@
     import ConfigPanel from './ConfigPanel.svelte';
     import PhasePanel from './PhasePanel.svelte';
     import OutputPanel from './OutputPanel.svelte';
+    import OledPreview from './OledPreview.svelte';
     import { addToast } from '$lib/stores/toast.svelte';
     import { goto } from '$app/navigation';
     import {
@@ -324,10 +325,10 @@
     <div class="flex items-center gap-4 border-b border-zinc-800 px-6 py-3">
         <a
             href="/"
-            class="flex items-center gap-1 text-sm text-zinc-400 hover:text-zinc-200"
+            class="flex items-center gap-1.5 text-sm text-zinc-400 hover:text-zinc-200"
         >
             <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                <path fill-rule="evenodd" d="M12.79 5.23a.75.75 0 01-.02 1.06L8.832 10l3.938 3.71a.75.75 0 11-1.04 1.08l-4.5-4.25a.75.75 0 010-1.08l4.5-4.25a.75.75 0 011.06.02z" clip-rule="evenodd" />
+                <path fill-rule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clip-rule="evenodd" />
             </svg>
             Back
         </a>
@@ -387,6 +388,8 @@
                 output={outputString}
                 onCopy={handleCopy}
             />
+
+            <OledPreview {points} {canvasCenter} />
 
             {#if transferValues}
                 <div class="rounded-lg border border-zinc-800 bg-zinc-900 p-3">

@@ -2,6 +2,7 @@
 	import { exportComboGPC, exportModuleTOML } from './export';
 	import type { ComboProject, ModuleExportConfig } from './types';
 	import { addToast } from '$lib/stores/toast.svelte';
+	import MiniMonaco from '$lib/components/editor/MiniMonaco.svelte';
 	import { saveUserModule, listModules } from '$lib/tauri/commands';
 	import { getSettings } from '$lib/stores/settings.svelte';
 	import { getGameStore } from '$lib/stores/game.svelte';
@@ -243,11 +244,13 @@
 				Copy
 			</button>
 		</div>
-		<textarea
-			readonly
-			value={tab === 'gpc' ? gpcOutput : tomlOutput}
-			class="flex-1 resize-none rounded border border-zinc-700 bg-zinc-900 p-2 font-mono text-xs text-zinc-300 focus:outline-none"
-			spellcheck="false"
-		></textarea>
+		<div class="flex-1 overflow-hidden rounded border border-zinc-700">
+			<MiniMonaco
+				value={tab === 'gpc' ? gpcOutput : tomlOutput}
+				language={tab === 'gpc' ? 'gpc' : 'toml'}
+				readonly={true}
+				label={tab === 'gpc' ? 'GPC Output' : 'Module TOML'}
+			/>
+		</div>
 	</div>
 </div>

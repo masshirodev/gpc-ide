@@ -404,6 +404,38 @@ export async function obfuscateGpc(source: string, level: number): Promise<Obfus
 	return invoke<ObfuscateResult>('obfuscate_gpc', { source, level });
 }
 
+// === Flow Commands ===
+
+import type { FlowGraph, FlowChunk } from '$lib/types/flow';
+
+export async function saveFlowGraph(gamePath: string, flowGraph: FlowGraph): Promise<void> {
+	return invoke<void>('save_flow_graph', { gamePath, flowGraph });
+}
+
+export async function loadFlowGraph(gamePath: string): Promise<FlowGraph | null> {
+	return invoke<FlowGraph | null>('load_flow_graph', { gamePath });
+}
+
+export async function deleteFlowGraph(gamePath: string): Promise<void> {
+	return invoke<void>('delete_flow_graph', { gamePath });
+}
+
+export async function listChunks(workspacePaths: string[]): Promise<FlowChunk[]> {
+	return invoke<FlowChunk[]>('list_chunks', { workspacePaths });
+}
+
+export async function saveChunk(workspacePath: string, chunk: FlowChunk): Promise<void> {
+	return invoke<void>('save_chunk', { workspacePath, chunk });
+}
+
+export async function deleteChunk(workspacePaths: string[], chunkId: string): Promise<void> {
+	return invoke<void>('delete_chunk', { workspacePaths, chunkId });
+}
+
+export async function getChunk(workspacePaths: string[], chunkId: string): Promise<FlowChunk> {
+	return invoke<FlowChunk>('get_chunk', { workspacePaths, chunkId });
+}
+
 // === Opener Commands ===
 
 export async function openInDefaultApp(path: string): Promise<void> {

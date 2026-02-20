@@ -148,6 +148,52 @@
 			OLED Creator
 		</a>
 		<a
+			href="/tools/oled-widgets"
+			class="mb-1 flex items-center gap-2 rounded px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800"
+		>
+			<svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+				<path
+					d="M2 4a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1H3a1 1 0 01-1-1V4zm6 0a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1H9a1 1 0 01-1-1V4zm7-1a1 1 0 00-1 1v12a1 1 0 001 1h2a1 1 0 001-1V4a1 1 0 00-1-1h-2z"
+				/>
+			</svg>
+			OLED Widgets
+		</a>
+		<a
+			href="/tools/templates"
+			class="mb-1 flex items-center gap-2 rounded px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800"
+		>
+			<svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+				<path
+					d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zm0 6a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zm10 0a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z"
+				/>
+			</svg>
+			Templates
+		</a>
+		<a
+			href="/tools/string-to-array"
+			class="mb-1 flex items-center gap-2 rounded px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800"
+		>
+			<svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+				<path
+					d="M3 5a2 2 0 012-2h10a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V5zm4 1a1 1 0 00-1 1v1a1 1 0 002 0V7a1 1 0 00-1-1zm3 0a1 1 0 00-1 1v3a1 1 0 002 0V7a1 1 0 00-1-1zm3 0a1 1 0 00-1 1v5a1 1 0 002 0V7a1 1 0 00-1-1z"
+				/>
+			</svg>
+			String to Array
+		</a>
+		<a
+			href="/tools/flow"
+			class="mb-1 flex items-center gap-2 rounded px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800"
+		>
+			<svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+				<path
+					fill-rule="evenodd"
+					d="M2 5a2 2 0 012-2h4a2 2 0 012 2v2a2 2 0 01-2 2H6.414l2.293 2.293a1 1 0 01-1.414 1.414L5 10.414V13a2 2 0 01-2 2H2v-2h1V5zm10 0a2 2 0 012-2h4v2h-4v6.586l2.293-2.293a1 1 0 011.414 1.414L15 13.414V15a2 2 0 01-2 2h-2v-2h2V5z"
+					clip-rule="evenodd"
+				/>
+			</svg>
+			Flow Editor
+		</a>
+		<a
 			href="/tools/combo"
 			class="mb-1 flex items-center gap-2 rounded px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800"
 		>

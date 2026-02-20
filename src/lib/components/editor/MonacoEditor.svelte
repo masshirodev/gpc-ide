@@ -38,10 +38,10 @@
 		}
 	});
 
-	// Sync value prop changes for readonly editors
+	// Sync value prop changes into the editor
 	$effect(() => {
 		const v = value;
-		if (editor && readonly && editor.getValue() !== v) {
+		if (editor && editor.getValue() !== v) {
 			suppressChangeEvent = true;
 			editor.setValue(v);
 			suppressChangeEvent = false;
