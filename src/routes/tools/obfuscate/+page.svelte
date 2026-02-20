@@ -3,12 +3,21 @@
 	import type { ObfuscateResult } from '$lib/tauri/commands';
 	import { addToast } from '$lib/stores/toast.svelte';
 	import MonacoEditor from '$lib/components/editor/MonacoEditor.svelte';
+	import type * as Monaco from 'monaco-editor';
 
 	let source = $state('');
 	let result = $state<ObfuscateResult | null>(null);
 	let level = $state(2);
 	let loading = $state(false);
 	let loadedFileName = $state('');
+
+	let outputEditor: Monaco.editor.IStandaloneCodeEditor | undefined;
+
+	$effect(() => {
+		if (outputEditor && result) {
+			outputEditor.setValue(result.output);
+		}
+	});
 
 	const levelLabels: Record<number, { name: string; desc: string }> = {
 		1: { name: 'Strip & Minify', desc: 'Remove comments and collapse whitespace' },
@@ -275,7 +284,7 @@
 			</div>
 			<div class="min-h-0 flex-1">
 				{#if result}
-					<MonacoEditor value={result.output} readonly={true} />
+					<MonacoEditor value={result.output} readonly={true} onready={(e) => (outputEditor = e)} />
 				{:else}
 					<div class="flex h-full items-center justify-center text-zinc-600">
 						<div class="text-center">
