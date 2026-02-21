@@ -71,7 +71,7 @@
 			}
 		}
 		if (!flowStore.graph) {
-			newGraph('Untitled Flow');
+			newGraph(gameStore.selectedGame?.name || 'Untitled Flow', gameStore.selectedGame?.path);
 		}
 	});
 
@@ -154,18 +154,18 @@
 
 	function handleNewGraph() {
 		const name = gameStore.selectedGame?.name || 'Untitled Flow';
-		newGraph(name);
+		newGraph(name, gameStore.selectedGame?.path);
 		addToast('New flow graph created', 'success');
 	}
 
-	function handleExport() {
+	async function handleExport() {
 		if (!flowStore.graph) return;
 		try {
 			const gpcCode = generateFlowGpc(flowStore.graph);
-			navigator.clipboard.writeText(gpcCode);
+			await navigator.clipboard.writeText(gpcCode);
 			addToast('GPC code copied to clipboard', 'success');
 		} catch (e) {
-			addToast(`Failed to generate: ${e}`, 'error');
+			addToast(`Failed to export: ${e}`, 'error');
 		}
 	}
 

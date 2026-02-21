@@ -51,7 +51,7 @@ export function generateFlowGpc(graph: FlowGraph): string {
 	if (graph.globalVariables.length > 0) {
 		lines.push(`// Global flow variables`);
 		for (const v of graph.globalVariables) {
-			lines.push(`${v.type} ${v.name} = ${v.defaultValue};`);
+			lines.push(generateVarDeclaration(v));
 		}
 		lines.push(``);
 	}
@@ -63,7 +63,7 @@ export function generateFlowGpc(graph: FlowGraph): string {
 			lines.push(`// Variables for ${node.label}`);
 			for (const v of node.variables) {
 				if (!declaredVars.has(v.name)) {
-					lines.push(`${v.type} ${v.name} = ${v.defaultValue};`);
+					lines.push(generateVarDeclaration(v));
 					declaredVars.add(v.name);
 				}
 			}
@@ -197,6 +197,23 @@ export function generateFlowGpc(graph: FlowGraph): string {
 	lines.push(`}`);
 
 	return lines.join('\n');
+}
+
+function generateVarDeclaration(v: FlowVariable): string {
+	if (v.type === 'string') {
+		const size = v.arraySize ?? 32;
+		const defaultStr = typeof v.defaultValue === 'string' ? v.defaultValue : '';
+		if (defaultStr) {
+			// GPC strings are int8 arrays initialized with character codes
+			const chars = Array.from(defaultStr).map((c) => c.charCodeAt(0));
+			chars.push(0); // null terminator
+			// Pad to array size
+			while (chars.length < size) chars.push(0);
+			return `int8 ${v.name}[${size}] = { ${chars.slice(0, size).join(', ')} };`;
+		}
+		return `int8 ${v.name}[${size}];`;
+	}
+	return `${v.type} ${v.name} = ${v.defaultValue};`;
 }
 
 function sanitizeName(name: string): string {

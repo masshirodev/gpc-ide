@@ -307,7 +307,7 @@
 				class="rounded px-3 py-1 text-xs {showExport
 					? 'bg-emerald-600/20 text-emerald-400'
 					: 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'}"
-				onclick={() => (showExport = !showExport)}
+				onclick={() => { showExport = !showExport; if (showExport) showSequencer = false; }}
 			>
 				Export
 			</button>
@@ -328,7 +328,7 @@
 				class="rounded px-3 py-1 text-xs {showSequencer
 					? 'bg-emerald-600/20 text-emerald-400'
 					: 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'}"
-				onclick={() => (showSequencer = !showSequencer)}
+				onclick={() => { showSequencer = !showSequencer; if (showSequencer) showExport = false; }}
 			>
 				Sequencer
 			</button>

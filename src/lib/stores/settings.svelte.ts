@@ -6,6 +6,7 @@ export interface Snippet {
     description: string;
     code: string;
     tags: string[];
+    creator?: string;
     createdAt: number;
 }
 

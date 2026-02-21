@@ -40,9 +40,9 @@
 			case 'button_press':
 				return edge.condition.button || 'Press';
 			case 'button_hold':
-				return `Hold ${edge.condition.button || '?'} ${edge.condition.timeoutMs || 0}ms`;
+				return `Hold ${edge.condition.button || '?'} ${edge.condition.timeoutMs ?? 3000}ms`;
 			case 'timeout':
-				return `${(edge.condition.timeoutMs || 0) / 1000}s`;
+				return `${(edge.condition.timeoutMs ?? 0) / 1000}s`;
 			case 'variable':
 				return `${edge.condition.variable || '?'} ${edge.condition.comparison || '=='} ${edge.condition.value ?? 0}`;
 			case 'custom':

@@ -4,13 +4,16 @@ import type { SerializedScene } from '../../routes/tools/oled/types';
 
 export type FlowNodeType = 'intro' | 'home' | 'menu' | 'submenu' | 'custom' | 'screensaver';
 
+export type FlowVariableType = 'int' | 'int8' | 'int16' | 'int32' | 'string';
+
 export interface FlowVariable {
 	name: string;
-	type: 'int' | 'int8' | 'int16' | 'int32';
-	defaultValue: number;
+	type: FlowVariableType;
+	defaultValue: number | string;
 	persist: boolean;
 	min?: number;
 	max?: number;
+	arraySize?: number;
 }
 
 export interface WidgetPlacement {
@@ -118,6 +121,7 @@ export interface FlowChunk {
 	description: string;
 	category: string;
 	tags: string[];
+	creator?: string;
 	nodeTemplate: Partial<FlowNode>;
 	edgeTemplates: ChunkEdgeTemplate[];
 	parameters: ChunkParameter[];

@@ -94,8 +94,9 @@ export function canRedo(): boolean {
 
 // ==================== Graph Lifecycle ====================
 
-export function newGraph(name: string) {
+export function newGraph(name: string, gamePath?: string) {
 	state.graph = createEmptyFlowGraph(name);
+	state.gamePath = gamePath ?? null;
 	state.selectedNodeId = null;
 	state.selectedEdgeId = null;
 	state.canvas = { panX: 0, panY: 0, zoom: 1 };

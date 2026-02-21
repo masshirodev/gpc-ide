@@ -224,6 +224,9 @@
 							<div>Size: {selectedWidget.width} x {selectedWidget.height} px</div>
 							<div>Category: {CATEGORY_LABELS[selectedWidget.category]}</div>
 							<div>ID: {selectedWidget.id}</div>
+							{#if selectedWidget.creator}
+								<div>Created by: {selectedWidget.creator}</div>
+							{/if}
 						</div>
 					</div>
 

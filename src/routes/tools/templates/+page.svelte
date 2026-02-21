@@ -104,7 +104,10 @@
 						onclick={() => selectTemplate(t)}
 					>
 						<div class="mb-1 text-sm font-medium text-zinc-200">{t.name}</div>
-						<div class="mb-2 text-xs text-zinc-500">{t.description}</div>
+						<div class="{t.creator ? 'mb-1' : 'mb-2'} text-xs text-zinc-500">{t.description}</div>
+						{#if t.creator}
+							<div class="mb-2 text-[10px] text-zinc-600">Originally made by {t.creator}</div>
+						{/if}
 						<div class="flex gap-1">
 							<span
 								class="rounded bg-zinc-700 px-1.5 py-0.5 text-xs text-zinc-400"

@@ -192,6 +192,9 @@
 						{#if snippet.description}
 							<span class="truncate text-xs text-zinc-500">{snippet.description}</span>
 						{/if}
+						{#if snippet.creator}
+							<span class="text-[10px] text-zinc-600">Originally made by {snippet.creator}</span>
+						{/if}
 						{#if snippet.tags.length > 0}
 							<div class="flex gap-1">
 								{#each snippet.tags as tag}

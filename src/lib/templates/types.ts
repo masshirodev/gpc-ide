@@ -19,6 +19,7 @@ export interface ScriptTemplate {
 	description: string;
 	category: 'state-machine' | 'menu' | 'persistence' | 'utility' | 'display';
 	tags: string[];
+	creator?: string;
 	params: TemplateParam[];
 	outputType: TemplateOutputType;
 	generate: (params: Record<string, unknown>) => TemplateOutput;

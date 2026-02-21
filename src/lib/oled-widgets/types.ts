@@ -13,6 +13,7 @@ export interface OledWidgetDef {
 	name: string;
 	category: 'bar' | 'indicator' | 'diagnostic' | 'decorative';
 	description: string;
+	creator?: string;
 	width: number;
 	height: number;
 	params: WidgetParam[];

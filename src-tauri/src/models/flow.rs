@@ -93,15 +93,17 @@ pub struct FlowCondition {
 #[serde(rename_all = "camelCase")]
 pub struct FlowVariable {
     pub name: String,
-    pub r#type: String, // int, int8, int16, int32
+    pub r#type: String, // int, int8, int16, int32, string
     #[serde(default)]
-    pub default_value: i32,
+    pub default_value: serde_json::Value, // number or string
     #[serde(default)]
     pub persist: bool,
     #[serde(default)]
     pub min: Option<i32>,
     #[serde(default)]
     pub max: Option<i32>,
+    #[serde(default)]
+    pub array_size: Option<u32>,
 }
 
 /// OLED scene data (matches frontend SerializedScene)
@@ -220,6 +222,8 @@ pub struct FlowChunk {
     pub category: String,
     #[serde(default)]
     pub tags: Vec<String>,
+    #[serde(default)]
+    pub creator: Option<String>,
     pub node_template: serde_json::Value, // Partial FlowNode as JSON
     #[serde(default)]
     pub edge_templates: Vec<ChunkEdgeTemplate>,

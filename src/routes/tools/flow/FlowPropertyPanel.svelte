@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { FlowNode, FlowEdge, FlowConditionType, FlowNodeType, FlowVariable } from '$lib/types/flow';
+	import type { FlowNode, FlowEdge, FlowConditionType, FlowNodeType, FlowVariable, FlowVariableType } from '$lib/types/flow';
 	import type { WidgetPlacement } from '$lib/oled-widgets/types';
 	import { NODE_LABELS, NODE_COLORS } from '$lib/types/flow';
 	import { listWidgets, getWidget, CATEGORY_LABELS } from '$lib/oled-widgets/registry';
@@ -112,12 +112,13 @@
 
 	function commitEdge() {
 		if (!selectedEdge) return;
+		const ctype = selectedEdge.condition.type;
 		onUpdateEdge(selectedEdge.id, {
 			label: editEdgeLabel,
 			condition: {
 				...selectedEdge.condition,
 				button: editEdgeButton || undefined,
-				timeoutMs: editEdgeTimeoutMs || undefined,
+				timeoutMs: ctype === 'button_hold' || ctype === 'timeout' ? editEdgeTimeoutMs : undefined,
 				customCode: editEdgeCustomCode || undefined,
 				variable: editEdgeVariable || undefined,
 				comparison: (editEdgeComparison as FlowEdge['condition']['comparison']) || undefined,
@@ -149,7 +150,18 @@
 	function updateVariable(index: number, updates: Partial<FlowVariable>) {
 		if (!selectedNode) return;
 		const vars = [...selectedNode.variables];
-		vars[index] = { ...vars[index], ...updates };
+		const current = vars[index];
+		// Reset default value when switching between string and numeric types
+		if (updates.type && updates.type !== current.type) {
+			if (updates.type === 'string' && typeof current.defaultValue !== 'string') {
+				updates.defaultValue = '';
+				updates.arraySize = 32;
+			} else if (updates.type !== 'string' && typeof current.defaultValue === 'string') {
+				updates.defaultValue = 0;
+				updates.arraySize = undefined;
+			}
+		}
+		vars[index] = { ...current, ...updates };
 		onUpdateNode(selectedNode.id, { variables: vars });
 	}
 
@@ -361,12 +373,13 @@
 						<select
 							class="rounded border border-zinc-700 bg-zinc-800 px-1 py-0.5 text-xs text-zinc-300 focus:border-emerald-500 focus:outline-none"
 							value={variable.type}
-							onchange={(e) => updateVariable(i, { type: (e.target as HTMLSelectElement).value as FlowVariable['type'] })}
+							onchange={(e) => updateVariable(i, { type: (e.target as HTMLSelectElement).value as FlowVariableType })}
 						>
 							<option value="int">int</option>
 							<option value="int8">int8</option>
 							<option value="int16">int16</option>
 							<option value="int32">int32</option>
+							<option value="string">string</option>
 						</select>
 						<button
 							class="text-zinc-500 hover:text-red-400"
@@ -377,6 +390,26 @@
 							</svg>
 						</button>
 					</div>
+					{#if variable.type === 'string'}
+						<div class="mb-1 ml-1 flex items-center gap-1">
+							<input
+								type="text"
+								class="flex-1 rounded border border-zinc-700 bg-zinc-800 px-1.5 py-0.5 text-xs text-zinc-200 focus:border-emerald-500 focus:outline-none"
+								value={typeof variable.defaultValue === 'string' ? variable.defaultValue : ''}
+								placeholder="Default value"
+								onchange={(e) => updateVariable(i, { defaultValue: (e.target as HTMLInputElement).value })}
+							/>
+							<input
+								type="number"
+								class="w-14 rounded border border-zinc-700 bg-zinc-800 px-1 py-0.5 text-xs text-zinc-200 focus:border-emerald-500 focus:outline-none"
+								value={variable.arraySize ?? 32}
+								title="Array size"
+								min="1"
+								max="256"
+								onchange={(e) => updateVariable(i, { arraySize: parseInt((e.target as HTMLInputElement).value) || 32 })}
+							/>
+						</div>
+					{/if}
 				{/each}
 			</div>
 
@@ -432,9 +465,12 @@
 					class="w-full rounded border border-zinc-700 bg-zinc-800 px-2 py-1 text-sm text-zinc-200 focus:border-emerald-500 focus:outline-none"
 					value={selectedEdge.condition.type}
 					onchange={(e) => {
-						onUpdateEdge(selectedEdge!.id, {
-							condition: { ...selectedEdge!.condition, type: (e.target as HTMLSelectElement).value as FlowConditionType },
-						});
+						const newType = (e.target as HTMLSelectElement).value as FlowConditionType;
+						const cond = { ...selectedEdge!.condition, type: newType };
+						if ((newType === 'button_hold' || newType === 'timeout') && !cond.timeoutMs) {
+							cond.timeoutMs = 3000;
+						}
+						onUpdateEdge(selectedEdge!.id, { condition: cond });
 					}}
 				>
 					{#each conditionTypes as ct}

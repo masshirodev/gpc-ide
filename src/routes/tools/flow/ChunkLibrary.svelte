@@ -102,6 +102,9 @@
 							>
 								<span class="text-xs text-zinc-300">{chunk.name}</span>
 								<span class="line-clamp-1 text-[10px] text-zinc-600">{chunk.description}</span>
+								{#if chunk.creator}
+									<span class="text-[10px] text-zinc-700">By {chunk.creator}</span>
+								{/if}
 							</button>
 						{/each}
 					</div>
