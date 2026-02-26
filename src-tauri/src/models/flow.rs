@@ -1,13 +1,29 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-/// Complete flow graph definition stored as flow.json in game directories
+/// Multi-flow project container stored as flows.json in game directories
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FlowProject {
+    pub version: u32,
+    pub flows: Vec<FlowGraph>,
+    #[serde(default)]
+    pub shared_variables: Vec<FlowVariable>,
+    #[serde(default)]
+    pub shared_code: String,
+    #[serde(default)]
+    pub updated_at: u64,
+}
+
+/// Complete flow graph definition
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FlowGraph {
     pub id: String,
     pub name: String,
     pub version: u32,
+    #[serde(default = "default_menu")]
+    pub flow_type: String, // "menu" | "gameplay"
     pub nodes: Vec<FlowNode>,
     pub edges: Vec<FlowEdge>,
     #[serde(default)]
@@ -47,6 +63,68 @@ pub struct FlowNode {
     pub on_exit: String,
     #[serde(default)]
     pub chunk_ref: Option<String>,
+    // v2: sub-node system
+    #[serde(default)]
+    pub sub_nodes: Vec<SubNode>,
+    #[serde(default)]
+    pub stack_offset_x: f64,
+    #[serde(default)]
+    pub stack_offset_y: f64,
+    #[serde(default)]
+    pub visible_count: Option<u32>,
+    #[serde(default)]
+    pub scroll_mode: Option<String>,
+    #[serde(default)]
+    pub back_button: Option<String>,
+    #[serde(default)]
+    pub module_data: Option<ModuleNodeData>,
+}
+
+/// Module-specific data for gameplay flow nodes
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModuleNodeData {
+    pub module_id: String,
+    pub module_name: String,
+    #[serde(default)]
+    pub trigger_condition: String,
+    #[serde(default)]
+    pub enable_variable: String,
+    // Code sections
+    #[serde(default)]
+    pub init_code: String,
+    #[serde(default)]
+    pub main_code: String,
+    #[serde(default)]
+    pub functions_code: String,
+    #[serde(default)]
+    pub combo_code: String,
+    /// @deprecated Use main_code instead. Kept for migration.
+    #[serde(default)]
+    pub trigger_code: Option<String>,
+    #[serde(default)]
+    pub options: Vec<ModuleNodeOption>,
+    #[serde(default)]
+    pub extra_vars: HashMap<String, String>,
+    #[serde(default)]
+    pub conflicts: Vec<String>,
+    #[serde(default)]
+    pub needs_weapondata: bool,
+}
+
+/// A configurable option on a module node
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModuleNodeOption {
+    pub name: String,
+    pub variable: String,
+    pub r#type: String, // "toggle" | "value"
+    #[serde(default)]
+    pub default_value: i32,
+    #[serde(default)]
+    pub min: Option<i32>,
+    #[serde(default)]
+    pub max: Option<i32>,
 }
 
 /// An edge connecting two nodes representing a transition
@@ -63,6 +141,15 @@ pub struct FlowEdge {
     #[serde(default)]
     pub label: String,
     pub condition: FlowCondition,
+    // v2: sub-node level edges
+    #[serde(default)]
+    pub source_sub_node_id: Option<String>,
+    #[serde(default)]
+    pub target_sub_node_id: Option<String>,
+}
+
+fn default_menu() -> String {
+    "menu".to_string()
 }
 
 fn default_port() -> String {
@@ -126,6 +213,38 @@ pub struct WidgetPlacement {
     pub config: HashMap<String, serde_json::Value>,
     #[serde(default)]
     pub bound_variable: Option<String>,
+}
+
+/// A sub-node within a flow node (v2)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SubNode {
+    pub id: String,
+    pub r#type: String, // header, menu-item, toggle-item, value-item, scroll-bar, text-line, bar, indicator, pixel-art, separator, custom
+    #[serde(default)]
+    pub label: String,
+    #[serde(default = "default_stack")]
+    pub position: String, // stack | absolute
+    #[serde(default)]
+    pub x: Option<f64>,
+    #[serde(default)]
+    pub y: Option<f64>,
+    #[serde(default)]
+    pub order: u32,
+    #[serde(default)]
+    pub interactive: bool,
+    #[serde(default)]
+    pub config: HashMap<String, serde_json::Value>,
+    #[serde(default)]
+    pub render_code: Option<String>,
+    #[serde(default)]
+    pub interact_code: Option<String>,
+    #[serde(default)]
+    pub bound_variable: Option<String>,
+}
+
+fn default_stack() -> String {
+    "stack".to_string()
 }
 
 /// Position on the canvas
@@ -242,6 +361,8 @@ pub struct ChunkEdgeTemplate {
     pub label: String,
     pub condition: FlowCondition,
     pub direction: String, // "outgoing" | "incoming"
+    #[serde(default)]
+    pub source_sub_node_id: Option<String>,
 }
 
 /// Configurable parameter for a chunk

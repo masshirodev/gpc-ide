@@ -2,6 +2,7 @@ import type { SerializedScene } from '../../routes/tools/oled/types';
 
 export interface FlowOledTransfer {
 	nodeId: string;
+	subNodeId?: string;
 	scene: SerializedScene;
 	returnTo: string | null; // game path
 }

@@ -406,7 +406,15 @@ export async function obfuscateGpc(source: string, level: number): Promise<Obfus
 
 // === Flow Commands ===
 
-import type { FlowGraph, FlowChunk } from '$lib/types/flow';
+import type { FlowGraph, FlowProject, FlowChunk } from '$lib/types/flow';
+
+export async function saveFlowProject(gamePath: string, flowProject: FlowProject): Promise<void> {
+	return invoke<void>('save_flow_project', { gamePath, flowProject });
+}
+
+export async function loadFlowProject(gamePath: string): Promise<FlowProject | null> {
+	return invoke<FlowProject | null>('load_flow_project', { gamePath });
+}
 
 export async function saveFlowGraph(gamePath: string, flowGraph: FlowGraph): Promise<void> {
 	return invoke<void>('save_flow_graph', { gamePath, flowGraph });

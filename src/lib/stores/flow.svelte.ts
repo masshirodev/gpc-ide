@@ -5,8 +5,21 @@ import type {
 	FlowCondition,
 	FlowVariable,
 	FlowNodeType,
+	FlowType,
+	FlowProject,
+	SubNode,
+	SubNodeType,
 } from '$lib/types/flow';
-import { createEmptyFlowGraph, createFlowNode, createFlowEdge } from '$lib/types/flow';
+import {
+	createEmptyFlowGraph,
+	createEmptyFlowProject,
+	createFlowNode,
+	createFlowEdge,
+	createSubNode,
+} from '$lib/types/flow';
+import { migrateFlowGraphV1toV2, ensureFlowProjectFlows } from '$lib/flow/migration';
+import { syncModuleToggles } from '$lib/flow/auto-link';
+import { getSubNodeDef } from '$lib/flow/subnodes/registry';
 
 // ==================== Canvas State ====================
 
@@ -19,10 +32,13 @@ interface CanvasState {
 // ==================== Editor State ====================
 
 interface FlowEditorState {
-	graph: FlowGraph | null;
+	project: FlowProject | null;
+	activeFlowType: FlowType;
+	graph: FlowGraph | null; // working copy of the active flow
 	gamePath: string | null;
 	selectedNodeId: string | null;
 	selectedEdgeId: string | null;
+	selectedSubNodeId: string | null;
 	canvas: CanvasState;
 	dirty: boolean;
 	connecting: ConnectingState | null;
@@ -31,6 +47,7 @@ interface FlowEditorState {
 interface ConnectingState {
 	sourceNodeId: string;
 	sourcePort: string;
+	sourceSubNodeId?: string | null;
 	mouseX: number;
 	mouseY: number;
 }
@@ -42,31 +59,42 @@ interface UndoEntry {
 	description: string;
 }
 
-let undoStack = $state<UndoEntry[]>([]);
-let redoStack = $state<UndoEntry[]>([]);
+let undoStacks = $state<Record<FlowType, UndoEntry[]>>({ menu: [], gameplay: [] });
+let redoStacks = $state<Record<FlowType, UndoEntry[]>>({ menu: [], gameplay: [] });
+let canvasStates = $state<Record<FlowType, CanvasState>>({
+	menu: { panX: 0, panY: 0, zoom: 1 },
+	gameplay: { panX: 0, panY: 0, zoom: 1 },
+});
 
 const MAX_UNDO = 50;
 
 function pushUndo(description: string) {
 	if (!state.graph) return;
-	undoStack = [
-		...undoStack.slice(-(MAX_UNDO - 1)),
+	const ft = state.activeFlowType;
+	undoStacks[ft] = [
+		...undoStacks[ft].slice(-(MAX_UNDO - 1)),
 		{ graph: JSON.stringify(state.graph), description },
 	];
-	redoStack = [];
+	redoStacks[ft] = [];
 }
 
 // ==================== State ====================
 
 let state = $state<FlowEditorState>({
+	project: null,
+	activeFlowType: 'menu',
 	graph: null,
 	gamePath: null,
 	selectedNodeId: null,
 	selectedEdgeId: null,
+	selectedSubNodeId: null,
 	canvas: { panX: 0, panY: 0, zoom: 1 },
 	dirty: false,
 	connecting: null,
 });
+
+// Track which nodes are expanded (showing all sub-nodes beyond max cap)
+let expandedNodes = $state<Set<string>>(new Set());
 
 // ==================== Getters ====================
 
@@ -85,49 +113,131 @@ export function getSelectedEdge(): FlowEdge | null {
 }
 
 export function canUndo(): boolean {
-	return undoStack.length > 0;
+	return undoStacks[state.activeFlowType].length > 0;
 }
 
 export function canRedo(): boolean {
-	return redoStack.length > 0;
+	return redoStacks[state.activeFlowType].length > 0;
+}
+
+// ==================== Internal Helpers ====================
+
+/** Sync current working graph back into the project's flows array */
+function syncGraphToProject() {
+	if (!state.project || !state.graph) return;
+	state.project.flows = state.project.flows.map((f) =>
+		f.flowType === state.activeFlowType ? state.graph! : f
+	);
+	state.project.updatedAt = Date.now();
+}
+
+/** Load the active flow from the project into state.graph */
+function loadActiveFlow() {
+	if (!state.project) {
+		state.graph = null;
+		return;
+	}
+	const flow = state.project.flows.find((f) => f.flowType === state.activeFlowType);
+	state.graph = flow ?? null;
+	state.canvas = canvasStates[state.activeFlowType];
+}
+
+function resetAllStacks() {
+	undoStacks = { menu: [], gameplay: [] };
+	redoStacks = { menu: [], gameplay: [] };
+	canvasStates = {
+		menu: { panX: 0, panY: 0, zoom: 1 },
+		gameplay: { panX: 0, panY: 0, zoom: 1 },
+	};
 }
 
 // ==================== Graph Lifecycle ====================
 
 export function newGraph(name: string, gamePath?: string) {
-	state.graph = createEmptyFlowGraph(name);
+	const project = createEmptyFlowProject();
+	state.project = project;
+	state.activeFlowType = 'menu';
 	state.gamePath = gamePath ?? null;
 	state.selectedNodeId = null;
 	state.selectedEdgeId = null;
-	state.canvas = { panX: 0, panY: 0, zoom: 1 };
+	state.selectedSubNodeId = null;
 	state.dirty = true;
-	undoStack = [];
-	redoStack = [];
+	resetAllStacks();
+	loadActiveFlow();
+	expandedNodes = new Set();
 }
 
 export function loadGraph(graph: FlowGraph, gamePath: string) {
-	state.graph = graph;
+	// Legacy: single graph load — wrap in project
+	const migrated = migrateFlowGraphV1toV2(graph);
+	if (!migrated.flowType) (migrated as FlowGraph).flowType = 'menu';
+	const project: FlowProject = ensureFlowProjectFlows({
+		version: 1,
+		flows: [migrated],
+		sharedVariables: [],
+		sharedCode: '',
+		updatedAt: Date.now(),
+	});
+	loadProject(project, gamePath);
+}
+
+export function loadProject(project: FlowProject, gamePath: string) {
+	const ensured = ensureFlowProjectFlows(project);
+	// Migrate each flow graph to v2
+	ensured.flows = ensured.flows.map((f) => migrateFlowGraphV1toV2(f));
+	state.project = ensured;
+	state.activeFlowType = 'menu';
 	state.gamePath = gamePath;
 	state.selectedNodeId = null;
 	state.selectedEdgeId = null;
-	state.canvas = { panX: 0, panY: 0, zoom: 1 };
+	state.selectedSubNodeId = null;
 	state.dirty = false;
-	undoStack = [];
-	redoStack = [];
+	resetAllStacks();
+	loadActiveFlow();
+	expandedNodes = new Set();
 }
 
 export function closeGraph() {
+	state.project = null;
 	state.graph = null;
 	state.gamePath = null;
 	state.selectedNodeId = null;
 	state.selectedEdgeId = null;
+	state.selectedSubNodeId = null;
 	state.dirty = false;
-	undoStack = [];
-	redoStack = [];
+	resetAllStacks();
+	expandedNodes = new Set();
 }
 
 export function markClean() {
 	state.dirty = false;
+}
+
+// ==================== Flow Switching ====================
+
+export function switchFlow(flowType: FlowType) {
+	if (flowType === state.activeFlowType) return;
+	// Save current graph and canvas state back to project
+	syncGraphToProject();
+	canvasStates[state.activeFlowType] = { ...state.canvas };
+	// Switch
+	state.activeFlowType = flowType;
+	state.selectedNodeId = null;
+	state.selectedEdgeId = null;
+	state.selectedSubNodeId = null;
+	state.connecting = null;
+	loadActiveFlow();
+	expandedNodes = new Set();
+}
+
+/** Get the project with the current working graph synced in */
+export function getSyncedProject(): FlowProject | null {
+	if (!state.project) return null;
+	syncGraphToProject();
+	syncModuleToggles(state.project);
+	// Reload active flow in case auto-link modified it
+	loadActiveFlow();
+	return state.project;
 }
 
 // ==================== Node Operations ====================
@@ -208,6 +318,8 @@ export function duplicateNode(nodeId: string): FlowNode | null {
 		position: { x: source.position.x + 40, y: source.position.y + 40 },
 		isInitialState: false,
 	};
+	// Regenerate sub-node IDs in the clone
+	node.subNodes = node.subNodes.map((sn) => ({ ...sn, id: crypto.randomUUID() }));
 	state.graph.nodes = [...state.graph.nodes, node];
 	state.graph.updatedAt = Date.now();
 	state.dirty = true;
@@ -220,17 +332,23 @@ export function addEdge(
 	sourceNodeId: string,
 	targetNodeId: string,
 	label: string,
-	condition: FlowCondition
+	condition: FlowCondition,
+	sourceSubNodeId?: string | null
 ): FlowEdge | null {
 	if (!state.graph) return null;
-	if (sourceNodeId === targetNodeId) return null;
-	// Don't allow duplicate edges
+	// Allow same source/target only when sourceSubNodeId is set (sub-node → parent)
+	if (sourceNodeId === targetNodeId && !sourceSubNodeId) return null;
+	// Don't allow duplicate edges (same source node + sub-node + target)
 	const exists = state.graph.edges.some(
-		(e) => e.sourceNodeId === sourceNodeId && e.targetNodeId === targetNodeId
+		(e) =>
+			e.sourceNodeId === sourceNodeId &&
+			e.targetNodeId === targetNodeId &&
+			(e.sourceSubNodeId ?? null) === (sourceSubNodeId ?? null)
 	);
 	if (exists) return null;
 	pushUndo('Add edge');
 	const edge = createFlowEdge(sourceNodeId, targetNodeId, label, condition);
+	edge.sourceSubNodeId = sourceSubNodeId ?? null;
 	state.graph.edges = [...state.graph.edges, edge];
 	state.graph.updatedAt = Date.now();
 	state.dirty = true;
@@ -261,16 +379,19 @@ export function updateEdge(edgeId: string, updates: Partial<FlowEdge>) {
 export function selectNode(nodeId: string | null) {
 	state.selectedNodeId = nodeId;
 	state.selectedEdgeId = null;
+	state.selectedSubNodeId = null;
 }
 
 export function selectEdge(edgeId: string | null) {
 	state.selectedEdgeId = edgeId;
 	state.selectedNodeId = null;
+	state.selectedSubNodeId = null;
 }
 
 export function clearSelection() {
 	state.selectedNodeId = null;
 	state.selectedEdgeId = null;
+	state.selectedSubNodeId = null;
 }
 
 // ==================== Canvas ====================
@@ -302,8 +423,14 @@ export function zoomToFit() {
 
 // ==================== Connecting ====================
 
-export function startConnecting(sourceNodeId: string, sourcePort: string, mx: number, my: number) {
-	state.connecting = { sourceNodeId, sourcePort, mouseX: mx, mouseY: my };
+export function startConnecting(
+	sourceNodeId: string,
+	sourcePort: string,
+	mx: number,
+	my: number,
+	sourceSubNodeId?: string | null
+) {
+	state.connecting = { sourceNodeId, sourcePort, sourceSubNodeId, mouseX: mx, mouseY: my };
 }
 
 export function updateConnecting(mx: number, my: number) {
@@ -314,10 +441,13 @@ export function updateConnecting(mx: number, my: number) {
 
 export function finishConnecting(targetNodeId: string | null) {
 	if (state.connecting && targetNodeId) {
-		addEdge(state.connecting.sourceNodeId, targetNodeId, '', {
-			type: 'button_press',
-			button: 'CONFIRM_BTN',
-		});
+		addEdge(
+			state.connecting.sourceNodeId,
+			targetNodeId,
+			'',
+			{ type: 'button_press', button: 'PS5_CROSS' },
+			state.connecting.sourceSubNodeId
+		);
 	}
 	state.connecting = null;
 }
@@ -329,19 +459,21 @@ export function cancelConnecting() {
 // ==================== Undo/Redo ====================
 
 export function undo() {
-	if (undoStack.length === 0 || !state.graph) return;
-	const entry = undoStack[undoStack.length - 1];
-	undoStack = undoStack.slice(0, -1);
-	redoStack = [...redoStack, { graph: JSON.stringify(state.graph), description: entry.description }];
+	const ft = state.activeFlowType;
+	if (undoStacks[ft].length === 0 || !state.graph) return;
+	const entry = undoStacks[ft][undoStacks[ft].length - 1];
+	undoStacks[ft] = undoStacks[ft].slice(0, -1);
+	redoStacks[ft] = [...redoStacks[ft], { graph: JSON.stringify(state.graph), description: entry.description }];
 	state.graph = JSON.parse(entry.graph);
 	state.dirty = true;
 }
 
 export function redo() {
-	if (redoStack.length === 0 || !state.graph) return;
-	const entry = redoStack[redoStack.length - 1];
-	redoStack = redoStack.slice(0, -1);
-	undoStack = [...undoStack, { graph: JSON.stringify(state.graph), description: entry.description }];
+	const ft = state.activeFlowType;
+	if (redoStacks[ft].length === 0 || !state.graph) return;
+	const entry = redoStacks[ft][redoStacks[ft].length - 1];
+	redoStacks[ft] = redoStacks[ft].slice(0, -1);
+	undoStacks[ft] = [...undoStacks[ft], { graph: JSON.stringify(state.graph), description: entry.description }];
 	state.graph = JSON.parse(entry.graph);
 	state.dirty = true;
 }
@@ -370,4 +502,133 @@ export function updateGlobalCode(code: string) {
 	state.graph.globalCode = code;
 	state.graph.updatedAt = Date.now();
 	state.dirty = true;
+}
+
+// ==================== Sub-Node Selection ====================
+
+export function selectSubNode(nodeId: string, subNodeId: string | null) {
+	state.selectedNodeId = nodeId;
+	state.selectedSubNodeId = subNodeId;
+	state.selectedEdgeId = null;
+}
+
+export function getSelectedSubNode(): SubNode | null {
+	if (!state.graph || !state.selectedNodeId || !state.selectedSubNodeId) return null;
+	const node = state.graph.nodes.find((n) => n.id === state.selectedNodeId);
+	return node?.subNodes.find((s) => s.id === state.selectedSubNodeId) ?? null;
+}
+
+// ==================== Sub-Node CRUD ====================
+
+export function addSubNode(nodeId: string, type: SubNodeType, label: string): SubNode | null {
+	if (!state.graph) return null;
+	const node = state.graph.nodes.find((n) => n.id === nodeId);
+	if (!node) return null;
+
+	const def = getSubNodeDef(type);
+	const interactive = def?.interactive ?? false;
+	const order = node.subNodes.length;
+
+	pushUndo('Add sub-node');
+	const sn = createSubNode(type, label, order, interactive);
+	sn.config = def?.defaultConfig ? { ...def.defaultConfig, label } : { label };
+
+	// Auto-create variable for toggle/value items
+	if ((type === 'toggle-item' || type === 'value-item') && node) {
+		const varName = label.toLowerCase().replace(/[^a-z0-9_]/g, '_').replace(/_+/g, '_');
+		const exists = node.variables.some((v) => v.name === varName) ||
+			state.graph!.globalVariables.some((v) => v.name === varName);
+		if (!exists) {
+			node.variables = [
+				...node.variables,
+				{
+					name: varName,
+					type: type === 'toggle-item' ? 'int' : 'int',
+					defaultValue: type === 'toggle-item' ? 0 : 0,
+					persist: false,
+					min: type === 'value-item' ? 0 : undefined,
+					max: type === 'value-item' ? 100 : undefined,
+				},
+			];
+		}
+		sn.boundVariable = varName;
+	}
+
+	node.subNodes = [...node.subNodes, sn];
+	state.graph.nodes = state.graph.nodes.map((n) => (n.id === nodeId ? { ...node } : n));
+	state.graph.updatedAt = Date.now();
+	state.dirty = true;
+	return sn;
+}
+
+export function removeSubNode(nodeId: string, subNodeId: string) {
+	if (!state.graph) return;
+	const node = state.graph.nodes.find((n) => n.id === nodeId);
+	if (!node) return;
+
+	pushUndo('Remove sub-node');
+
+	// Remove edges that reference this sub-node
+	state.graph.edges = state.graph.edges.filter(
+		(e) => e.sourceSubNodeId !== subNodeId && e.targetSubNodeId !== subNodeId
+	);
+
+	// Remove the sub-node and reorder remaining
+	const filtered = node.subNodes.filter((sn) => sn.id !== subNodeId);
+	node.subNodes = filtered.map((sn, i) => ({ ...sn, order: i }));
+
+	state.graph.nodes = state.graph.nodes.map((n) => (n.id === nodeId ? { ...node } : n));
+
+	if (state.selectedSubNodeId === subNodeId) state.selectedSubNodeId = null;
+	state.graph.updatedAt = Date.now();
+	state.dirty = true;
+}
+
+export function updateSubNode(nodeId: string, subNodeId: string, updates: Partial<SubNode>) {
+	if (!state.graph) return;
+	pushUndo('Update sub-node');
+	state.graph.nodes = state.graph.nodes.map((n) => {
+		if (n.id !== nodeId) return n;
+		return {
+			...n,
+			subNodes: n.subNodes.map((sn) => (sn.id === subNodeId ? { ...sn, ...updates } : sn)),
+		};
+	});
+	state.graph.updatedAt = Date.now();
+	state.dirty = true;
+}
+
+export function reorderSubNodes(nodeId: string, fromIndex: number, toIndex: number) {
+	if (!state.graph) return;
+	const node = state.graph.nodes.find((n) => n.id === nodeId);
+	if (!node) return;
+
+	pushUndo('Reorder sub-nodes');
+	const sorted = [...node.subNodes].sort((a, b) => a.order - b.order);
+	const [moved] = sorted.splice(fromIndex, 1);
+	sorted.splice(toIndex, 0, moved);
+	const reordered = sorted.map((sn, i) => ({ ...sn, order: i }));
+
+	state.graph.nodes = state.graph.nodes.map((n) =>
+		n.id === nodeId ? { ...n, subNodes: reordered } : n
+	);
+	state.graph.updatedAt = Date.now();
+	state.dirty = true;
+}
+
+// ==================== Node Expand/Collapse ====================
+
+export function toggleNodeExpanded(nodeId: string) {
+	const next = new Set(expandedNodes);
+	if (next.has(nodeId)) next.delete(nodeId);
+	else next.add(nodeId);
+	expandedNodes = next;
+}
+
+export function isNodeExpanded(nodeId: string): boolean {
+	return expandedNodes.has(nodeId);
+}
+
+export function getExpandedNodes(): Set<string> {
+	return expandedNodes;
 }

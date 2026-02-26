@@ -1,4 +1,6 @@
-import type { FlowGraph, FlowNode, FlowEdge, FlowVariable } from '$lib/types/flow';
+import type { FlowGraph, FlowNode, FlowEdge, FlowVariable, SubNode, SubNodeCodegenContext } from '$lib/types/flow';
+import { getSubNodeDef } from '$lib/flow/subnodes/registry';
+import { computeSubNodePixelY, getSortedSubNodes } from '$lib/flow/layout';
 
 /**
  * Generate a complete GPC script from a FlowGraph.
@@ -40,11 +42,19 @@ export function generateFlowGpc(graph: FlowGraph): string {
 	}
 	lines.push(``);
 
+	const bm = graph.settings.buttonMapping;
+
+	const hasBackButton = nodes.some((n) => n.backButton);
+
 	// Variables
 	lines.push(`// ===== VARIABLES =====`);
 	lines.push(`int FlowCurrentState;`);
 	lines.push(`int FlowPrevState = -1;`);
 	lines.push(`int FlowStateTimer;`);
+	if (hasBackButton) {
+		lines.push(`int FlowStateStack[8];`);
+		lines.push(`int FlowStackTop = 0;`);
+	}
 	lines.push(``);
 
 	// Global variables
@@ -56,17 +66,33 @@ export function generateFlowGpc(graph: FlowGraph): string {
 		lines.push(``);
 	}
 
-	// Per-node variables
+	// Per-node variables + auto cursor/scroll vars
 	const declaredVars = new Set<string>(['FlowCurrentState', 'FlowPrevState', 'FlowStateTimer']);
 	for (const node of sorted) {
-		if (node.variables.length > 0) {
+		const safeName = sanitizeName(node.label);
+		const interactiveSubs = getInteractiveSubNodes(node);
+
+		if (node.variables.length > 0 || interactiveSubs.length > 0) {
 			lines.push(`// Variables for ${node.label}`);
-			for (const v of node.variables) {
-				if (!declaredVars.has(v.name)) {
-					lines.push(generateVarDeclaration(v));
-					declaredVars.add(v.name);
-				}
+		}
+
+		for (const v of node.variables) {
+			if (!declaredVars.has(v.name)) {
+				lines.push(generateVarDeclaration(v));
+				declaredVars.add(v.name);
 			}
+		}
+
+		// Auto-declare cursor variable for nodes with interactive sub-nodes
+		if (interactiveSubs.length > 0) {
+			const cursorVar = `Flow_${safeName}_cursor`;
+			if (!declaredVars.has(cursorVar)) {
+				lines.push(`int ${cursorVar};`);
+				declaredVars.add(cursorVar);
+			}
+		}
+
+		if (node.variables.length > 0 || interactiveSubs.length > 0) {
 			lines.push(``);
 		}
 	}
@@ -78,9 +104,9 @@ export function generateFlowGpc(graph: FlowGraph): string {
 		lines.push(``);
 	}
 
-	// OLED draw functions (one per node with an OLED scene)
+	// OLED draw functions (legacy: nodes with oledScene but no sub-nodes)
 	for (const node of sorted) {
-		if (node.oledScene) {
+		if (node.oledScene && node.subNodes.length === 0) {
 			lines.push(`// ===== DRAW: ${node.label} =====`);
 			lines.push(generateOledDrawFunction(node));
 			lines.push(``);
@@ -91,6 +117,8 @@ export function generateFlowGpc(graph: FlowGraph): string {
 	for (const node of sorted) {
 		const safeName = sanitizeName(node.label);
 		const outEdges = edges.filter((e) => e.sourceNodeId === node.id);
+		const interactiveSubs = getInteractiveSubNodes(node);
+		const hasSubNodes = node.subNodes.length > 0;
 
 		lines.push(`// ===== STATE: ${node.label} =====`);
 		lines.push(`function FlowState_${safeName}() {`);
@@ -105,21 +133,106 @@ export function generateFlowGpc(graph: FlowGraph): string {
 			lines.push(`    }`);
 		}
 
-		// Draw OLED
-		if (node.oledScene) {
-			lines.push(`    Draw_Flow_${safeName}();`);
+		if (hasSubNodes) {
+			// === V2: Sub-node based rendering ===
+			lines.push(`    cls_oled(OLED_BLACK);`);
+
+			// Cursor navigation logic
+			if (interactiveSubs.length > 0) {
+				const cursorVar = `Flow_${safeName}_cursor`;
+				const maxCursor = interactiveSubs.length - 1;
+				lines.push(``);
+				lines.push(`    // Cursor navigation`);
+				if (node.scrollMode === 'wrap') {
+					lines.push(`    if(event_press(${bm.up})) { if(${cursorVar} > 0) ${cursorVar} = ${cursorVar} - 1; else ${cursorVar} = ${maxCursor}; }`);
+					lines.push(`    if(event_press(${bm.down})) { if(${cursorVar} < ${maxCursor}) ${cursorVar} = ${cursorVar} + 1; else ${cursorVar} = 0; }`);
+				} else {
+					lines.push(`    if(event_press(${bm.up}) && ${cursorVar} > 0) ${cursorVar} = ${cursorVar} - 1;`);
+					lines.push(`    if(event_press(${bm.down}) && ${cursorVar} < ${maxCursor}) ${cursorVar} = ${cursorVar} + 1;`);
+				}
+
+				// Toggle interaction (confirm toggles the bound variable)
+				for (let i = 0; i < interactiveSubs.length; i++) {
+					const sub = interactiveSubs[i];
+					if (sub.type === 'toggle-item' && sub.boundVariable) {
+						lines.push(`    if(${cursorVar} == ${i} && event_press(${bm.confirm})) ${sub.boundVariable} = !${sub.boundVariable};`);
+					}
+				}
+			}
+
+			lines.push(``);
+			lines.push(`    // Sub-node rendering`);
+
+			// Generate render calls for each sub-node
+			const sortedSubs = getSortedSubNodes(node);
+			let cursorIndex = 0;
+			for (const sub of sortedSubs) {
+				const def = getSubNodeDef(sub.type);
+				if (!def) continue;
+
+				const pixelY = computeSubNodePixelY(node, sub);
+				const pixelX = sub.position === 'absolute' ? (sub.x ?? 0) : node.stackOffsetX;
+
+				const ctx: SubNodeCodegenContext = {
+					varPrefix: `Flow_${safeName}`,
+					cursorVar: `Flow_${safeName}_cursor`,
+					cursorIndex: sub.interactive ? cursorIndex : -1,
+					x: pixelX,
+					y: pixelY,
+					boundVariable: sub.boundVariable,
+					buttons: bm,
+				};
+
+				// Merge label into config for codegen
+				const configWithLabel = { ...sub.config, label: sub.label };
+				const code = def.generateGpc(configWithLabel, ctx);
+				if (code.trim()) {
+					lines.push(code);
+				}
+
+				if (sub.interactive) cursorIndex++;
+			}
+		} else {
+			// === Legacy: raw code + OLED scene ===
+			if (node.oledScene) {
+				lines.push(`    Draw_Flow_${safeName}();`);
+			}
+
+			if (node.gpcCode.trim()) {
+				lines.push(`    // Logic`);
+				for (const line of node.gpcCode.trim().split('\n')) {
+					lines.push(`    ${line}`);
+				}
+			}
 		}
 
-		// Main logic
-		if (node.gpcCode.trim()) {
-			lines.push(`    // Logic`);
+		// User's custom GPC code (even nodes with sub-nodes can have extra code)
+		if (hasSubNodes && node.gpcCode.trim()) {
+			lines.push(``);
+			lines.push(`    // Custom code`);
 			for (const line of node.gpcCode.trim().split('\n')) {
 				lines.push(`    ${line}`);
 			}
 		}
 
+		// Back button: pop state stack to return to caller
+		if (node.backButton) {
+			lines.push(``);
+			lines.push(`    // Back button`);
+			lines.push(`    if(event_press(${node.backButton}) && FlowStackTop > 0) {`);
+			if (node.onExit.trim()) {
+				for (const line of node.onExit.trim().split('\n')) {
+					lines.push(`        ${line.trim()}`);
+				}
+			}
+			lines.push(`        FlowStackTop = FlowStackTop - 1;`);
+			lines.push(`        FlowCurrentState = FlowStateStack[FlowStackTop];`);
+			lines.push(`    }`);
+		}
+
 		// Transitions
 		if (outEdges.length > 0) {
+			lines.push(``);
 			lines.push(`    // Transitions`);
 			for (const edge of outEdges) {
 				const targetNode = nodes.find((n) => n.id === edge.targetNodeId);
@@ -128,12 +241,23 @@ export function generateFlowGpc(graph: FlowGraph): string {
 				const condition = generateConditionCode(edge);
 
 				if (condition) {
-					lines.push(`    if(${condition}) {`);
-					// onExit
+					// Sub-node level edge: wrap with cursor index check
+					let fullCondition = condition;
+					if (edge.sourceSubNodeId && interactiveSubs.length > 0) {
+						const subIdx = interactiveSubs.findIndex((s) => s.id === edge.sourceSubNodeId);
+						if (subIdx >= 0) {
+							fullCondition = `Flow_${safeName}_cursor == ${subIdx} && ${condition}`;
+						}
+					}
+
+					lines.push(`    if(${fullCondition}) {`);
 					if (node.onExit.trim()) {
 						for (const line of node.onExit.trim().split('\n')) {
 							lines.push(`        ${line.trim()}`);
 						}
+					}
+					if (hasBackButton) {
+						lines.push(`        if(FlowStackTop < 8) { FlowStateStack[FlowStackTop] = FlowCurrentState; FlowStackTop = FlowStackTop + 1; }`);
 					}
 					lines.push(`        FlowCurrentState = FLOW_STATE_${targetName};`);
 					lines.push(`    }`);
@@ -199,15 +323,19 @@ export function generateFlowGpc(graph: FlowGraph): string {
 	return lines.join('\n');
 }
 
+// ==================== Helpers ====================
+
+function getInteractiveSubNodes(node: FlowNode): SubNode[] {
+	return getSortedSubNodes(node).filter((sn) => sn.interactive);
+}
+
 function generateVarDeclaration(v: FlowVariable): string {
 	if (v.type === 'string') {
 		const size = v.arraySize ?? 32;
 		const defaultStr = typeof v.defaultValue === 'string' ? v.defaultValue : '';
 		if (defaultStr) {
-			// GPC strings are int8 arrays initialized with character codes
 			const chars = Array.from(defaultStr).map((c) => c.charCodeAt(0));
-			chars.push(0); // null terminator
-			// Pad to array size
+			chars.push(0);
 			while (chars.length < size) chars.push(0);
 			return `int8 ${v.name}[${size}] = { ${chars.slice(0, size).join(', ')} };`;
 		}
@@ -255,7 +383,6 @@ function generateOledDrawFunction(node: FlowNode): string {
 	lines.push(`    cls_oled(OLED_BLACK);`);
 
 	if (node.oledScene) {
-		// Decode base64 pixels and generate pixel_oled calls
 		try {
 			const binaryStr = atob(node.oledScene.pixels);
 			const bytes = new Uint8Array(binaryStr.length);
@@ -306,7 +433,6 @@ function collectPersistVars(graph: FlowGraph): FlowVariable[] {
 function generatePersistence(vars: FlowVariable[]): string {
 	const lines: string[] = [];
 
-	// Simple SPVAR persistence — each variable gets its own slot
 	lines.push(`function Flow_Save() {`);
 	vars.forEach((v, i) => {
 		lines.push(`    set_pvar(SPVAR_${i + 1}, ${v.name});`);

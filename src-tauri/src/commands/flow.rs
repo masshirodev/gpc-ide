@@ -1,10 +1,61 @@
-use crate::models::flow::{FlowChunk, FlowGraph};
+use crate::models::flow::{FlowChunk, FlowGraph, FlowProject};
 use std::path::PathBuf;
 
 const FLOW_FILENAME: &str = "flow.json";
+const FLOWS_FILENAME: &str = "flows.json";
 const CHUNKS_DIR: &str = "chunks";
 
-// ==================== Flow Graph Commands ====================
+// ==================== Flow Project Commands ====================
+
+/// Save a flow project to a game directory as flows.json
+#[tauri::command]
+pub fn save_flow_project(game_path: String, flow_project: FlowProject) -> Result<(), String> {
+    let path = PathBuf::from(&game_path).join(FLOWS_FILENAME);
+    let content = serde_json::to_string_pretty(&flow_project)
+        .map_err(|e| format!("Failed to serialize flow project: {}", e))?;
+    std::fs::write(&path, content)
+        .map_err(|e| format!("Failed to write flows.json: {}", e))?;
+    Ok(())
+}
+
+/// Load a flow project from a game directory.
+/// Falls back to legacy flow.json if flows.json doesn't exist.
+#[tauri::command]
+pub fn load_flow_project(game_path: String) -> Result<Option<FlowProject>, String> {
+    let project_path = PathBuf::from(&game_path).join(FLOWS_FILENAME);
+    if project_path.exists() {
+        let content = std::fs::read_to_string(&project_path)
+            .map_err(|e| format!("Failed to read flows.json: {}", e))?;
+        let project: FlowProject = serde_json::from_str(&content)
+            .map_err(|e| format!("Failed to parse flows.json: {}", e))?;
+        return Ok(Some(project));
+    }
+
+    // Fallback: load legacy flow.json and wrap in a FlowProject
+    let legacy_path = PathBuf::from(&game_path).join(FLOW_FILENAME);
+    if legacy_path.exists() {
+        let content = std::fs::read_to_string(&legacy_path)
+            .map_err(|e| format!("Failed to read flow.json: {}", e))?;
+        let mut graph: FlowGraph = serde_json::from_str(&content)
+            .map_err(|e| format!("Failed to parse flow.json: {}", e))?;
+        // Ensure legacy graphs get tagged as menu flow
+        if graph.flow_type.is_empty() {
+            graph.flow_type = "menu".to_string();
+        }
+        let project = FlowProject {
+            version: 1,
+            flows: vec![graph],
+            shared_variables: vec![],
+            shared_code: String::new(),
+            updated_at: 0,
+        };
+        return Ok(Some(project));
+    }
+
+    Ok(None)
+}
+
+// ==================== Legacy Flow Graph Commands ====================
 
 /// Save a flow graph to a game directory as flow.json
 #[tauri::command]

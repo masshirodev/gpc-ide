@@ -79,7 +79,7 @@ const stateMachine: ScriptTemplate = {
 				transType === 'timeout' ? '3s' : 'Next',
 				{
 					type: transType as 'button_press' | 'timeout',
-					button: transType === 'button_press' ? 'CONFIRM_BTN' : undefined,
+					button: transType === 'button_press' ? 'PS5_CROSS' : undefined,
 					timeoutMs: transType === 'timeout' ? 3000 : undefined,
 				}
 			);
@@ -162,7 +162,7 @@ const oledMenu: ScriptTemplate = {
 		graph.edges.push(
 			createFlowEdge(home.id, menuNodes[0].id, 'Open', {
 				type: 'button_press',
-				button: 'CONFIRM_BTN',
+				button: 'PS5_CROSS',
 			})
 		);
 
@@ -181,7 +181,7 @@ const oledMenu: ScriptTemplate = {
 		graph.edges.push(
 			createFlowEdge(menuNodes[menuNodes.length - 1].id, home.id, 'Back', {
 				type: 'button_press',
-				button: 'CANCEL_BTN',
+				button: 'PS5_CIRCLE',
 			})
 		);
 
@@ -197,13 +197,13 @@ const oledMenu: ScriptTemplate = {
 			graph.edges.push(
 				createFlowEdge(menuNodes[0].id, sub.id, 'Enter', {
 					type: 'button_press',
-					button: 'CONFIRM_BTN',
+					button: 'PS5_CROSS',
 				})
 			);
 			graph.edges.push(
 				createFlowEdge(sub.id, menuNodes[0].id, 'Back', {
 					type: 'button_press',
-					button: 'CANCEL_BTN',
+					button: 'PS5_CIRCLE',
 				})
 			);
 		}
@@ -316,7 +316,7 @@ const screensaver: ScriptTemplate = {
 			options: [
 				{ value: 'any', label: 'Any Button' },
 				{ value: 'PS5_CROSS', label: 'Cross' },
-				{ value: 'CONFIRM_BTN', label: 'Confirm' },
+				{ value: 'PS5_CROSS', label: 'Confirm' },
 			],
 		},
 	],

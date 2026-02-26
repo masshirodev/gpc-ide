@@ -1,8 +1,9 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { listModules, createGame, validateModuleSelection } from '$lib/tauri/commands';
+	import { listModules, createGame, validateModuleSelection, saveFlowProject, getModule } from '$lib/tauri/commands';
 	import type { ModuleSummary } from '$lib/types/module';
 	import type { CreateGameParams } from '$lib/tauri/commands';
+	import { createFlowProjectFromModules } from '$lib/flow/create-project';
 	import { loadGames } from '$lib/stores/game.svelte';
 	import { getSettings, getAllGameTypes } from '$lib/stores/settings.svelte';
 	import KeySelect from '$lib/components/inputs/KeySelect.svelte';
@@ -146,6 +147,20 @@
 			};
 
 			const result = await createGame(params);
+
+			// Generate flow project from selected modules
+			if (selectedModuleIds.size > 0) {
+				try {
+					const workspacePaths = settings.workspaces ?? [];
+					const moduleDefs = await Promise.all(
+						Array.from(selectedModuleIds).map((id) => getModule(id, workspacePaths))
+					);
+					const flowProject = createFlowProjectFromModules(moduleDefs);
+					await saveFlowProject(result.game_path, flowProject);
+				} catch (flowError) {
+					console.warn('Failed to generate flow project:', flowError);
+				}
+			}
 
 			// Refresh the game list
 			await loadGames(settings.workspaces);

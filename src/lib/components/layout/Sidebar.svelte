@@ -181,19 +181,6 @@
 			String to Array
 		</a>
 		<a
-			href="/tools/flow"
-			class="mb-1 flex items-center gap-2 rounded px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800"
-		>
-			<svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-				<path
-					fill-rule="evenodd"
-					d="M2 5a2 2 0 012-2h4a2 2 0 012 2v2a2 2 0 01-2 2H6.414l2.293 2.293a1 1 0 01-1.414 1.414L5 10.414V13a2 2 0 01-2 2H2v-2h1V5zm10 0a2 2 0 012-2h4v2h-4v6.586l2.293-2.293a1 1 0 011.414 1.414L15 13.414V15a2 2 0 01-2 2h-2v-2h2V5z"
-					clip-rule="evenodd"
-				/>
-			</svg>
-			Flow Editor
-		</a>
-		<a
 			href="/tools/combo"
 			class="mb-1 flex items-center gap-2 rounded px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800"
 		>

@@ -1,9 +1,11 @@
 <script lang="ts">
-	import type { FlowNodeType } from '$lib/types/flow';
+	import type { FlowNodeType, FlowType } from '$lib/types/flow';
 	import { NODE_LABELS } from '$lib/types/flow';
+	import type { ModuleSummary } from '$lib/types/module';
 
 	interface Props {
 		onAddNode: (type: FlowNodeType) => void;
+		onAddModule: (moduleId: string) => void;
 		onDeleteSelected: () => void;
 		onZoomIn: () => void;
 		onZoomOut: () => void;
@@ -11,18 +13,23 @@
 		onUndo: () => void;
 		onRedo: () => void;
 		onSave: () => void;
-		onExport: () => void;
+		onBuildToGame: () => Promise<void>;
 		onNewGraph: () => void;
 		onLoadGraph: () => void;
+		onEmulator: () => void;
 		canUndo: boolean;
 		canRedo: boolean;
 		hasSelection: boolean;
 		dirty: boolean;
+		building: boolean;
 		graphName: string;
+		flowType: FlowType;
+		availableModules: ModuleSummary[];
 	}
 
 	let {
 		onAddNode,
+		onAddModule,
 		onDeleteSelected,
 		onZoomIn,
 		onZoomOut,
@@ -30,19 +37,23 @@
 		onUndo,
 		onRedo,
 		onSave,
-		onExport,
+		onBuildToGame,
 		onNewGraph,
 		onLoadGraph,
+		onEmulator,
 		canUndo,
 		canRedo,
 		hasSelection,
 		dirty,
+		building,
 		graphName,
+		flowType,
+		availableModules,
 	}: Props = $props();
 
 	let showAddMenu = $state(false);
 
-	const nodeTypes: FlowNodeType[] = ['intro', 'home', 'menu', 'submenu', 'custom', 'screensaver'];
+	const menuNodeTypes: FlowNodeType[] = ['intro', 'home', 'menu', 'submenu', 'custom', 'screensaver'];
 </script>
 
 <div class="flex items-center gap-1 border-b border-zinc-800 bg-zinc-900 px-3 py-1.5">
@@ -64,22 +75,52 @@
 			<svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
 				<path d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" />
 			</svg>
-			Add Node
+			{flowType === 'gameplay' ? 'Add Module' : 'Add Node'}
 		</button>
 		{#if showAddMenu}
 			<button class="fixed inset-0 z-40" onclick={() => (showAddMenu = false)}></button>
-			<div class="absolute left-0 top-full z-50 mt-1 w-40 rounded border border-zinc-700 bg-zinc-800 py-1 shadow-lg">
-				{#each nodeTypes as type}
+			<div class="absolute left-0 top-full z-50 mt-1 max-h-72 w-48 overflow-y-auto rounded border border-zinc-700 bg-zinc-800 py-1 shadow-lg">
+				{#if flowType === 'gameplay'}
+					{#if availableModules.length > 0}
+						{#each availableModules as mod}
+							<button
+								class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-zinc-300 hover:bg-zinc-700"
+								onclick={() => {
+									onAddModule(mod.id);
+									showAddMenu = false;
+								}}
+								title={mod.description || ''}
+							>
+								<span class="h-1.5 w-1.5 rounded-full bg-red-500"></span>
+								{mod.display_name}
+							</button>
+						{/each}
+					{:else}
+						<div class="px-3 py-2 text-xs text-zinc-500">No modules available</div>
+					{/if}
+					<div class="my-1 border-t border-zinc-700"></div>
 					<button
 						class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-zinc-300 hover:bg-zinc-700"
 						onclick={() => {
-							onAddNode(type);
+							onAddNode('custom');
 							showAddMenu = false;
 						}}
 					>
-						{NODE_LABELS[type]}
+						{NODE_LABELS['custom']}
 					</button>
-				{/each}
+				{:else}
+					{#each menuNodeTypes as type}
+						<button
+							class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-zinc-300 hover:bg-zinc-700"
+							onclick={() => {
+								onAddNode(type);
+								showAddMenu = false;
+							}}
+						>
+							{NODE_LABELS[type]}
+						</button>
+					{/each}
+				{/if}
 			</div>
 		{/if}
 	</div>
@@ -175,11 +216,21 @@
 	>
 		Save
 	</button>
+	{#if flowType === 'menu'}
+		<button
+			class="rounded border border-amber-700 bg-amber-900 px-3 py-1 text-xs font-medium text-amber-200 hover:bg-amber-800"
+			onclick={onEmulator}
+			title="Open OLED emulator"
+		>
+			Emulator
+		</button>
+	{/if}
 	<button
-		class="rounded bg-emerald-600 px-3 py-1 text-xs font-medium text-white hover:bg-emerald-500"
-		onclick={onExport}
-		title="Export as GPC"
+		class="rounded bg-emerald-600 px-3 py-1 text-xs font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
+		disabled={building}
+		onclick={() => onBuildToGame()}
+		title="Write flow code to main.gpc and build"
 	>
-		Export GPC
+		{building ? 'Building...' : 'Build to Game'}
 	</button>
 </div>

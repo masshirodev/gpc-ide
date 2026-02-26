@@ -2,22 +2,27 @@
 	import type { FlowGraph, FlowNode as FlowNodeType } from '$lib/types/flow';
 	import FlowNode from './FlowNode.svelte';
 	import FlowEdge from './FlowEdge.svelte';
+	import { getNodeHeight, getPortPosition, NODE_WIDTH } from '$lib/flow/layout';
 
 	interface Props {
 		graph: FlowGraph;
 		selectedNodeId: string | null;
 		selectedEdgeId: string | null;
-		connecting: { sourceNodeId: string; sourcePort: string; mouseX: number; mouseY: number } | null;
+		selectedSubNodeId: string | null;
+		connecting: { sourceNodeId: string; sourcePort: string; sourceSubNodeId?: string | null; mouseX: number; mouseY: number } | null;
+		expandedNodes: Set<string>;
 		panX: number;
 		panY: number;
 		zoom: number;
 		onSelectNode: (nodeId: string | null) => void;
 		onSelectEdge: (edgeId: string | null) => void;
+		onSelectSubNode: (nodeId: string, subNodeId: string) => void;
 		onMoveNode: (nodeId: string, position: { x: number; y: number }) => void;
 		onMoveNodeDone: (nodeId: string) => void;
-		onStartConnect: (nodeId: string, port: string, e: MouseEvent) => void;
+		onStartConnect: (nodeId: string, port: string, e: MouseEvent, subNodeId?: string) => void;
 		onFinishConnect: (targetNodeId: string | null) => void;
 		onUpdateConnect: (mx: number, my: number) => void;
+		onToggleExpand: (nodeId: string) => void;
 		onPan: (x: number, y: number) => void;
 		onZoom: (zoom: number) => void;
 	}
@@ -26,20 +31,41 @@
 		graph,
 		selectedNodeId,
 		selectedEdgeId,
+		selectedSubNodeId,
 		connecting,
+		expandedNodes,
 		panX,
 		panY,
 		zoom,
 		onSelectNode,
 		onSelectEdge,
+		onSelectSubNode,
 		onMoveNode,
 		onMoveNodeDone,
 		onStartConnect,
 		onFinishConnect,
 		onUpdateConnect,
+		onToggleExpand,
 		onPan,
 		onZoom,
 	}: Props = $props();
+
+	// Build a set of module node IDs that have active conflicts
+	let conflictNodeIds = $derived.by(() => {
+		const ids = new Set<string>();
+		const moduleNodes = graph.nodes.filter((n) => n.type === 'module' && n.moduleData);
+		const moduleIdMap = new Map(moduleNodes.map((n) => [n.moduleData!.moduleId, n]));
+		for (const node of moduleNodes) {
+			const conflicts = node.moduleData!.conflicts ?? [];
+			for (const conflictId of conflicts) {
+				if (moduleIdMap.has(conflictId)) {
+					ids.add(node.id);
+					ids.add(moduleIdMap.get(conflictId)!.id);
+				}
+			}
+		}
+		return ids;
+	});
 
 	let svgEl: SVGSVGElement | undefined = $state();
 	let containerEl: HTMLDivElement | undefined = $state();
@@ -137,8 +163,8 @@
 		onSelectNode(nodeId);
 	}
 
-	function handleStartConnect(nodeId: string, port: string, e: MouseEvent) {
-		onStartConnect(nodeId, port, e);
+	function handleStartConnect(nodeId: string, port: string, e: MouseEvent, subNodeId?: string) {
+		onStartConnect(nodeId, port, e, subNodeId);
 	}
 
 	function handlePortDrop(nodeId: string) {
@@ -152,14 +178,9 @@
 		if (!connecting) return null;
 		const sourceNode = graph.nodes.find((n) => n.id === connecting.sourceNodeId);
 		if (!sourceNode) return null;
-		return {
-			x: sourceNode.position.x + 220,
-			y: sourceNode.position.y + 50,
-		};
+		const isExpanded = expandedNodes.has(sourceNode.id);
+		return getPortPosition(sourceNode, 'output', connecting.sourceSubNodeId, isExpanded);
 	});
-
-	// Grid pattern
-	let gridSize = $derived(40 * zoom);
 
 	// viewBox
 	let vb = $derived(
@@ -222,6 +243,8 @@
 					{sourceNode}
 					{targetNode}
 					selected={selectedEdgeId === edge.id}
+					sourceExpanded={expandedNodes.has(sourceNode.id)}
+					targetExpanded={expandedNodes.has(targetNode.id)}
 					onSelect={(id) => onSelectEdge(id)}
 				/>
 			{/if}
@@ -253,9 +276,14 @@
 				<FlowNode
 					{node}
 					selected={selectedNodeId === node.id}
+					expanded={expandedNodes.has(node.id)}
+					selectedSubNodeId={selectedNodeId === node.id ? selectedSubNodeId : null}
+					hasConflict={conflictNodeIds.has(node.id)}
 					onSelect={handleNodeSelect}
+					onSelectSubNode={onSelectSubNode}
 					onStartConnect={handleStartConnect}
 					onPortDrop={handlePortDrop}
+					onToggleExpand={onToggleExpand}
 				/>
 			</g>
 		{/each}

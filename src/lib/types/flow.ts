@@ -1,10 +1,134 @@
 import type { SerializedScene } from '../../routes/tools/oled/types';
 
+// ==================== Flow Types ====================
+
+export type FlowType = 'menu' | 'gameplay';
+
 // ==================== Flow Node Types ====================
 
-export type FlowNodeType = 'intro' | 'home' | 'menu' | 'submenu' | 'custom' | 'screensaver';
+export type FlowNodeType =
+	| 'intro'
+	| 'home'
+	| 'menu'
+	| 'submenu'
+	| 'custom'
+	| 'screensaver'
+	| 'module';
 
 export type FlowVariableType = 'int' | 'int8' | 'int16' | 'int32' | 'string';
+
+// ==================== Sub-Node Types (v2) ====================
+
+export type SubNodeType =
+	| 'header'
+	| 'menu-item'
+	| 'toggle-item'
+	| 'value-item'
+	| 'scroll-bar'
+	| 'text-line'
+	| 'bar'
+	| 'indicator'
+	| 'pixel-art'
+	| 'separator'
+	| 'custom';
+
+export interface SubNode {
+	id: string;
+	type: SubNodeType;
+	label: string;
+	position: 'stack' | 'absolute';
+	x?: number;
+	y?: number;
+	order: number;
+	interactive: boolean;
+	config: Record<string, unknown>;
+	renderCode?: string;
+	interactCode?: string;
+	boundVariable?: string;
+}
+
+export interface SubNodeParam {
+	key: string;
+	label: string;
+	type: 'number' | 'boolean' | 'select' | 'string' | 'code';
+	default: unknown;
+	min?: number;
+	max?: number;
+	options?: { value: unknown; label: string }[];
+	description?: string;
+}
+
+export interface SubNodeRenderContext {
+	pixels: Uint8Array;
+	x: number;
+	y: number;
+	width: number;
+	height: number;
+	isSelected: boolean;
+	cursorStyle: string;
+	boundValue?: number | string;
+}
+
+export interface SubNodeCodegenContext {
+	varPrefix: string;
+	cursorVar: string;
+	cursorIndex: number;
+	x: number;
+	y: number;
+	boundVariable?: string;
+	buttons: {
+		confirm: string;
+		cancel: string;
+		up: string;
+		down: string;
+		left: string;
+		right: string;
+	};
+}
+
+export interface SubNodeDef {
+	id: string;
+	name: string;
+	category: string;
+	description: string;
+	interactive: boolean;
+	defaultConfig: Record<string, unknown>;
+	params: SubNodeParam[];
+	width?: number;
+	height?: number;
+	stackHeight?: number;
+	render: (config: Record<string, unknown>, ctx: SubNodeRenderContext) => void;
+	generateGpc: (config: Record<string, unknown>, ctx: SubNodeCodegenContext) => string;
+}
+
+// ==================== Module Node Data (Gameplay Flow) ====================
+
+export interface ModuleNodeOption {
+	name: string;
+	variable: string;
+	type: 'toggle' | 'value';
+	defaultValue: number;
+	min?: number;
+	max?: number;
+}
+
+export interface ModuleNodeData {
+	moduleId: string;
+	moduleName: string;
+	triggerCondition: string;
+	enableVariable: string;
+	// Code sections
+	initCode: string;
+	mainCode: string;
+	functionsCode: string;
+	comboCode: string;
+	/** @deprecated Use mainCode instead. Kept for migration. */
+	triggerCode?: string;
+	options: ModuleNodeOption[];
+	extraVars: Record<string, string>;
+	conflicts: string[];
+	needsWeapondata: boolean;
+}
 
 export interface FlowVariable {
 	name: string;
@@ -30,7 +154,9 @@ export interface FlowNode {
 	label: string;
 	position: { x: number; y: number };
 	gpcCode: string;
+	/** @deprecated Use subNodes with type='pixel-art' instead. Kept for migration. */
 	oledScene: SerializedScene | null;
+	/** @deprecated Use subNodes instead. Kept for migration. */
 	oledWidgets: WidgetPlacement[];
 	comboCode: string;
 	isInitialState: boolean;
@@ -38,6 +164,16 @@ export interface FlowNode {
 	onEnter: string;
 	onExit: string;
 	chunkRef: string | null;
+	// v2: sub-node system
+	subNodes: SubNode[];
+	stackOffsetX: number;
+	stackOffsetY: number;
+	visibleCount?: number;
+	scrollMode?: 'window' | 'wrap';
+	/** Button that navigates back to the previous state (e.g. 'PS5_CIRCLE') */
+	backButton?: string;
+	/** Module data for gameplay flow module nodes */
+	moduleData?: ModuleNodeData;
 }
 
 // ==================== Flow Edge Types ====================
@@ -67,6 +203,9 @@ export interface FlowEdge {
 	targetPort: string;
 	label: string;
 	condition: FlowCondition;
+	// v2: sub-node level edges
+	sourceSubNodeId?: string | null;
+	targetSubNodeId?: string | null;
 }
 
 // ==================== Flow Graph ====================
@@ -90,6 +229,7 @@ export interface FlowGraph {
 	id: string;
 	name: string;
 	version: number;
+	flowType: FlowType;
 	nodes: FlowNode[];
 	edges: FlowEdge[];
 	globalVariables: FlowVariable[];
@@ -99,12 +239,23 @@ export interface FlowGraph {
 	updatedAt: number;
 }
 
+// ==================== Flow Project (Multi-Flow Container) ====================
+
+export interface FlowProject {
+	version: number;
+	flows: FlowGraph[];
+	sharedVariables: FlowVariable[];
+	sharedCode: string;
+	updatedAt: number;
+}
+
 // ==================== Chunks ====================
 
 export interface ChunkEdgeTemplate {
 	label: string;
 	condition: FlowCondition;
 	direction: 'outgoing' | 'incoming';
+	sourceSubNodeId?: string;
 }
 
 export interface ChunkParameter {
@@ -122,6 +273,8 @@ export interface FlowChunk {
 	category: string;
 	tags: string[];
 	creator?: string;
+	/** Which flow type this chunk belongs to. Defaults to 'menu' if unset. */
+	flowType?: FlowType;
 	nodeTemplate: Partial<FlowNode>;
 	edgeTemplates: ChunkEdgeTemplate[];
 	parameters: ChunkParameter[];
@@ -185,26 +338,40 @@ export const DEFAULT_FLOW_SETTINGS: FlowSettings = {
 	includeCommonUtils: true,
 	persistenceEnabled: true,
 	buttonMapping: {
-		confirm: 'CONFIRM_BTN',
-		cancel: 'CANCEL_BTN',
-		up: 'UP_BTN',
-		down: 'DOWN_BTN',
-		left: 'LEFT_BTN',
-		right: 'RIGHT_BTN',
+		confirm: 'PS5_CROSS',
+		cancel: 'PS5_CIRCLE',
+		up: 'PS5_UP',
+		down: 'PS5_DOWN',
+		left: 'PS5_LEFT',
+		right: 'PS5_RIGHT',
 	},
 };
 
-export function createEmptyFlowGraph(name: string): FlowGraph {
+export function createEmptyFlowGraph(name: string, flowType: FlowType = 'menu'): FlowGraph {
 	return {
 		id: crypto.randomUUID(),
 		name,
-		version: 1,
+		version: 2,
+		flowType,
 		nodes: [],
 		edges: [],
 		globalVariables: [],
 		globalCode: '',
 		settings: { ...DEFAULT_FLOW_SETTINGS },
 		createdAt: Date.now(),
+		updatedAt: Date.now(),
+	};
+}
+
+export function createEmptyFlowProject(): FlowProject {
+	return {
+		version: 1,
+		flows: [
+			createEmptyFlowGraph('Menu Flow', 'menu'),
+			createEmptyFlowGraph('Gameplay Flow', 'gameplay'),
+		],
+		sharedVariables: [],
+		sharedCode: '',
 		updatedAt: Date.now(),
 	};
 }
@@ -228,6 +395,9 @@ export function createFlowNode(
 		onEnter: '',
 		onExit: '',
 		chunkRef: null,
+		subNodes: [],
+		stackOffsetX: 0,
+		stackOffsetY: 0,
 	};
 }
 
@@ -245,6 +415,25 @@ export function createFlowEdge(
 		targetPort: 'left',
 		label,
 		condition,
+		sourceSubNodeId: null,
+		targetSubNodeId: null,
+	};
+}
+
+export function createSubNode(
+	type: SubNodeType,
+	label: string,
+	order: number,
+	interactive: boolean = false
+): SubNode {
+	return {
+		id: crypto.randomUUID(),
+		type,
+		label,
+		position: 'stack',
+		order,
+		interactive,
+		config: {},
 	};
 }
 
@@ -255,6 +444,7 @@ export const NODE_COLORS: Record<FlowNodeType, string> = {
 	submenu: '#f97316',
 	custom: '#6b7280',
 	screensaver: '#06b6d4',
+	module: '#ef4444',
 };
 
 export const NODE_LABELS: Record<FlowNodeType, string> = {
@@ -264,4 +454,5 @@ export const NODE_LABELS: Record<FlowNodeType, string> = {
 	submenu: 'Submenu',
 	custom: 'Custom',
 	screensaver: 'Screensaver',
+	module: 'Module',
 };

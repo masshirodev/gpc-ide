@@ -8,7 +8,10 @@
 	import AnimationPresetsModal from './AnimationPresetsModal.svelte';
 	import FontEditor from './FontEditor.svelte';
 	import SequencerPanel from './SequencerPanel.svelte';
+	import CodeRunnerModal from './CodeRunnerModal.svelte';
 	import { addToast } from '$lib/stores/toast.svelte';
+	import { getFlowOledTransfer, setFlowOledTransfer, clearFlowOledTransfer } from '$lib/stores/flow-transfer.svelte';
+	import { goto } from '$app/navigation';
 	import { PixelHistory } from './history';
 	import { shiftPixels, drawText } from './drawing';
 	import { createEmptyPixels, clonePixels, invertPixels, pixelsToBase64, base64ToPixels } from './pixels';
@@ -16,13 +19,20 @@
 	import type { OledScene, DrawTool, BrushShape, AnimationConfig, OledProject, TextState } from './types';
 	import { writeFile, readFile } from '$lib/tauri/commands';
 
+	// --- Flow editor transfer ---
+	const flowTransfer = getFlowOledTransfer();
+	let isFlowMode = $state(!!flowTransfer);
+
 	// --- State ---
-	const initialId: string = crypto.randomUUID() as string;
+	const initialId: string = flowTransfer?.scene?.id || (crypto.randomUUID() as string);
+	const initialPixels: Uint8Array = flowTransfer?.scene?.pixels
+		? base64ToPixels(flowTransfer.scene.pixels)
+		: createEmptyPixels();
 	let scenes = $state<OledScene[]>([
 		{
 			id: initialId,
-			name: 'Scene 1',
-			pixels: createEmptyPixels()
+			name: flowTransfer?.scene?.name || 'Scene 1',
+			pixels: initialPixels
 		}
 	]);
 	let activeSceneId = $state<string>(initialId);
@@ -36,6 +46,7 @@
 	let showPresets = $state(false);
 	let showFontEditor = $state(false);
 	let showSequencer = $state(false);
+	let showCodeRunner = $state(false);
 	let pixelVersion = $state(0);
 
 	// Per-scene history
@@ -271,6 +282,21 @@
 			}
 		}
 	}
+
+	// --- Send back to flow editor ---
+	function handleSendToFlow() {
+		if (!flowTransfer) return;
+		const pixelData = pixelsToBase64(activeScene.pixels);
+		setFlowOledTransfer({
+			...flowTransfer,
+			scene: {
+				id: activeScene.id,
+				name: activeScene.name,
+				pixels: pixelData,
+			},
+		});
+		goto('/tools/flow');
+	}
 </script>
 
 <svelte:window onkeydown={handleKeydown} />
@@ -278,15 +304,27 @@
 <div class="flex h-full flex-col bg-zinc-950">
 	<!-- Header -->
 	<div class="flex items-center gap-4 border-b border-zinc-800 px-6 py-3">
-		<a
-			href="/"
-			class="flex items-center gap-1.5 text-sm text-zinc-400 hover:text-zinc-200"
-		>
-			<svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-				<path fill-rule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clip-rule="evenodd" />
-			</svg>
-			Back
-		</a>
+		{#if isFlowMode}
+			<button
+				class="flex items-center gap-1.5 rounded bg-emerald-600 px-3 py-1 text-sm font-medium text-white hover:bg-emerald-500"
+				onclick={handleSendToFlow}
+			>
+				<svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+					<path fill-rule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clip-rule="evenodd" />
+				</svg>
+				Send to Flow Editor
+			</button>
+		{:else}
+			<a
+				href="/"
+				class="flex items-center gap-1.5 text-sm text-zinc-400 hover:text-zinc-200"
+			>
+				<svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+					<path fill-rule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clip-rule="evenodd" />
+				</svg>
+				Back
+			</a>
+		{/if}
 
 		<h1 class="text-lg font-semibold text-zinc-100">OLED Creator</h1>
 
@@ -331,6 +369,12 @@
 				onclick={() => { showSequencer = !showSequencer; if (showSequencer) showExport = false; }}
 			>
 				Sequencer
+			</button>
+			<button
+				class="rounded px-3 py-1 text-xs text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
+				onclick={() => (showCodeRunner = true)}
+			>
+				Code
 			</button>
 		</div>
 
@@ -445,4 +489,16 @@
 <FontEditor
 	open={showFontEditor}
 	onClose={() => (showFontEditor = false)}
+/>
+
+<CodeRunnerModal
+	open={showCodeRunner}
+	currentPixels={activeScene.pixels}
+	onApply={(pixels) => {
+		handleBeforeDraw();
+		handleDraw(pixels);
+		showCodeRunner = false;
+		addToast('Code applied to canvas', 'success', 2000);
+	}}
+	onCancel={() => (showCodeRunner = false)}
 />

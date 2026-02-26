@@ -1,26 +1,32 @@
 <script lang="ts">
 	import type { FlowEdge, FlowNode } from '$lib/types/flow';
+	import { getPortPosition } from '$lib/flow/layout';
 
 	interface Props {
 		edge: FlowEdge;
 		sourceNode: FlowNode;
 		targetNode: FlowNode;
 		selected: boolean;
+		sourceExpanded: boolean;
+		targetExpanded: boolean;
 		onSelect: (edgeId: string) => void;
 	}
 
-	let { edge, sourceNode, targetNode, selected, onSelect }: Props = $props();
+	let { edge, sourceNode, targetNode, selected, sourceExpanded, targetExpanded, onSelect }: Props = $props();
 
-	const NODE_WIDTH = 220;
-	const NODE_HEIGHT = 100;
+	// Source: right side (output port), possibly on a sub-node row
+	let sourcePos = $derived(
+		getPortPosition(sourceNode, 'output', edge.sourceSubNodeId, sourceExpanded)
+	);
+	// Target: left side (input port)
+	let targetPos = $derived(
+		getPortPosition(targetNode, 'input', null, targetExpanded)
+	);
 
-	// Source: right side of source node
-	let sx = $derived(sourceNode.position.x + NODE_WIDTH);
-	let sy = $derived(sourceNode.position.y + NODE_HEIGHT / 2);
-
-	// Target: left side of target node
-	let tx = $derived(targetNode.position.x);
-	let ty = $derived(targetNode.position.y + NODE_HEIGHT / 2);
+	let sx = $derived(sourcePos.x);
+	let sy = $derived(sourcePos.y);
+	let tx = $derived(targetPos.x);
+	let ty = $derived(targetPos.y);
 
 	// Control points for cubic bezier
 	let dx = $derived(Math.abs(tx - sx));
@@ -33,6 +39,9 @@
 	// Midpoint for label
 	let midX = $derived((sx + tx) / 2);
 	let midY = $derived((sy + ty) / 2);
+
+	// Whether this edge originates from a sub-node
+	let isSubNodeEdge = $derived(!!edge.sourceSubNodeId);
 
 	let conditionLabel = $derived.by(() => {
 		if (edge.label) return edge.label;
@@ -71,8 +80,9 @@
 	<path
 		d={path}
 		fill="none"
-		stroke={selected ? '#f59e0b' : '#52525b'}
+		stroke={selected ? '#f59e0b' : isSubNodeEdge ? '#6366f1' : '#52525b'}
 		stroke-width={selected ? 2.5 : 1.5}
+		stroke-dasharray={isSubNodeEdge ? '4,2' : 'none'}
 		class="cursor-pointer"
 		onclick={(e) => {
 			e.stopPropagation();
@@ -83,7 +93,7 @@
 	<!-- Arrowhead -->
 	<polygon
 		points="{tx - 8},{ty - 4} {tx},{ty} {tx - 8},{ty + 4}"
-		fill={selected ? '#f59e0b' : '#52525b'}
+		fill={selected ? '#f59e0b' : isSubNodeEdge ? '#6366f1' : '#52525b'}
 	/>
 
 	<!-- Label -->

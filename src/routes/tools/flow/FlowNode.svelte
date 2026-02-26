@@ -1,26 +1,74 @@
 <script lang="ts">
 	import type { FlowNode } from '$lib/types/flow';
 	import { NODE_COLORS, NODE_LABELS } from '$lib/types/flow';
+	import {
+		NODE_WIDTH,
+		HEADER_HEIGHT,
+		SUBNODE_ROW_HEIGHT,
+		FOOTER_HEIGHT,
+		PORT_RADIUS,
+		getNodeHeight,
+		getVisibleSubNodeCount,
+		getSortedSubNodes,
+	} from '$lib/flow/layout';
 
 	interface Props {
 		node: FlowNode;
 		selected: boolean;
+		expanded: boolean;
+		selectedSubNodeId: string | null;
+		hasConflict?: boolean;
 		onSelect: (nodeId: string) => void;
-		onStartConnect: (nodeId: string, port: string, e: MouseEvent) => void;
+		onSelectSubNode: (nodeId: string, subNodeId: string) => void;
+		onStartConnect: (nodeId: string, port: string, e: MouseEvent, subNodeId?: string) => void;
 		onPortDrop: (nodeId: string) => void;
+		onToggleExpand: (nodeId: string) => void;
 	}
 
-	let { node, selected, onSelect, onStartConnect, onPortDrop }: Props = $props();
+	let {
+		node,
+		selected,
+		expanded,
+		selectedSubNodeId,
+		hasConflict = false,
+		onSelect,
+		onSelectSubNode,
+		onStartConnect,
+		onPortDrop,
+		onToggleExpand,
+	}: Props = $props();
 
-	const NODE_WIDTH = 220;
-	const NODE_HEIGHT = 100;
-	const PORT_RADIUS = 6;
-	const HEADER_HEIGHT = 24;
-
+	let isModule = $derived(node.type === 'module');
+	let height = $derived(isModule ? HEADER_HEIGHT + 56 + FOOTER_HEIGHT : getNodeHeight(node, expanded));
 	let color = $derived(NODE_COLORS[node.type] || '#6b7280');
 	let hasCode = $derived(node.gpcCode.trim().length > 0);
-	let hasOled = $derived(node.oledScene !== null);
-	let hasCombo = $derived(node.comboCode.trim().length > 0);
+	let hasCombo = $derived(node.comboCode.trim().length > 0 || (node.moduleData?.comboCode?.trim().length ?? 0) > 0);
+	let sortedSubNodes = $derived(getSortedSubNodes(node));
+	let visibleCount = $derived(getVisibleSubNodeCount(node, expanded));
+	let hiddenCount = $derived(node.subNodes.length - visibleCount);
+	let hasSubNodes = $derived(node.subNodes.length > 0);
+	let optionCount = $derived(node.moduleData?.options.length ?? 0);
+
+	// Module code section indicators
+	let hasInitCode = $derived((node.moduleData?.initCode ?? '').trim().length > 0);
+	let hasMainCode = $derived((node.moduleData?.mainCode || node.moduleData?.triggerCode || '').trim().length > 0);
+	let hasFunctionsCode = $derived((node.moduleData?.functionsCode ?? '').trim().length > 0);
+	let hasModuleComboCode = $derived((node.moduleData?.comboCode ?? '').trim().length > 0);
+
+	// Sub-node type abbreviations for the row icon
+	const TYPE_ABBREVS: Record<string, string> = {
+		header: 'H',
+		'menu-item': 'M',
+		'toggle-item': 'T',
+		'value-item': 'V',
+		'scroll-bar': 'S',
+		'text-line': 'T',
+		bar: 'B',
+		indicator: 'I',
+		'pixel-art': 'P',
+		separator: '—',
+		custom: '*',
+	};
 </script>
 
 <g
@@ -32,7 +80,7 @@
 		x="2"
 		y="2"
 		width={NODE_WIDTH}
-		height={NODE_HEIGHT}
+		{height}
 		rx="6"
 		fill="rgba(0,0,0,0.3)"
 	/>
@@ -40,11 +88,11 @@
 	<!-- Node body -->
 	<rect
 		width={NODE_WIDTH}
-		height={NODE_HEIGHT}
+		{height}
 		rx="6"
 		fill="#18181b"
-		stroke={selected ? '#f59e0b' : color}
-		stroke-width={selected ? 2.5 : 1.5}
+		stroke={selected ? '#f59e0b' : hasConflict ? '#f97316' : color}
+		stroke-width={selected ? 2.5 : hasConflict ? 2 : 1.5}
 	/>
 
 	<!-- Header bar -->
@@ -93,46 +141,234 @@
 		{NODE_LABELS[node.type]}
 	</text>
 
-	<!-- Content indicators -->
-	<g transform="translate(10, {HEADER_HEIGHT + 12})">
-		{#if hasCode}
-			<g>
-				<rect width="14" height="14" rx="2" fill="#27272a" stroke="#3f3f46" stroke-width="0.5" />
-				<text x="7" y="11" text-anchor="middle" fill="#a78bfa" font-size="8" style="pointer-events: none; user-select: none;">C</text>
-			</g>
-		{/if}
-		{#if hasOled}
-			<g transform="translate({hasCode ? 18 : 0}, 0)">
-				<rect width="14" height="14" rx="2" fill="#27272a" stroke="#3f3f46" stroke-width="0.5" />
-				<text x="7" y="11" text-anchor="middle" fill="#34d399" font-size="8" style="pointer-events: none; user-select: none;">O</text>
-			</g>
-		{/if}
-		{#if hasCombo}
-			<g transform="translate({(hasCode ? 18 : 0) + (hasOled ? 18 : 0)}, 0)">
-				<rect width="14" height="14" rx="2" fill="#27272a" stroke="#3f3f46" stroke-width="0.5" />
-				<text x="7" y="11" text-anchor="middle" fill="#f472b6" font-size="8" style="pointer-events: none; user-select: none;">X</text>
-			</g>
-		{/if}
-	</g>
+	{#if isModule}
+		<!-- Module node body -->
+		<g transform="translate(0, {HEADER_HEIGHT})">
+			<!-- Code section badges row -->
+			<g transform="translate(8, 6)">
+				{#each [
+					{ key: 'I', active: hasInitCode, color: '#60a5fa' },
+					{ key: 'M', active: hasMainCode, color: '#34d399' },
+					{ key: 'F', active: hasFunctionsCode, color: '#a78bfa' },
+					{ key: 'C', active: hasModuleComboCode, color: '#f472b6' },
+				] as badge, idx}
+					<g transform="translate({idx * 20}, 0)">
+						<rect width="16" height="14" rx="2" fill={badge.active ? '#27272a' : '#1a1a1e'} stroke={badge.active ? '#3f3f46' : '#27272a'} stroke-width="0.5" />
+						<text x="8" y="10" text-anchor="middle" fill={badge.active ? badge.color : '#3f3f46'} font-size="8" font-weight="600" style="pointer-events: none; user-select: none;">
+							{badge.key}
+						</text>
+					</g>
+				{/each}
 
-	<!-- Variables count -->
+				<!-- Conflict warning badge -->
+				{#if hasConflict}
+					<g transform="translate(84, 0)">
+						<rect width="14" height="14" rx="2" fill="#451a03" stroke="#92400e" stroke-width="0.5" />
+						<text x="7" y="10" text-anchor="middle" fill="#f97316" font-size="9" font-weight="700" style="pointer-events: none; user-select: none;">!</text>
+					</g>
+				{/if}
+			</g>
+
+			<!-- Options count + info row -->
+			<g transform="translate(8, 26)">
+				{#if optionCount > 0}
+					<text fill="#71717a" font-size="8" style="pointer-events: none; user-select: none;">
+						{optionCount} option{optionCount !== 1 ? 's' : ''}
+					</text>
+				{/if}
+				{#if node.moduleData?.enableVariable}
+					<text
+						x={optionCount > 0 ? 60 : 0}
+						fill="#52525b"
+						font-size="7"
+						style="pointer-events: none; user-select: none;"
+					>
+						{node.moduleData.enableVariable}
+					</text>
+				{/if}
+			</g>
+		</g>
+	{:else if hasSubNodes}
+		<!-- Sub-node rows -->
+		{#each sortedSubNodes.slice(0, visibleCount) as subNode, i (subNode.id)}
+			{@const rowY = HEADER_HEIGHT + i * SUBNODE_ROW_HEIGHT}
+			{@const isSubSelected = selectedSubNodeId === subNode.id}
+			<!-- Row background (clickable) -->
+			<!-- svelte-ignore a11y_no_static_element_interactions -->
+			<rect
+				x="1"
+				y={rowY}
+				width={NODE_WIDTH - 2}
+				height={SUBNODE_ROW_HEIGHT}
+				fill={isSubSelected ? 'rgba(245,158,11,0.15)' : 'transparent'}
+				class="cursor-pointer"
+				onmousedown={(e) => {
+					e.stopPropagation();
+					onSelectSubNode(node.id, subNode.id);
+				}}
+			/>
+
+			<!-- Separator line between rows -->
+			{#if i > 0}
+				<line
+					x1="8"
+					y1={rowY}
+					x2={NODE_WIDTH - 8}
+					y2={rowY}
+					stroke="#27272a"
+					stroke-width="0.5"
+				/>
+			{/if}
+
+			<!-- Type abbreviation badge -->
+			<rect
+				x="8"
+				y={rowY + 4}
+				width="16"
+				height="16"
+				rx="3"
+				fill={subNode.interactive ? '#3b2f6b' : '#1f2937'}
+				style="pointer-events: none;"
+			/>
+			<text
+				x="16"
+				y={rowY + SUBNODE_ROW_HEIGHT / 2 + 1}
+				text-anchor="middle"
+				fill={subNode.interactive ? '#a78bfa' : '#6b7280'}
+				font-size="8"
+				font-weight="600"
+				dominant-baseline="middle"
+				style="pointer-events: none; user-select: none;"
+			>
+				{TYPE_ABBREVS[subNode.type] || '?'}
+			</text>
+
+			<!-- Sub-node label -->
+			<text
+				x="30"
+				y={rowY + SUBNODE_ROW_HEIGHT / 2 + 1}
+				fill={isSubSelected ? '#fbbf24' : '#d4d4d8'}
+				font-size="10"
+				dominant-baseline="middle"
+				style="pointer-events: none; user-select: none;"
+			>
+				{subNode.label.length > 22 ? subNode.label.slice(0, 20) + '...' : subNode.label}
+			</text>
+
+			<!-- Output port for sub-node (right side) -->
+			<circle
+				cx={NODE_WIDTH}
+				cy={rowY + SUBNODE_ROW_HEIGHT / 2}
+				r={PORT_RADIUS - 1}
+				fill={isSubSelected ? '#292524' : '#27272a'}
+				stroke={isSubSelected ? '#f59e0b' : color}
+				stroke-width="1.5"
+				class="cursor-crosshair"
+				onmousedown={(e) => {
+					e.stopPropagation();
+					e.preventDefault();
+					onStartConnect(node.id, 'right', e, subNode.id);
+				}}
+			/>
+		{/each}
+
+		<!-- "+N more" indicator when collapsed -->
+		{#if hiddenCount > 0}
+			{@const moreY = HEADER_HEIGHT + visibleCount * SUBNODE_ROW_HEIGHT}
+			<!-- svelte-ignore a11y_no_static_element_interactions -->
+			<g
+				class="cursor-pointer"
+				onmousedown={(e) => {
+					e.stopPropagation();
+					onToggleExpand(node.id);
+				}}
+			>
+				<rect
+					x="1"
+					y={moreY}
+					width={NODE_WIDTH - 2}
+					height={SUBNODE_ROW_HEIGHT}
+					fill="transparent"
+				/>
+				<text
+					x={NODE_WIDTH / 2}
+					y={moreY + SUBNODE_ROW_HEIGHT / 2}
+					text-anchor="middle"
+					dominant-baseline="middle"
+					fill="#71717a"
+					font-size="9"
+					class="cursor-pointer"
+					style="pointer-events: none; user-select: none;"
+				>
+					+{hiddenCount} more...
+				</text>
+			</g>
+		{/if}
+	{:else}
+		<!-- Empty node body: content indicators -->
+		<g transform="translate(10, {HEADER_HEIGHT + 12})">
+			{#if hasCode}
+				<g>
+					<rect width="14" height="14" rx="2" fill="#27272a" stroke="#3f3f46" stroke-width="0.5" />
+					<text x="7" y="11" text-anchor="middle" fill="#a78bfa" font-size="8" style="pointer-events: none; user-select: none;">C</text>
+				</g>
+			{/if}
+			{#if hasCombo}
+				<g transform="translate({hasCode ? 18 : 0}, 0)">
+					<rect width="14" height="14" rx="2" fill="#27272a" stroke="#3f3f46" stroke-width="0.5" />
+					<text x="7" y="11" text-anchor="middle" fill="#f472b6" font-size="8" style="pointer-events: none; user-select: none;">X</text>
+				</g>
+			{/if}
+		</g>
+	{/if}
+
+	<!-- Footer separator -->
+	<line
+		x1="0"
+		y1={height - FOOTER_HEIGHT}
+		x2={NODE_WIDTH}
+		y2={height - FOOTER_HEIGHT}
+		stroke="#27272a"
+		stroke-width="0.5"
+	/>
+
+	<!-- Footer content: variables count + badges -->
 	{#if node.variables.length > 0}
 		<text
 			x={NODE_WIDTH - 10}
-			y={NODE_HEIGHT - 12}
+			y={height - FOOTER_HEIGHT / 2 + 1}
 			fill="#71717a"
 			font-size="9"
 			text-anchor="end"
+			dominant-baseline="middle"
 			style="pointer-events: none; user-select: none;"
 		>
 			{node.variables.length} var{node.variables.length !== 1 ? 's' : ''}
 		</text>
 	{/if}
 
-	<!-- Input port (left) -->
+	<!-- Expand/collapse button in footer (when node has sub-nodes) -->
+	{#if hasSubNodes && node.subNodes.length > 8}
+		<!-- svelte-ignore a11y_no_static_element_interactions -->
+		<g
+			class="cursor-pointer"
+			transform="translate(8, {height - FOOTER_HEIGHT / 2 - 6})"
+			onmousedown={(e) => {
+				e.stopPropagation();
+				onToggleExpand(node.id);
+			}}
+		>
+			<rect width="12" height="12" rx="2" fill="#27272a" stroke="#3f3f46" stroke-width="0.5" />
+			<text x="6" y="9" text-anchor="middle" fill="#71717a" font-size="9" style="pointer-events: none; user-select: none;">
+				{expanded ? '▲' : '▼'}
+			</text>
+		</g>
+	{/if}
+
+	<!-- Input port (left, in footer area) -->
 	<circle
 		cx={0}
-		cy={NODE_HEIGHT / 2}
+		cy={height - FOOTER_HEIGHT / 2}
 		r={PORT_RADIUS}
 		fill="#27272a"
 		stroke="#71717a"
@@ -147,10 +383,10 @@
 		}}
 	/>
 
-	<!-- Output port (right) -->
+	<!-- Node-level output port (right, in footer area) -->
 	<circle
 		cx={NODE_WIDTH}
-		cy={NODE_HEIGHT / 2}
+		cy={height - FOOTER_HEIGHT / 2}
 		r={PORT_RADIUS}
 		fill="#27272a"
 		stroke={color}

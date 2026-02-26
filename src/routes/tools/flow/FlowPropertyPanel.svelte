@@ -1,14 +1,26 @@
 <script lang="ts">
-	import type { FlowNode, FlowEdge, FlowConditionType, FlowNodeType, FlowVariable, FlowVariableType } from '$lib/types/flow';
-	import type { WidgetPlacement } from '$lib/oled-widgets/types';
+	import type {
+		FlowNode,
+		FlowEdge,
+		FlowConditionType,
+		FlowNodeType,
+		FlowVariable,
+		FlowVariableType,
+		SubNode,
+		SubNodeType,
+		ModuleNodeOption,
+	} from '$lib/types/flow';
 	import { NODE_LABELS, NODE_COLORS } from '$lib/types/flow';
-	import { listWidgets, getWidget, CATEGORY_LABELS } from '$lib/oled-widgets/registry';
+	import { getSubNodeDef, listSubNodeDefs, listSubNodeCategories, SUBNODE_CATEGORY_LABELS } from '$lib/flow/subnodes/registry';
+	import SubNodeParamEditor from './SubNodeParamEditor.svelte';
 	import MiniMonaco from '$lib/components/editor/MiniMonaco.svelte';
 	import ButtonSelect from '$lib/components/inputs/ButtonSelect.svelte';
 
 	interface Props {
 		selectedNode: FlowNode | null;
 		selectedEdge: FlowEdge | null;
+		selectedSubNode: SubNode | null;
+		allModuleNodes?: FlowNode[];
 		onUpdateNode: (nodeId: string, updates: Partial<FlowNode>) => void;
 		onUpdateEdge: (edgeId: string, updates: Partial<FlowEdge>) => void;
 		onSetInitial: (nodeId: string) => void;
@@ -16,11 +28,18 @@
 		onDelete: () => void;
 		onEditOled: (nodeId: string) => void;
 		onSaveAsChunk?: () => void;
+		onAddSubNode: (nodeId: string, type: SubNodeType, label: string) => void;
+		onRemoveSubNode: (nodeId: string, subNodeId: string) => void;
+		onUpdateSubNode: (nodeId: string, subNodeId: string, updates: Partial<SubNode>) => void;
+		onReorderSubNodes: (nodeId: string, fromIndex: number, toIndex: number) => void;
+		onSelectSubNode: (nodeId: string, subNodeId: string | null) => void;
 	}
 
 	let {
 		selectedNode,
 		selectedEdge,
+		selectedSubNode,
+		allModuleNodes = [],
 		onUpdateNode,
 		onUpdateEdge,
 		onSetInitial,
@@ -28,7 +47,29 @@
 		onDelete,
 		onEditOled,
 		onSaveAsChunk,
+		onAddSubNode,
+		onRemoveSubNode,
+		onUpdateSubNode,
+		onReorderSubNodes,
+		onSelectSubNode,
 	}: Props = $props();
+
+	// Derive active conflicts for the selected module node
+	let activeConflicts = $derived.by(() => {
+		if (!selectedNode?.moduleData?.conflicts?.length) return [];
+		const myConflicts = selectedNode.moduleData.conflicts;
+		const myId = selectedNode.moduleData.moduleId;
+		const conflicts: { nodeId: string; moduleName: string }[] = [];
+		for (const other of allModuleNodes) {
+			if (other.id === selectedNode.id || !other.moduleData) continue;
+			const otherId = other.moduleData.moduleId;
+			// Bidirectional check
+			if (myConflicts.includes(otherId) || (other.moduleData.conflicts?.includes(myId))) {
+				conflicts.push({ nodeId: other.id, moduleName: other.moduleData.moduleName });
+			}
+		}
+		return conflicts;
+	});
 
 	const nodeTypes: FlowNodeType[] = ['intro', 'home', 'menu', 'submenu', 'custom', 'screensaver'];
 	const conditionTypes: { value: FlowConditionType; label: string }[] = [
@@ -40,6 +81,7 @@
 	];
 
 	let codeTab = $state<'gpc' | 'enter' | 'exit' | 'combo'>('gpc');
+	let showSubNodePicker = $state(false);
 
 	// Local editing state for node
 	let editLabel = $state('');
@@ -63,6 +105,85 @@
 		}
 	});
 
+	// Local editing state for module node
+	let editInitCode = $state('');
+	let editMainCode = $state('');
+	let editFunctionsCode = $state('');
+	let editModuleComboCode = $state('');
+	let editEnableVariable = $state('');
+	let moduleCodeTab = $state<'init' | 'main' | 'functions' | 'combos'>('main');
+	let isModuleNode = $derived(selectedNode?.type === 'module');
+
+	let lastSyncedModuleNodeId = '';
+	$effect(() => {
+		if (selectedNode && selectedNode.type === 'module' && selectedNode.id !== lastSyncedModuleNodeId) {
+			lastSyncedModuleNodeId = selectedNode.id;
+			const md = selectedNode.moduleData;
+			editInitCode = md?.initCode ?? '';
+			editMainCode = md?.mainCode || md?.triggerCode || '';
+			editFunctionsCode = md?.functionsCode ?? '';
+			editModuleComboCode = md?.comboCode ?? '';
+			editEnableVariable = md?.enableVariable ?? '';
+		} else if (!selectedNode || selectedNode.type !== 'module') {
+			lastSyncedModuleNodeId = '';
+		}
+	});
+
+	function commitModuleData() {
+		if (!selectedNode || !selectedNode.moduleData) return;
+		const md = { ...selectedNode.moduleData };
+		let changed = false;
+		if (editInitCode !== (md.initCode ?? '')) { md.initCode = editInitCode; changed = true; }
+		if (editMainCode !== (md.mainCode || md.triggerCode || '')) { md.mainCode = editMainCode; md.triggerCode = undefined; changed = true; }
+		if (editFunctionsCode !== (md.functionsCode ?? '')) { md.functionsCode = editFunctionsCode; changed = true; }
+		if (editModuleComboCode !== md.comboCode) { md.comboCode = editModuleComboCode; changed = true; }
+		if (editEnableVariable !== md.enableVariable) { md.enableVariable = editEnableVariable; changed = true; }
+		if (changed) {
+			onUpdateNode(selectedNode.id, { moduleData: md });
+		}
+	}
+
+	function updateModuleOption(index: number, updates: Partial<ModuleNodeOption>) {
+		if (!selectedNode || !selectedNode.moduleData) return;
+		const md = { ...selectedNode.moduleData };
+		const opts = [...md.options];
+		opts[index] = { ...opts[index], ...updates };
+		md.options = opts;
+		onUpdateNode(selectedNode.id, { moduleData: md });
+	}
+
+	function addModuleOption() {
+		if (!selectedNode || !selectedNode.moduleData) return;
+		const md = { ...selectedNode.moduleData };
+		const newOpt: ModuleNodeOption = {
+			name: `Option ${md.options.length + 1}`,
+			variable: `opt_${md.options.length}`,
+			type: 'value',
+			defaultValue: 0,
+		};
+		md.options = [...md.options, newOpt];
+		onUpdateNode(selectedNode.id, { moduleData: md });
+	}
+
+	function removeModuleOption(index: number) {
+		if (!selectedNode || !selectedNode.moduleData) return;
+		const md = { ...selectedNode.moduleData };
+		md.options = md.options.filter((_, i) => i !== index);
+		onUpdateNode(selectedNode.id, { moduleData: md });
+	}
+
+	// Local editing state for sub-node
+	let editSubLabel = $state('');
+	let lastSyncedSubNodeId = '';
+	$effect(() => {
+		if (selectedSubNode && selectedSubNode.id !== lastSyncedSubNodeId) {
+			lastSyncedSubNodeId = selectedSubNode.id;
+			editSubLabel = selectedSubNode.label;
+		} else if (!selectedSubNode) {
+			lastSyncedSubNodeId = '';
+		}
+	});
+
 	// Local editing state for edge
 	let editEdgeLabel = $state('');
 	let editEdgeButton = $state('');
@@ -72,7 +193,6 @@
 	let editEdgeComparison = $state('==');
 	let editEdgeValue = $state(0);
 
-	// Sync edge → local state only when a different edge is selected or condition type changes
 	let lastSyncedEdgeKey = '';
 	$effect(() => {
 		if (selectedEdge) {
@@ -92,6 +212,22 @@
 		}
 	});
 
+	// Derived
+	let subNodeDef = $derived(selectedSubNode ? getSubNodeDef(selectedSubNode.type) : null);
+	let isTextSubNode = $derived(
+		selectedSubNode
+			? ['header', 'text-line', 'menu-item', 'toggle-item', 'value-item'].includes(selectedSubNode.type)
+			: false
+	);
+	let sortedSubNodes = $derived(
+		selectedNode ? [...selectedNode.subNodes].sort((a, b) => a.order - b.order) : []
+	);
+	let subNodeCategories = $derived(listSubNodeCategories());
+	let availableVariables = $derived.by(() => {
+		if (!selectedNode) return [];
+		return selectedNode.variables.map((v) => v.name);
+	});
+
 	function commitNodeLabel() {
 		if (selectedNode && editLabel !== selectedNode.label) {
 			onUpdateNode(selectedNode.id, { label: editLabel });
@@ -107,6 +243,12 @@
 		if (editComboCode !== selectedNode.comboCode) updates.comboCode = editComboCode;
 		if (Object.keys(updates).length > 0) {
 			onUpdateNode(selectedNode.id, updates);
+		}
+	}
+
+	function commitSubNodeLabel() {
+		if (selectedNode && selectedSubNode && editSubLabel !== selectedSubNode.label) {
+			onUpdateSubNode(selectedNode.id, selectedSubNode.id, { label: editSubLabel });
 		}
 	}
 
@@ -151,7 +293,6 @@
 		if (!selectedNode) return;
 		const vars = [...selectedNode.variables];
 		const current = vars[index];
-		// Reset default value when switching between string and numeric types
 		if (updates.type && updates.type !== current.type) {
 			if (updates.type === 'string' && typeof current.defaultValue !== 'string') {
 				updates.defaultValue = '';
@@ -165,40 +306,465 @@
 		onUpdateNode(selectedNode.id, { variables: vars });
 	}
 
-	let showWidgetPicker = $state(false);
-	let allWidgets = listWidgets();
-
-	function addWidget(widgetId: string) {
+	function handleAddSubNode(type: SubNodeType) {
 		if (!selectedNode) return;
-		const w = getWidget(widgetId);
-		if (!w) return;
-		const defaultConfig: Record<string, unknown> = {};
-		for (const p of w.params) {
-			defaultConfig[p.key] = p.default;
-		}
-		const placement: WidgetPlacement = {
-			widgetId,
-			x: 0,
-			y: 0,
-			config: defaultConfig,
-		};
-		onUpdateNode(selectedNode.id, {
-			oledWidgets: [...(selectedNode.oledWidgets || []), placement],
-		});
-		showWidgetPicker = false;
+		const def = getSubNodeDef(type);
+		const label = def?.name || type;
+		onAddSubNode(selectedNode.id, type, label);
+		showSubNodePicker = false;
 	}
 
-	function removeWidget(index: number) {
+	function handleMoveSubNode(fromIdx: number, direction: -1 | 1) {
 		if (!selectedNode) return;
-		const widgets = [...(selectedNode.oledWidgets || [])];
-		widgets.splice(index, 1);
-		onUpdateNode(selectedNode.id, { oledWidgets: widgets });
+		const toIdx = fromIdx + direction;
+		if (toIdx < 0 || toIdx >= sortedSubNodes.length) return;
+		onReorderSubNodes(selectedNode.id, fromIdx, toIdx);
+	}
+
+	function handleSubNodeParamUpdate(key: string, value: unknown) {
+		if (!selectedNode || !selectedSubNode) return;
+		const newConfig = { ...selectedSubNode.config, [key]: value };
+		onUpdateSubNode(selectedNode.id, selectedSubNode.id, { config: newConfig });
 	}
 </script>
 
 <div class="flex h-full w-72 flex-col border-l border-zinc-800 bg-zinc-900">
-	{#if selectedNode}
-		<!-- Node Properties -->
+	{#if selectedNode && selectedSubNode}
+		<!-- ==================== Sub-Node Properties ==================== -->
+		<div class="border-b border-zinc-800 px-3 py-2">
+			<div class="flex items-center gap-2">
+				<button
+					class="text-zinc-400 hover:text-zinc-200"
+					onclick={() => onSelectSubNode(selectedNode!.id, null)}
+					title="Back to node"
+				>
+					<svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+						<path fill-rule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clip-rule="evenodd" />
+					</svg>
+				</button>
+				<h3 class="text-xs font-medium uppercase tracking-wider text-zinc-500">Sub-Node</h3>
+				<span class="rounded bg-zinc-800 px-1.5 py-0.5 text-xs text-zinc-400">
+					{subNodeDef?.name || selectedSubNode.type}
+				</span>
+			</div>
+		</div>
+		<div class="flex-1 overflow-y-auto px-3 py-2">
+			<!-- Label / Display Text -->
+			<div class="mb-3">
+				<label class="mb-1 block text-xs text-zinc-400" for="subnode-label">
+					{isTextSubNode ? 'Display Text' : 'Label'}
+				</label>
+				<input
+					id="subnode-label"
+					type="text"
+					class="w-full rounded border border-zinc-700 bg-zinc-800 px-2 py-1 text-sm text-zinc-200 focus:border-emerald-500 focus:outline-none"
+					bind:value={editSubLabel}
+					onblur={commitSubNodeLabel}
+					onkeydown={(e) => { if (e.key === 'Enter') commitSubNodeLabel(); }}
+					placeholder={isTextSubNode ? 'Text shown on OLED...' : 'Sub-node label...'}
+				/>
+				{#if isTextSubNode}
+					<p class="mt-0.5 text-[10px] text-zinc-600">This text is rendered on the OLED screen</p>
+				{/if}
+			</div>
+
+			<!-- Pixel Art: Edit button -->
+			{#if selectedSubNode.type === 'pixel-art'}
+				<div class="mb-3">
+					<button
+						class="w-full rounded border border-blue-800 bg-blue-950 px-2 py-1.5 text-xs text-blue-300 hover:bg-blue-900"
+						onclick={() => onEditOled(selectedNode!.id)}
+					>
+						Edit in OLED Pixel Editor
+					</button>
+				</div>
+			{/if}
+
+			<!-- Position mode -->
+			<div class="mb-3">
+				<label class="mb-1 block text-xs text-zinc-400">Position</label>
+				<div class="flex gap-1">
+					<button
+						class="flex-1 rounded px-2 py-1 text-xs {selectedSubNode.position === 'stack' ? 'bg-zinc-700 text-zinc-200' : 'bg-zinc-800 text-zinc-500 hover:text-zinc-300'}"
+						onclick={() => onUpdateSubNode(selectedNode!.id, selectedSubNode!.id, { position: 'stack' })}
+					>
+						Stack
+					</button>
+					<button
+						class="flex-1 rounded px-2 py-1 text-xs {selectedSubNode.position === 'absolute' ? 'bg-zinc-700 text-zinc-200' : 'bg-zinc-800 text-zinc-500 hover:text-zinc-300'}"
+						onclick={() => onUpdateSubNode(selectedNode!.id, selectedSubNode!.id, { position: 'absolute' })}
+					>
+						Absolute
+					</button>
+				</div>
+			</div>
+
+			<!-- Absolute x/y inputs -->
+			{#if selectedSubNode.position === 'absolute'}
+				<div class="mb-3 flex gap-2">
+					<div class="flex-1">
+						<label class="mb-0.5 block text-xs text-zinc-400" for="subnode-x">X</label>
+						<input
+							id="subnode-x"
+							type="number"
+							class="w-full rounded border border-zinc-700 bg-zinc-800 px-2 py-1 text-sm text-zinc-200 focus:border-emerald-500 focus:outline-none"
+							value={selectedSubNode.x ?? 0}
+							min="0"
+							max="127"
+							onchange={(e) => onUpdateSubNode(selectedNode!.id, selectedSubNode!.id, { x: parseInt((e.target as HTMLInputElement).value) || 0 })}
+						/>
+					</div>
+					<div class="flex-1">
+						<label class="mb-0.5 block text-xs text-zinc-400" for="subnode-y">Y</label>
+						<input
+							id="subnode-y"
+							type="number"
+							class="w-full rounded border border-zinc-700 bg-zinc-800 px-2 py-1 text-sm text-zinc-200 focus:border-emerald-500 focus:outline-none"
+							value={selectedSubNode.y ?? 0}
+							min="0"
+							max="63"
+							onchange={(e) => onUpdateSubNode(selectedNode!.id, selectedSubNode!.id, { y: parseInt((e.target as HTMLInputElement).value) || 0 })}
+						/>
+					</div>
+				</div>
+			{/if}
+
+			<!-- Variable binding -->
+			{#if selectedSubNode.interactive || ['bar', 'indicator', 'toggle-item', 'value-item'].includes(selectedSubNode.type)}
+				<div class="mb-3">
+					<label class="mb-1 block text-xs text-zinc-400">Bound Variable</label>
+					<select
+						class="w-full rounded border border-zinc-700 bg-zinc-800 px-2 py-1 text-sm text-zinc-200 focus:border-emerald-500 focus:outline-none"
+						value={selectedSubNode.boundVariable || ''}
+						onchange={(e) => {
+							const val = (e.target as HTMLSelectElement).value;
+							onUpdateSubNode(selectedNode!.id, selectedSubNode!.id, { boundVariable: val || undefined });
+						}}
+					>
+						<option value="">None</option>
+						{#each availableVariables as varName}
+							<option value={varName}>{varName}</option>
+						{/each}
+					</select>
+				</div>
+			{/if}
+
+			<!-- Type-specific parameters -->
+			{#if subNodeDef && subNodeDef.params.length > 0}
+				<div class="mb-3">
+					<label class="mb-1 block text-xs font-medium text-zinc-400">Parameters</label>
+					<SubNodeParamEditor
+						params={subNodeDef.params}
+						config={selectedSubNode.config}
+						onUpdate={handleSubNodeParamUpdate}
+					/>
+				</div>
+			{/if}
+
+			<!-- Custom code -->
+			{#if selectedSubNode.type === 'custom'}
+				<div class="mb-3">
+					<label class="mb-1 block text-xs text-zinc-400">Render Code</label>
+					<div class="h-24 overflow-hidden rounded border border-zinc-700">
+						<MiniMonaco
+							value={selectedSubNode.renderCode || ''}
+							language="gpc"
+							label="Render Code"
+							onchange={(v) => onUpdateSubNode(selectedNode!.id, selectedSubNode!.id, { renderCode: v })}
+						/>
+					</div>
+				</div>
+				<div class="mb-3">
+					<label class="mb-1 block text-xs text-zinc-400">Interact Code</label>
+					<div class="h-24 overflow-hidden rounded border border-zinc-700">
+						<MiniMonaco
+							value={selectedSubNode.interactCode || ''}
+							language="gpc"
+							label="Interact Code"
+							onchange={(v) => onUpdateSubNode(selectedNode!.id, selectedSubNode!.id, { interactCode: v })}
+						/>
+					</div>
+				</div>
+			{/if}
+
+			<!-- Delete sub-node -->
+			<button
+				class="mt-4 w-full rounded border border-red-800 bg-red-950 px-2 py-1.5 text-xs text-red-300 hover:bg-red-900"
+				onclick={() => {
+					if (selectedNode && selectedSubNode) {
+						onRemoveSubNode(selectedNode.id, selectedSubNode.id);
+					}
+				}}
+			>
+				Delete Sub-Node
+			</button>
+		</div>
+
+	{:else if selectedNode && isModuleNode}
+		<!-- ==================== Module Node Properties ==================== -->
+		<div class="border-b border-zinc-800 px-3 py-2">
+			<h3 class="text-xs font-medium uppercase tracking-wider text-zinc-500">Module Properties</h3>
+		</div>
+		<div class="flex-1 overflow-y-auto px-3 py-2">
+			<!-- Label -->
+			<div class="mb-3">
+				<label class="mb-1 block text-xs text-zinc-400" for="module-label">Label</label>
+				<input
+					id="module-label"
+					type="text"
+					class="w-full rounded border border-zinc-700 bg-zinc-800 px-2 py-1 text-sm text-zinc-200 focus:border-emerald-500 focus:outline-none"
+					bind:value={editLabel}
+					onblur={commitNodeLabel}
+					onkeydown={(e) => { if (e.key === 'Enter') commitNodeLabel(); }}
+				/>
+			</div>
+
+			<!-- Module ID badge -->
+			{#if selectedNode.moduleData}
+				<div class="mb-3 flex items-center gap-2">
+					<span class="rounded bg-red-950 px-2 py-0.5 text-xs text-red-300">
+						{selectedNode.moduleData.moduleId}
+					</span>
+					<span class="text-xs text-zinc-500">{selectedNode.moduleData.moduleName}</span>
+				</div>
+			{/if}
+
+			<!-- Conflict Warning -->
+			{#if activeConflicts.length > 0}
+				<div class="mb-3 rounded border border-orange-800 bg-orange-950/50 px-2 py-1.5">
+					<p class="text-xs font-medium text-orange-400">Conflicts Detected</p>
+					<ul class="mt-0.5 space-y-0.5">
+						{#each activeConflicts as conflict}
+							<li class="text-[10px] text-orange-300">• {conflict.moduleName}</li>
+						{/each}
+					</ul>
+				</div>
+			{/if}
+
+			<!-- Enable Variable -->
+			<div class="mb-3">
+				<label class="mb-1 block text-xs text-zinc-400" for="module-enable-var">Enable Variable</label>
+				<input
+					id="module-enable-var"
+					type="text"
+					class="w-full rounded border border-zinc-700 bg-zinc-800 px-2 py-1 text-sm text-zinc-200 focus:border-emerald-500 focus:outline-none"
+					bind:value={editEnableVariable}
+					onblur={commitModuleData}
+					onkeydown={(e) => { if (e.key === 'Enter') commitModuleData(); }}
+				/>
+				<p class="mt-0.5 text-[10px] text-zinc-600">Toggle variable shared with Menu Flow</p>
+			</div>
+
+			<!-- Code Tabs -->
+			<div class="mb-2">
+				<label class="mb-1 block text-xs text-zinc-400">Code</label>
+				<div class="flex gap-0.5 rounded bg-zinc-800 p-0.5">
+					{#each [
+						{ key: 'init', label: 'Init' },
+						{ key: 'main', label: 'Main' },
+						{ key: 'functions', label: 'Funcs' },
+						{ key: 'combos', label: 'Combos' },
+					] as tab}
+						<button
+							class="flex-1 rounded px-1 py-1 text-xs {moduleCodeTab === tab.key ? 'bg-zinc-700 text-zinc-200' : 'text-zinc-500 hover:text-zinc-300'}"
+							onclick={() => {
+								commitModuleData();
+								moduleCodeTab = tab.key as typeof moduleCodeTab;
+							}}
+						>
+							{tab.label}
+						</button>
+					{/each}
+				</div>
+			</div>
+			<div class="mb-3 h-32 overflow-hidden rounded border border-zinc-700">
+				{#if moduleCodeTab === 'init'}
+					<MiniMonaco
+						value={editInitCode}
+						language="gpc"
+						label="Init Code"
+						onchange={(v) => { editInitCode = v; commitModuleData(); }}
+					/>
+				{:else if moduleCodeTab === 'main'}
+					<MiniMonaco
+						value={editMainCode}
+						language="gpc"
+						label="Main Code"
+						onchange={(v) => { editMainCode = v; commitModuleData(); }}
+					/>
+				{:else if moduleCodeTab === 'functions'}
+					<MiniMonaco
+						value={editFunctionsCode}
+						language="gpc"
+						label="Functions"
+						onchange={(v) => { editFunctionsCode = v; commitModuleData(); }}
+					/>
+				{:else if moduleCodeTab === 'combos'}
+					<MiniMonaco
+						value={editModuleComboCode}
+						language="gpc"
+						label="Combos"
+						onchange={(v) => { editModuleComboCode = v; commitModuleData(); }}
+					/>
+				{/if}
+			</div>
+			<p class="mb-3 text-[10px] text-zinc-600">
+				{#if moduleCodeTab === 'init'}Runs once in the init block
+				{:else if moduleCodeTab === 'main'}Runs every frame in main, guarded by enable variable
+				{:else if moduleCodeTab === 'functions'}Function definitions, constants, and defines
+				{:else}Combo blocks
+				{/if}
+			</p>
+
+			<!-- Options -->
+			<div class="mb-3">
+				<div class="mb-1 flex items-center justify-between">
+					<label class="text-xs text-zinc-400">Options</label>
+					<button
+						class="rounded px-1.5 py-0.5 text-xs text-emerald-400 hover:bg-zinc-800"
+						onclick={addModuleOption}
+					>
+						+ Add
+					</button>
+				</div>
+				{#if selectedNode.moduleData && selectedNode.moduleData.options.length > 0}
+					<div class="space-y-1">
+						{#each selectedNode.moduleData.options as opt, i}
+							<div class="rounded bg-zinc-800 px-2 py-1.5">
+								<div class="mb-1 flex items-center gap-1">
+									<input
+										type="text"
+										class="flex-1 rounded border border-zinc-700 bg-zinc-900 px-1.5 py-0.5 text-xs text-zinc-200 focus:border-emerald-500 focus:outline-none"
+										value={opt.name}
+										placeholder="Name"
+										onchange={(e) => updateModuleOption(i, { name: (e.target as HTMLInputElement).value })}
+									/>
+									<button
+										class="text-zinc-600 hover:text-red-400"
+										onclick={() => removeModuleOption(i)}
+									>
+										<svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+											<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+										</svg>
+									</button>
+								</div>
+								<div class="flex items-center gap-1">
+									<input
+										type="text"
+										class="flex-1 rounded border border-zinc-700 bg-zinc-900 px-1.5 py-0.5 text-xs text-zinc-300 focus:border-emerald-500 focus:outline-none"
+										value={opt.variable}
+										placeholder="Variable"
+										onchange={(e) => updateModuleOption(i, { variable: (e.target as HTMLInputElement).value })}
+									/>
+									<select
+										class="rounded border border-zinc-700 bg-zinc-900 px-1 py-0.5 text-xs text-zinc-300 focus:border-emerald-500 focus:outline-none"
+										value={opt.type}
+										onchange={(e) => updateModuleOption(i, { type: (e.target as HTMLSelectElement).value as 'toggle' | 'value' })}
+									>
+										<option value="toggle">Toggle</option>
+										<option value="value">Value</option>
+									</select>
+								</div>
+								{#if opt.type === 'value'}
+									<div class="mt-1 flex gap-1">
+										<input
+											type="number"
+											class="w-16 rounded border border-zinc-700 bg-zinc-900 px-1 py-0.5 text-xs text-zinc-300 focus:border-emerald-500 focus:outline-none"
+											value={opt.defaultValue}
+											placeholder="Default"
+											title="Default"
+											onchange={(e) => updateModuleOption(i, { defaultValue: parseInt((e.target as HTMLInputElement).value) || 0 })}
+										/>
+										<input
+											type="number"
+											class="w-14 rounded border border-zinc-700 bg-zinc-900 px-1 py-0.5 text-xs text-zinc-300 focus:border-emerald-500 focus:outline-none"
+											value={opt.min ?? 0}
+											placeholder="Min"
+											title="Min"
+											onchange={(e) => updateModuleOption(i, { min: parseInt((e.target as HTMLInputElement).value) || 0 })}
+										/>
+										<input
+											type="number"
+											class="w-14 rounded border border-zinc-700 bg-zinc-900 px-1 py-0.5 text-xs text-zinc-300 focus:border-emerald-500 focus:outline-none"
+											value={opt.max ?? 100}
+											placeholder="Max"
+											title="Max"
+											onchange={(e) => updateModuleOption(i, { max: parseInt((e.target as HTMLInputElement).value) || 100 })}
+										/>
+									</div>
+								{/if}
+							</div>
+						{/each}
+					</div>
+				{:else}
+					<div class="rounded border border-dashed border-zinc-700 px-2 py-2 text-center text-xs text-zinc-600">
+						No options configured
+					</div>
+				{/if}
+			</div>
+
+			<!-- Variables (auto-generated from module) -->
+			<div class="mb-3">
+				<div class="mb-1 flex items-center justify-between">
+					<label class="text-xs text-zinc-400">Variables</label>
+					<button
+						class="rounded px-1.5 py-0.5 text-xs text-emerald-400 hover:bg-zinc-800"
+						onclick={addVariable}
+					>
+						+ Add
+					</button>
+				</div>
+				{#each selectedNode.variables as variable, i}
+					<div class="mb-1 flex items-center gap-1">
+						<input
+							type="text"
+							class="flex-1 rounded border border-zinc-700 bg-zinc-800 px-1.5 py-0.5 text-xs text-zinc-200 focus:border-emerald-500 focus:outline-none"
+							value={variable.name}
+							onchange={(e) => updateVariable(i, { name: (e.target as HTMLInputElement).value })}
+						/>
+						<select
+							class="rounded border border-zinc-700 bg-zinc-800 px-1 py-0.5 text-xs text-zinc-300 focus:border-emerald-500 focus:outline-none"
+							value={variable.type}
+							onchange={(e) => updateVariable(i, { type: (e.target as HTMLSelectElement).value as FlowVariableType })}
+						>
+							<option value="int">int</option>
+							<option value="int8">int8</option>
+							<option value="int16">int16</option>
+							<option value="int32">int32</option>
+						</select>
+						<button
+							class="text-zinc-500 hover:text-red-400"
+							onclick={() => removeVariable(i)}
+						>
+							<svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+							</svg>
+						</button>
+					</div>
+				{/each}
+			</div>
+
+			<!-- Actions -->
+			<div class="mt-4 space-y-2">
+				<div class="flex gap-2">
+					<button
+						class="flex-1 rounded border border-zinc-700 bg-zinc-800 px-2 py-1.5 text-xs text-zinc-300 hover:bg-zinc-700"
+						onclick={() => onDuplicate(selectedNode!.id)}
+					>
+						Duplicate
+					</button>
+					<button
+						class="flex-1 rounded border border-red-800 bg-red-950 px-2 py-1.5 text-xs text-red-300 hover:bg-red-900"
+						onclick={onDelete}
+					>
+						Delete
+					</button>
+				</div>
+			</div>
+		</div>
+
+	{:else if selectedNode}
+		<!-- ==================== Node Properties ==================== -->
 		<div class="border-b border-zinc-800 px-3 py-2">
 			<h3 class="text-xs font-medium uppercase tracking-wider text-zinc-500">Node Properties</h3>
 		</div>
@@ -245,56 +811,151 @@
 				</div>
 			{/if}
 
-			<!-- OLED Scene -->
-			<div class="mb-3">
-				<label class="mb-1 block text-xs text-zinc-400">OLED Scene</label>
-				<button
-					class="w-full rounded border border-zinc-700 bg-zinc-800 px-2 py-1.5 text-xs text-zinc-300 hover:bg-zinc-700"
-					onclick={() => onEditOled(selectedNode!.id)}
-				>
-					{selectedNode.oledScene ? 'Edit in OLED Tool' : 'Create OLED Scene'}
-				</button>
-			</div>
-
-			<!-- OLED Widgets -->
+			<!-- Sub-Nodes -->
 			<div class="mb-3">
 				<div class="mb-1 flex items-center justify-between">
-					<label class="text-xs text-zinc-400">OLED Widgets</label>
+					<label class="text-xs text-zinc-400">Sub-Nodes</label>
 					<button
 						class="rounded px-1.5 py-0.5 text-xs text-emerald-400 hover:bg-zinc-800"
-						onclick={() => (showWidgetPicker = !showWidgetPicker)}
+						onclick={() => (showSubNodePicker = !showSubNodePicker)}
 					>
 						+ Add
 					</button>
 				</div>
-				{#if showWidgetPicker}
-					<div class="mb-2 max-h-32 overflow-y-auto rounded border border-zinc-700 bg-zinc-800 p-1">
-						{#each allWidgets as w}
-							<button
-								class="w-full rounded px-2 py-1 text-left text-xs text-zinc-300 hover:bg-zinc-700"
-								onclick={() => addWidget(w.id)}
-							>
-								{w.name}
-							</button>
+
+				<!-- Sub-node type picker -->
+				{#if showSubNodePicker}
+					<div class="mb-2 max-h-48 overflow-y-auto rounded border border-zinc-700 bg-zinc-800 p-1">
+						{#each subNodeCategories as cat}
+							<div class="mb-1">
+								<div class="px-1 py-0.5 text-xs font-medium text-zinc-500">
+									{SUBNODE_CATEGORY_LABELS[cat] || cat}
+								</div>
+								{#each listSubNodeDefs(cat) as def}
+									<button
+										class="w-full rounded px-2 py-1 text-left text-xs text-zinc-300 hover:bg-zinc-700"
+										onclick={() => handleAddSubNode(def.id as SubNodeType)}
+										title={def.description}
+									>
+										{def.name}
+									</button>
+								{/each}
+							</div>
 						{/each}
 					</div>
 				{/if}
-				{#if selectedNode.oledWidgets && selectedNode.oledWidgets.length > 0}
-					{#each selectedNode.oledWidgets as wp, i}
-						{@const wDef = getWidget(wp.widgetId)}
-						<div class="mb-1 flex items-center gap-1 text-xs text-zinc-300">
-							<span class="flex-1 truncate">{wDef?.name || wp.widgetId}</span>
-							<button
-								class="text-zinc-500 hover:text-red-400"
-								onclick={() => removeWidget(i)}
-							>
-								<svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-								</svg>
-							</button>
-						</div>
-					{/each}
+
+				<!-- Sub-node list -->
+				{#if sortedSubNodes.length > 0}
+					<div class="space-y-0.5">
+						{#each sortedSubNodes as subNode, i (subNode.id)}
+							{@const def = getSubNodeDef(subNode.type)}
+							<div class="flex items-center gap-1 rounded bg-zinc-800 px-1.5 py-1">
+								<!-- Reorder buttons -->
+								<div class="flex flex-col">
+									<button
+										class="text-zinc-600 hover:text-zinc-300 disabled:opacity-30"
+										disabled={i === 0}
+										onclick={() => handleMoveSubNode(i, -1)}
+									>
+										<svg class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
+											<path fill-rule="evenodd" d="M14.707 12.707a1 1 0 01-1.414 0L10 9.414l-3.293 3.293a1 1 0 01-1.414-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 010 1.414z" clip-rule="evenodd" />
+										</svg>
+									</button>
+									<button
+										class="text-zinc-600 hover:text-zinc-300 disabled:opacity-30"
+										disabled={i === sortedSubNodes.length - 1}
+										onclick={() => handleMoveSubNode(i, 1)}
+									>
+										<svg class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
+											<path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
+										</svg>
+									</button>
+								</div>
+
+								<!-- Click to select -->
+								<button
+									class="flex-1 truncate text-left text-xs text-zinc-300 hover:text-zinc-100"
+									onclick={() => onSelectSubNode(selectedNode!.id, subNode.id)}
+								>
+									<span class="mr-1 text-zinc-500">{def?.name || subNode.type}</span>
+									{subNode.label}
+								</button>
+
+								<!-- Interactive badge -->
+								{#if subNode.interactive}
+									<span class="rounded bg-purple-900/50 px-1 text-[9px] text-purple-400">INT</span>
+								{/if}
+
+								<!-- Remove -->
+								<button
+									class="text-zinc-600 hover:text-red-400"
+									onclick={() => onRemoveSubNode(selectedNode!.id, subNode.id)}
+								>
+									<svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+									</svg>
+								</button>
+							</div>
+						{/each}
+					</div>
+				{:else}
+					<div class="rounded border border-dashed border-zinc-700 px-2 py-2 text-center text-xs text-zinc-600">
+						No sub-nodes. Add one above.
+					</div>
 				{/if}
+			</div>
+
+			<!-- Stack offset -->
+			{#if selectedNode.subNodes.length > 0}
+				<div class="mb-3 flex gap-2">
+					<div class="flex-1">
+						<label class="mb-0.5 block text-xs text-zinc-400" for="stack-offset-x">Stack Offset X</label>
+						<input
+							id="stack-offset-x"
+							type="number"
+							class="w-full rounded border border-zinc-700 bg-zinc-800 px-2 py-1 text-sm text-zinc-200 focus:border-emerald-500 focus:outline-none"
+							value={selectedNode.stackOffsetX}
+							onchange={(e) => onUpdateNode(selectedNode!.id, { stackOffsetX: parseInt((e.target as HTMLInputElement).value) || 0 })}
+						/>
+					</div>
+					<div class="flex-1">
+						<label class="mb-0.5 block text-xs text-zinc-400" for="stack-offset-y">Stack Offset Y</label>
+						<input
+							id="stack-offset-y"
+							type="number"
+							class="w-full rounded border border-zinc-700 bg-zinc-800 px-2 py-1 text-sm text-zinc-200 focus:border-emerald-500 focus:outline-none"
+							value={selectedNode.stackOffsetY}
+							onchange={(e) => onUpdateNode(selectedNode!.id, { stackOffsetY: parseInt((e.target as HTMLInputElement).value) || 0 })}
+						/>
+					</div>
+				</div>
+			{/if}
+
+			<!-- Back Button -->
+			<div class="mb-3">
+				<label class="mb-1 block text-xs text-zinc-400">Back Button</label>
+				<div class="flex items-center gap-1">
+					<div class="flex-1">
+						<ButtonSelect
+							value={selectedNode.backButton || ''}
+							onchange={(v) => onUpdateNode(selectedNode!.id, { backButton: v || undefined })}
+							placeholder="None (no back navigation)"
+						/>
+					</div>
+					{#if selectedNode.backButton}
+						<button
+							class="rounded px-1.5 py-1 text-xs text-zinc-500 hover:text-zinc-300"
+							title="Clear back button"
+							onclick={() => onUpdateNode(selectedNode!.id, { backButton: undefined })}
+						>
+							<svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+							</svg>
+						</button>
+					{/if}
+				</div>
+				<p class="mt-0.5 text-[10px] text-zinc-600">Returns to the previous state when pressed</p>
 			</div>
 
 			<!-- Code Tabs -->
@@ -440,7 +1101,7 @@
 			</div>
 		</div>
 	{:else if selectedEdge}
-		<!-- Edge Properties -->
+		<!-- ==================== Edge Properties ==================== -->
 		<div class="border-b border-zinc-800 px-3 py-2">
 			<h3 class="text-xs font-medium uppercase tracking-wider text-zinc-500">Edge Properties</h3>
 		</div>
@@ -566,7 +1227,7 @@
 			</button>
 		</div>
 	{:else}
-		<!-- No selection -->
+		<!-- ==================== No Selection ==================== -->
 		<div class="border-b border-zinc-800 px-3 py-2">
 			<h3 class="text-xs font-medium uppercase tracking-wider text-zinc-500">Properties</h3>
 		</div>

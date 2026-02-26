@@ -73,6 +73,8 @@ pub fn run() {
             commands::history::delete_snapshot,
             commands::history::rename_snapshot,
             commands::obfuscate::obfuscate_gpc,
+            commands::flow::save_flow_project,
+            commands::flow::load_flow_project,
             commands::flow::save_flow_graph,
             commands::flow::load_flow_graph,
             commands::flow::delete_flow_graph,
