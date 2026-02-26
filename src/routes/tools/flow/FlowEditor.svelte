@@ -76,22 +76,40 @@
 	let availableModules = $state<ModuleSummary[]>([]);
 	let building = $state(false);
 
-	// Load flow project from selected game on mount
-	onMount(async () => {
-		if (gameStore.selectedGame && !flowStore.project) {
-			try {
-				const project = await loadFlowProject(gameStore.selectedGame.path);
-				if (project) {
-					loadProject(project, gameStore.selectedGame.path);
-				}
-			} catch {
-				// No flow project exists yet
-			}
-		}
-		if (!flowStore.project) {
-			newGraph(gameStore.selectedGame?.name || 'Untitled Flow', gameStore.selectedGame?.path);
+	let lastLoadedGamePath = $state<string | null>(null);
+
+	async function loadFlowForGame(gamePath: string, gameName: string) {
+		if (gamePath === lastLoadedGamePath) return;
+		lastLoadedGamePath = gamePath;
+
+		// Close existing graph before loading new one
+		if (flowStore.project) {
+			closeGraph();
 		}
 
+		try {
+			const project = await loadFlowProject(gamePath);
+			if (project) {
+				loadProject(project, gamePath);
+			}
+		} catch {
+			// No flow project exists yet
+		}
+		if (!flowStore.project) {
+			newGraph(gameName || 'Untitled Flow', gamePath);
+		}
+	}
+
+	// Reload flow when selected game changes
+	$effect(() => {
+		const game = gameStore.selectedGame;
+		if (game) {
+			loadFlowForGame(game.path, game.name);
+		}
+	});
+
+	// Load flow project from selected game on mount
+	onMount(async () => {
 		// Handle return from OLED editor with pixel data
 		const transfer = getFlowOledTransfer();
 		if (transfer && flowStore.graph) {
