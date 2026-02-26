@@ -1,5 +1,5 @@
 use crate::models::config::GameConfig;
-use crate::pipeline::config_gen::resolve_config_template;
+use crate::models::game_meta::GameMeta;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
@@ -684,36 +684,20 @@ pub fn build_game(
     dist_base: &Path,
     verbose: bool,
 ) -> BuildResult {
-    let config_path = game_dir.join("config.toml");
     let main_path = game_dir.join("main.gpc");
 
-    // Read config for filename and version
-    let config_content = match std::fs::read_to_string(&config_path) {
-        Ok(c) => c,
+    // Resolve output filename: try game.json first, fall back to config.toml
+    let output_filename = match resolve_output_filename(game_dir) {
+        Ok(f) => f,
         Err(e) => {
             return BuildResult {
                 output_path: String::new(),
                 success: false,
-                errors: vec![format!("Could not read config.toml: {}", e)],
+                errors: vec![e],
                 warnings: Vec::new(),
             };
         }
     };
-
-    let config: GameConfig = match toml::from_str(&config_content) {
-        Ok(c) => c,
-        Err(e) => {
-            return BuildResult {
-                output_path: String::new(),
-                success: false,
-                errors: vec![format!("Could not parse config.toml: {}", e)],
-                warnings: Vec::new(),
-            };
-        }
-    };
-
-    let resolved_filename = resolve_config_template(&config.filename, &config);
-    let output_filename = format!("{}.gpc", resolved_filename);
     let dist_dir = dist_base.join("dist");
 
     // Ensure dist directory exists
@@ -785,6 +769,66 @@ pub fn build_game(
         errors,
         warnings,
     }
+}
+
+/// Resolve the output filename for a game build.
+/// Tries game.json first (flow-based), then falls back to config.toml (legacy).
+fn resolve_output_filename(game_dir: &Path) -> Result<String, String> {
+    let meta_path = game_dir.join("game.json");
+    if meta_path.exists() {
+        let content = std::fs::read_to_string(&meta_path)
+            .map_err(|e| format!("Could not read game.json: {}", e))?;
+        let meta: GameMeta = serde_json::from_str(&content)
+            .map_err(|e| format!("Could not parse game.json: {}", e))?;
+        let resolved = resolve_filename_template(&meta.filename, &meta);
+        return Ok(format!("{}.gpc", resolved));
+    }
+
+    let config_path = game_dir.join("config.toml");
+    if config_path.exists() {
+        let content = std::fs::read_to_string(&config_path)
+            .map_err(|e| format!("Could not read config.toml: {}", e))?;
+        let config: GameConfig = toml::from_str(&content)
+            .map_err(|e| format!("Could not parse config.toml: {}", e))?;
+        let resolved = resolve_config_filename_template(&config.filename, &config);
+        return Ok(format!("{}.gpc", resolved));
+    }
+
+    Err("No game.json or config.toml found in game directory".to_string())
+}
+
+/// Resolve template variables in a filename string using GameMeta.
+/// Supports: {version}, {game}, {gameabbr}, {username}, {type}
+fn resolve_filename_template(template: &str, meta: &GameMeta) -> String {
+    let gameabbr = normalize_for_filename(&meta.name);
+    let username = meta.username.as_deref().unwrap_or("");
+
+    template
+        .replace("{version}", &meta.version.to_string())
+        .replace("{game}", &meta.name)
+        .replace("{gameabbr}", &gameabbr)
+        .replace("{username}", username)
+        .replace("{type}", &meta.game_type)
+}
+
+/// Resolve template variables in a filename string using legacy GameConfig.
+fn resolve_config_filename_template(template: &str, config: &GameConfig) -> String {
+    let game_name = config.name.as_deref().unwrap_or("");
+    let gameabbr = normalize_for_filename(game_name);
+    let username = config.username.as_deref().unwrap_or("");
+
+    template
+        .replace("{version}", &config.version.to_string())
+        .replace("{game}", game_name)
+        .replace("{gameabbr}", &gameabbr)
+        .replace("{username}", username)
+        .replace("{type}", config.r#type.as_deref().unwrap_or("fps"))
+}
+
+fn normalize_for_filename(s: &str) -> String {
+    s.chars()
+        .filter(|c| c.is_alphanumeric() || *c == '-' || *c == '_')
+        .collect()
 }
 
 #[cfg(test)]

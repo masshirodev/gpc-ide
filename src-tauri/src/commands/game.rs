@@ -1,4 +1,5 @@
 use crate::models::config::{GameConfig, GameSummary};
+use crate::models::game_meta::GameMeta;
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
@@ -41,14 +42,13 @@ pub fn app_root() -> PathBuf {
     cwd
 }
 
-/// Scan the Games/ directory for all game configs
-/// If workspace_paths is provided and non-empty, scan those directories instead of the default Games dir
+/// Scan workspace directories for games.
+/// Detects both game.json (flow-based) and config.toml (legacy config-based) games.
 #[tauri::command]
 pub fn list_games(workspace_paths: Option<Vec<String>>) -> Result<Vec<GameSummary>, String> {
     let mut games = Vec::new();
     let mut scanned_paths = std::collections::HashSet::new();
 
-    // Determine which directories to scan
     let paths_to_scan: Vec<PathBuf> = if let Some(workspaces) = workspace_paths {
         workspaces.into_iter().filter(|w| !w.is_empty()).map(PathBuf::from).collect()
     } else {
@@ -59,48 +59,59 @@ pub fn list_games(workspace_paths: Option<Vec<String>>) -> Result<Vec<GameSummar
         return Ok(games);
     }
 
-    // Scan each workspace directory
     for workspace_path in paths_to_scan {
         if !workspace_path.exists() {
             log::warn!("Workspace directory not found: {}", workspace_path.display());
             continue;
         }
 
-        // Games are organized as <Workspace>/<Category>/<GameName>/config.toml
-        // or <Workspace>/<GameName>/config.toml
-        // Only include modular games (those with a modules/ subdirectory)
         for entry in WalkDir::new(&workspace_path)
             .min_depth(1)
             .max_depth(3)
             .into_iter()
             .filter_map(|e| e.ok())
         {
-            if entry.file_name() == "config.toml" {
-                let config_path = entry.path();
-                let game_dir = config_path.parent().unwrap();
+            let filename = entry.file_name().to_string_lossy().to_string();
+            if filename != "game.json" && filename != "config.toml" {
+                continue;
+            }
 
-                // Skip if we've already processed this game directory
-                let canonical_path = game_dir.canonicalize().unwrap_or_else(|_| game_dir.to_path_buf());
-                if !scanned_paths.insert(canonical_path) {
-                    continue;
-                }
+            let file_path = entry.path();
+            let game_dir = file_path.parent().unwrap();
 
-                // Ensure modules/ directory exists for modular games
-                let modules_dir = game_dir.join("modules");
-                if !modules_dir.is_dir() {
-                    if let Err(e) = std::fs::create_dir_all(&modules_dir) {
-                        log::warn!(
-                            "Failed to create Modules dir for {}: {}",
-                            game_dir.display(),
-                            e
-                        );
-                        continue;
-                    }
-                }
-                match parse_game_summary(config_path) {
+            let canonical_path = game_dir.canonicalize().unwrap_or_else(|_| game_dir.to_path_buf());
+            if !scanned_paths.insert(canonical_path) {
+                continue;
+            }
+
+            if filename == "game.json" {
+                // Flow-based game (preferred over config.toml if both exist)
+                match parse_game_summary_from_meta(game_dir) {
                     Ok(summary) => games.push(summary),
                     Err(e) => {
-                        log::warn!("Failed to parse {}: {}", config_path.display(), e);
+                        log::warn!("Failed to parse {}: {}", file_path.display(), e);
+                    }
+                }
+            } else {
+                // Legacy config-based game (only if no game.json exists)
+                if !game_dir.join("game.json").exists() {
+                    // Ensure modules/ directory exists for modular games
+                    let modules_dir = game_dir.join("modules");
+                    if !modules_dir.is_dir() {
+                        if let Err(e) = std::fs::create_dir_all(&modules_dir) {
+                            log::warn!(
+                                "Failed to create Modules dir for {}: {}",
+                                game_dir.display(),
+                                e
+                            );
+                            continue;
+                        }
+                    }
+                    match parse_game_summary_from_config(file_path) {
+                        Ok(summary) => games.push(summary),
+                        Err(e) => {
+                            log::warn!("Failed to parse {}: {}", file_path.display(), e);
+                        }
                     }
                 }
             }
@@ -111,7 +122,27 @@ pub fn list_games(workspace_paths: Option<Vec<String>>) -> Result<Vec<GameSummar
     Ok(games)
 }
 
-fn parse_game_summary(config_path: &Path) -> Result<GameSummary, String> {
+fn parse_game_summary_from_meta(game_dir: &Path) -> Result<GameSummary, String> {
+    let meta_path = game_dir.join("game.json");
+    let content = std::fs::read_to_string(&meta_path)
+        .map_err(|e| format!("Failed to read {}: {}", meta_path.display(), e))?;
+
+    let meta: GameMeta =
+        serde_json::from_str(&content).map_err(|e| format!("Failed to parse game.json: {}", e))?;
+
+    Ok(GameSummary {
+        name: meta.name.clone(),
+        path: game_dir.to_string_lossy().to_string(),
+        game_type: meta.game_type.clone(),
+        console_type: meta.console_type.clone(),
+        version: meta.version,
+        title: meta.name.clone(),
+        module_count: 0,
+        generation_mode: meta.generation_mode.clone(),
+    })
+}
+
+fn parse_game_summary_from_config(config_path: &Path) -> Result<GameSummary, String> {
     let content = std::fs::read_to_string(config_path)
         .map_err(|e| format!("Failed to read {}: {}", config_path.display(), e))?;
 
@@ -137,10 +168,11 @@ fn parse_game_summary(config_path: &Path) -> Result<GameSummary, String> {
         version: config.version,
         title: config.state_screen.title.clone(),
         module_count: config.menu.len(),
+        generation_mode: "config".to_string(),
     })
 }
 
-/// Get the full config for a specific game
+/// Get the full config for a specific game (legacy config-based games)
 #[tauri::command]
 pub fn get_game_config(game_path: String) -> Result<GameConfig, String> {
     let config_path = Path::new(&game_path).join("config.toml");
@@ -150,6 +182,31 @@ pub fn get_game_config(game_path: String) -> Result<GameConfig, String> {
     toml::from_str(&content).map_err(|e| format!("Failed to parse config: {}", e))
 }
 
+/// Save game metadata to game.json
+#[tauri::command]
+pub fn save_game_meta(game_path: String, meta: GameMeta) -> Result<(), String> {
+    let path = Path::new(&game_path).join("game.json");
+    let content = serde_json::to_string_pretty(&meta)
+        .map_err(|e| format!("Failed to serialize game meta: {}", e))?;
+    std::fs::write(&path, content)
+        .map_err(|e| format!("Failed to write game.json: {}", e))?;
+    Ok(())
+}
+
+/// Load game metadata from game.json
+#[tauri::command]
+pub fn load_game_meta(game_path: String) -> Result<Option<GameMeta>, String> {
+    let path = Path::new(&game_path).join("game.json");
+    if !path.exists() {
+        return Ok(None);
+    }
+    let content = std::fs::read_to_string(&path)
+        .map_err(|e| format!("Failed to read game.json: {}", e))?;
+    let meta: GameMeta = serde_json::from_str(&content)
+        .map_err(|e| format!("Failed to parse game.json: {}", e))?;
+    Ok(Some(meta))
+}
+
 /// Delete an entire game directory
 #[tauri::command]
 pub fn delete_game(game_path: String) -> Result<(), String> {
@@ -157,8 +214,8 @@ pub fn delete_game(game_path: String) -> Result<(), String> {
     if !path.exists() {
         return Err("Game directory not found".to_string());
     }
-    // Safety: require config.toml to confirm it's a real game dir
-    if !path.join("config.toml").exists() {
+    // Safety: require game.json or config.toml to confirm it's a real game dir
+    if !path.join("game.json").exists() && !path.join("config.toml").exists() {
         return Err("Not a valid game directory".to_string());
     }
     std::fs::remove_dir_all(path)

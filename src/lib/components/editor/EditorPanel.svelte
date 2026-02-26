@@ -9,7 +9,7 @@
 		saveTab,
 		type EditorTab
 	} from '$lib/stores/editor.svelte';
-	import { getLanguageForFile, canRegenerateFile } from '$lib/utils/editor-helpers';
+	import { getLanguageForFile } from '$lib/utils/editor-helpers';
 	import type { ConsoleType } from '$lib/utils/console-buttons';
 
 	interface ThemeAccent {
@@ -30,12 +30,9 @@
 		gamePath: string;
 		consoleType: ConsoleType;
 		themeAccent: ThemeAccent;
-		regenerating: boolean;
-		regenFileLoading: boolean;
 		onCloseTab: (e: MouseEvent, path: string) => void;
 		onContentChange: (path: string, content: string) => void;
 		onEditorReady: (editor: import('monaco-editor').editor.IStandaloneCodeEditor) => void;
-		onRegenerateFile: () => void;
 		onOpenExternal: () => void;
 		editorComponent?: MonacoEditor;
 	}
@@ -45,12 +42,9 @@
 		gamePath,
 		consoleType,
 		themeAccent,
-		regenerating,
-		regenFileLoading,
 		onCloseTab,
 		onContentChange,
 		onEditorReady,
-		onRegenerateFile,
 		onOpenExternal,
 		editorComponent = $bindable()
 	}: Props = $props();
@@ -136,16 +130,6 @@
 								d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
 							/>
 						</svg>
-					</button>
-				{/if}
-				{#if currentTab && canRegenerateFile(currentTab.path)}
-					<button
-						class="px-3 py-1.5 text-xs text-blue-400 hover:text-blue-300 disabled:opacity-50"
-						onclick={onRegenerateFile}
-						disabled={regenerating || regenFileLoading}
-						title="Regenerate this file from config.toml"
-					>
-						{regenFileLoading ? 'Loading diff...' : regenerating ? 'Regenerating...' : 'Regenerate'}
 					</button>
 				{/if}
 				{#if currentTab?.dirty}

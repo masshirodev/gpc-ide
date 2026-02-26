@@ -148,6 +148,13 @@ pub struct GameSummary {
     pub version: u32,
     pub title: String,
     pub module_count: usize,
+    /// "flow" for flow-based games, "config" for legacy config-based games
+    #[serde(default = "default_generation_mode")]
+    pub generation_mode: String,
+}
+
+fn default_generation_mode() -> String {
+    "config".to_string()
 }
 
 /// Menu items can be flat (selector) or nested (dependent_selector)

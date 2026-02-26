@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
 	import { getGameStore, gamesByType, loadGames, clearSelection } from '$lib/stores/game.svelte';
 	import { selectGame } from '$lib/stores/game.svelte';
 	import {
@@ -33,11 +32,6 @@
 		watchDirectory,
 		deleteFile,
 		deleteGame,
-		regenerateFile,
-		regenerateAll,
-		regeneratePreview,
-		regenerateCommit,
-		removeModule,
 		openInDefaultApp,
 		createSnapshot,
 		listSnapshots,
@@ -47,13 +41,11 @@
 		renameSnapshot
 	} from '$lib/tauri/commands';
 	import { onFileChange } from '$lib/tauri/events';
-	import type { BuildResult, FileTreeEntry, FileDiff, SnapshotMeta } from '$lib/tauri/commands';
+	import type { BuildResult, FileTreeEntry, SnapshotMeta } from '$lib/tauri/commands';
 	import type { UnlistenFn } from '@tauri-apps/api/event';
 	import { onMount } from 'svelte';
 	import MonacoEditor from '$lib/components/editor/MonacoEditor.svelte';
-	import PersistencePanel from '$lib/components/persistence/PersistencePanel.svelte';
 	import FlowEditor from './tools/flow/FlowEditor.svelte';
-	import AddModuleModal from '$lib/components/modals/AddModuleModal.svelte';
 	import NewFileModal from '$lib/components/modals/NewFileModal.svelte';
 	import TemplateImportModal from '$lib/components/modals/TemplateImportModal.svelte';
 	import ConfirmDialog from '$lib/components/modals/ConfirmDialog.svelte';
@@ -75,7 +67,6 @@
 		serializeRecoilTable,
 		updateWeaponValues
 	} from '$lib/utils/recoil-parser';
-	import { parseStateScreenText } from '$lib/utils/config-vars';
 	import { parseBuildErrorLink } from '$lib/utils/editor-helpers';
 
 	// Extracted components
@@ -85,7 +76,6 @@
 	import EditorPanel from '$lib/components/editor/EditorPanel.svelte';
 	import BuildPanel from '$lib/components/editor/BuildPanel.svelte';
 	import HistoryPanel from '$lib/components/editor/HistoryPanel.svelte';
-	import RegenerateDiffModal from '$lib/components/editor/RegenerateDiffModal.svelte';
 
 	let store = getGameStore();
 	let editorStore = getEditorStore();
@@ -128,26 +118,13 @@
 	// Active editor tab
 	let currentEditorTab = $derived(getActiveEditorTab());
 
-	// Profile state
-	let activeProfile = $state(0);
-	let profileCount = $derived(store.selectedConfig?.profile_count ?? 0);
-	let profileLabels = $derived(store.selectedConfig?.state_screen?.profile_labels ?? []);
-
 	// Build state
 	let building = $state(false);
-	let regeneratingAll = $state(false);
 	let buildResult = $state<BuildResult | null>(null);
 	let buildOutputContent = $state<string | null>(null);
 	let buildOutputLoading = $state(false);
 
-	// Build diff preview state
-	let buildDiffs = $state<FileDiff[]>([]);
-	let buildDiffMode = $state(false);
-	let buildDiffSelectedFile = $state<number>(0);
-	let buildDiffLoading = $state(false);
-
 	// Modal state
-	let showAddModuleModal = $state(false);
 	let showNewFileModal = $state(false);
 	let showTemplateImportModal = $state(false);
 	// Confirm dialog state
@@ -200,7 +177,7 @@
 	let expandedDirs = $state<Set<string>>(new Set());
 
 	// Page tab state
-	let activeTab = $state<'overview' | 'files' | 'flow' | 'build' | 'persistence' | 'history'>('overview');
+	let activeTab = $state<'overview' | 'files' | 'flow' | 'build' | 'history'>('overview');
 
 	// History state
 	let snapshots = $state<SnapshotMeta[]>([]);
@@ -447,84 +424,11 @@
 		}
 	}
 
-	async function handleRegenerateAll() {
-		if (!store.selectedGame || regeneratingAll) return;
-
-		const confirmed = await showConfirm({
-			title: 'Regenerate',
-			message:
-				'Regenerate all generated files? Any custom changes to module files, core.gpc, and main.gpc will be lost.',
-			confirmLabel: 'Regenerate',
-			variant: 'warning'
-		});
-		if (!confirmed) return;
-
-		regeneratingAll = true;
-		try {
-			const files = await regenerateAll(store.selectedGame.path);
-			addToast(`Regenerated ${files.length} file(s)`, 'success');
-			await loadFileTree(store.selectedGame.path);
-		} catch (e) {
-			const msg = e instanceof Error ? e.message : String(e);
-			addToast(`Regenerate failed: ${msg}`, 'error');
-		} finally {
-			regeneratingAll = false;
-		}
-	}
-
 	function getWorkspaceForGame(gamePath: string): string | undefined {
 		return settings.workspaces.find((ws) => gamePath.startsWith(ws));
 	}
 
-	async function handleBuild(autoBuild = true) {
-		if (!store.selectedGame || building) return;
-		buildDiffLoading = true;
-		buildResult = null;
-		buildOutputContent = null;
-		buildDiffs = [];
-		buildDiffMode = false;
-		buildDiffSelectedFile = 0;
-		try {
-			const diffs = await regeneratePreview(store.selectedGame.path);
-			if (diffs.length === 0) {
-				if (autoBuild) {
-					await executeBuild();
-				} else {
-					addToast('No file changes detected', 'info');
-				}
-			} else {
-				buildDiffs = diffs;
-				buildDiffMode = true;
-			}
-		} catch (e) {
-			const msg = e instanceof Error ? e.message : String(e);
-			addToast(`Build preview error: ${msg}`, 'error');
-		} finally {
-			buildDiffLoading = false;
-		}
-	}
-
-	function handleBuildCancel() {
-		buildDiffMode = false;
-		buildDiffs = [];
-		buildDiffSelectedFile = 0;
-	}
-
-	async function handleBuildCommit() {
-		if (!store.selectedGame) return;
-		buildDiffMode = false;
-		try {
-			const files = buildDiffs.map((d) => ({ path: d.path, content: d.new_content }));
-			const written = await regenerateCommit(store.selectedGame.path, files);
-			addToast(`Regenerated ${written.length} file(s)`, 'success');
-			await loadFileTree(store.selectedGame.path);
-			buildDiffs = [];
-			buildDiffSelectedFile = 0;
-		} catch (e) {
-			const msg = e instanceof Error ? e.message : String(e);
-			addToast(`Commit failed: ${msg}`, 'error');
-			return;
-		}
+	async function handleBuild() {
 		await executeBuild();
 	}
 
@@ -616,88 +520,6 @@
 			addToast(`Game "${game.name}" deleted`, 'success');
 		} catch (e) {
 			addToast(`Failed to delete game: ${e}`, 'error');
-		}
-	}
-
-	async function handleRemoveModule(index: number, name: string) {
-		if (!store.selectedGame) return;
-
-		const confirmed = await showConfirm({
-			title: 'Remove Module',
-			message: `Remove "${name}" from this game? This will delete the menu item, module parameters, and associated module file.`,
-			confirmLabel: 'Remove',
-			variant: 'danger'
-		});
-		if (!confirmed) return;
-
-		try {
-			const result = await removeModule(store.selectedGame.path, index);
-			addToast(`Module removed (${result.length} files affected)`, 'success');
-			await selectGame(store.selectedGame);
-			await loadFileTree(store.selectedGame.path);
-		} catch (e) {
-			const msg = e instanceof Error ? e.message : String(e);
-			addToast(`Failed to remove module: ${msg}`, 'error');
-		}
-	}
-
-	let regenerating = $state(false);
-	let regenFileDiff = $state<FileDiff | null>(null);
-	let regenFileLoading = $state(false);
-
-	async function handleRegenerateFile() {
-		if (!currentEditorTab || !store.selectedGame || regenerating || regenFileLoading) return;
-
-		try {
-			regenFileLoading = true;
-			const filePath = currentEditorTab.path;
-			const diffs = await regeneratePreview(store.selectedGame.path);
-			const diff = diffs.find((d) => filePath.endsWith(d.path) || d.path.endsWith(filePath.split('/').slice(-2).join('/')));
-
-			if (!diff) {
-				addToast('No changes detected for this file', 'info');
-				return;
-			}
-
-			regenFileDiff = diff;
-		} catch (e) {
-			const msg = e instanceof Error ? e.message : String(e);
-			addToast(`Failed to preview regeneration: ${msg}`, 'error');
-		} finally {
-			regenFileLoading = false;
-		}
-	}
-
-	function handleRegenCancel() {
-		regenFileDiff = null;
-	}
-
-	async function handleRegenCommit() {
-		if (!regenFileDiff || !store.selectedGame) return;
-
-		try {
-			regenerating = true;
-			const files = [{ path: regenFileDiff.path, content: regenFileDiff.new_content }];
-			await regenerateCommit(store.selectedGame.path, files);
-
-			const filePath = regenFileDiff.path;
-			regenFileDiff = null;
-
-			// Reload the tab if open
-			const fullPath = `${store.selectedGame.path}/${filePath}`;
-			const tab = getTab(fullPath);
-			if (tab) {
-				closeTab(fullPath);
-				await openTab(fullPath);
-			}
-			await loadFileTree(store.selectedGame.path);
-
-			addToast('File regenerated successfully', 'success');
-		} catch (e) {
-			const msg = e instanceof Error ? e.message : String(e);
-			addToast(`Failed to regenerate: ${msg}`, 'error');
-		} finally {
-			regenerating = false;
 		}
 	}
 
@@ -819,7 +641,7 @@
 		if ((e.ctrlKey || e.metaKey) && e.key === 'b') {
 			e.preventDefault();
 			activeTab = 'build';
-			handleBuild(false);
+			handleBuild();
 		}
 		if ((e.ctrlKey || e.metaKey) && e.key === 'j') {
 			e.preventDefault();
@@ -850,20 +672,14 @@
 		closeTab(path);
 	}
 
-	function handleOpenConfig() {
-		if (store.selectedGame) {
-			const configPath = `${store.selectedGame.path}/config.toml`;
-			openTab(configPath);
-			activeTab = 'files';
-			editorPanelComponent?.setConfigSubTab('gui');
-		}
-	}
 </script>
 
 <svelte:window onkeydown={handleKeydown} />
 
-{#if store.selectedGame && store.selectedConfig}
+{#if store.selectedGame && (store.selectedMeta || store.selectedConfig)}
 	<!-- Game Detail View -->
+	{@const gameVersion = store.selectedMeta?.version ?? store.selectedConfig?.version ?? 0}
+	{@const isFlowGame = store.selectedGame.generation_mode === 'flow'}
 	<div
 		class={activeTab === 'files' || activeTab === 'flow' ? 'flex h-full flex-col overflow-hidden' : 'mx-auto max-w-5xl p-6'}
 	>
@@ -871,32 +687,31 @@
 			<div>
 				<h1 class="text-2xl font-bold text-zinc-100">{store.selectedGame.name}</h1>
 				<p class="text-sm text-zinc-400">
-					{parseStateScreenText(store.selectedConfig.state_screen.title, store.selectedConfig)}
+					{store.selectedGame.console_type.toUpperCase()} &middot; {store.selectedGame.game_type.toUpperCase()}
+					{#if !isFlowGame}
+						<span class="ml-1 rounded bg-zinc-800 px-1.5 py-0.5 text-xs text-zinc-500">Legacy</span>
+					{/if}
 				</p>
 			</div>
 			<div class="flex items-center gap-2">
 				{#if store.selectedGame.game_type}
-					<button
-						class="cursor-pointer rounded bg-emerald-900/50 px-2 py-1 text-xs font-medium text-emerald-400 uppercase transition-colors hover:bg-emerald-900/70"
-						onclick={handleOpenConfig}
-						title="Click to edit in Config GUI"
+					<span
+						class="rounded bg-emerald-900/50 px-2 py-1 text-xs font-medium text-emerald-400 uppercase"
 					>
 						{store.selectedGame.game_type}
-					</button>
+					</span>
 				{/if}
-				<button
-					class="cursor-pointer rounded bg-zinc-800 px-2 py-1 text-xs text-zinc-400 transition-colors hover:bg-zinc-700"
-					onclick={handleOpenConfig}
-					title="Click to edit in Config GUI"
+				<span
+					class="rounded bg-zinc-800 px-2 py-1 text-xs text-zinc-400"
 				>
-					v{store.selectedConfig.version}
-				</button>
+					v{gameVersion}
+				</span>
 			</div>
 		</div>
 
 		<!-- Tab Bar -->
 		<div class="mb-4 flex gap-1 border-b border-zinc-800 {activeTab === 'files' || activeTab === 'flow' ? 'px-4' : ''}">
-			{#each ['overview', 'files', 'flow', 'persistence', 'build', 'history'] as tab}
+			{#each isFlowGame ? ['overview', 'files', 'flow', 'build', 'history'] : ['overview', 'files', 'build', 'history'] as tab}
 				<button
 					class="border-b-2 px-4 py-2 text-sm font-medium transition-colors"
 					class:border-emerald-400={activeTab === tab}
@@ -914,9 +729,7 @@
 								? 'Flow'
 								: tab === 'build'
 									? 'Build'
-									: tab === 'history'
-										? 'History'
-										: 'Persistence'}
+									: 'History'}
 					{#if tab === 'build' && buildResult}
 						<span
 							class="ml-1 inline-block h-2 w-2 rounded-full"
@@ -928,35 +741,11 @@
 			{/each}
 		</div>
 
-		{#if profileCount > 0}
-			<!-- Profile Selector -->
-			<div class="mb-4 flex items-center gap-2 border-b border-zinc-800 px-4 py-2">
-				<span class="text-xs font-medium text-zinc-500">Profile:</span>
-				<div class="flex gap-1">
-					{#each Array.from({ length: profileCount }, (_, i) => i) as i}
-						<button
-							class="rounded px-3 py-1 text-xs font-medium transition-colors {activeProfile === i ? 'bg-emerald-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200'}"
-							onclick={() => (activeProfile = i)}
-						>
-							{profileLabels[i] ?? `Profile ${i + 1}`}
-						</button>
-					{/each}
-				</div>
-				<span class="text-xs text-zinc-600">
-					Profile-aware settings will use index [{activeProfile}]
-				</span>
-			</div>
-		{/if}
-
 		{#if activeTab === 'overview'}
 			<GameOverviewPanel
+				game={store.selectedGame}
+				meta={store.selectedMeta}
 				config={store.selectedConfig}
-				gamePath={store.selectedGame.path}
-				{profileCount}
-				onAddModule={() => (showAddModuleModal = true)}
-				onRemoveModule={handleRemoveModule}
-				onOpenModuleManager={() => { goto('/tools/modules'); }}
-				onOpenConfig={handleOpenConfig}
 			/>
 		{:else if activeTab === 'files'}
 			<!-- File Browser - Full Width -->
@@ -969,7 +758,6 @@
 					onToggleDir={toggleDir}
 					onFileClick={handleFileClick}
 					onDeleteFile={handleDeleteFile}
-					onAddModule={() => (showAddModuleModal = true)}
 					onNewFile={() => (showNewFileModal = true)}
 					onImportTemplate={() => (showTemplateImportModal = true)}
 				/>
@@ -980,12 +768,9 @@
 					gamePath={store.selectedGame?.path ?? ''}
 					consoleType={gameConsoleType}
 					{themeAccent}
-					{regenerating}
-					{regenFileLoading}
 					onCloseTab={handleCloseTab}
 					onContentChange={(path, content) => updateTabContent(path, content)}
 					onEditorReady={handleEditorReady}
-					onRegenerateFile={handleRegenerateFile}
 					onOpenExternal={handleOpenExternal}
 					bind:editorComponent
 				/>
@@ -994,25 +779,14 @@
 			<FlowEditor />
 		{:else if activeTab === 'build'}
 			<BuildPanel
-				{buildDiffMode}
-				{buildDiffs}
-				{buildDiffSelectedFile}
-				{buildDiffLoading}
 				{buildResult}
 				{buildOutputContent}
 				{buildOutputLoading}
 				{building}
-				{regeneratingAll}
-				onBuild={() => handleBuild()}
-				onBuildCancel={handleBuildCancel}
-				onBuildCommit={handleBuildCommit}
-				onRegenerateAll={handleRegenerateAll}
+				onBuild={handleBuild}
 				onBuildErrorClick={handleBuildErrorClick}
 				onCopyBuildOutput={handleCopyBuildOutput}
-				onSelectDiffFile={(i) => (buildDiffSelectedFile = i)}
 			/>
-		{:else if activeTab === 'persistence'}
-			<PersistencePanel config={store.selectedConfig} gamePath={store.selectedGame.path} />
 		{:else if activeTab === 'history'}
 			<HistoryPanel
 				{snapshots}
@@ -1048,18 +822,6 @@
 
 <!-- Modals -->
 {#if store.selectedGame}
-	<AddModuleModal
-		open={showAddModuleModal}
-		gamePath={store.selectedGame.path}
-		onclose={() => (showAddModuleModal = false)}
-		onsuccess={async () => {
-			if (store.selectedGame) {
-				await selectGame(store.selectedGame);
-				loadFileTree(store.selectedGame.path);
-			}
-		}}
-	/>
-
 	<NewFileModal
 		open={showNewFileModal}
 		gamePath={store.selectedGame.path}
@@ -1094,10 +856,3 @@
 	oncancel={confirmDialogCancel}
 />
 
-<RegenerateDiffModal
-	diff={regenFileDiff}
-	{regenerating}
-	{regenFileLoading}
-	onCancel={handleRegenCancel}
-	onCommit={handleRegenCommit}
-/>

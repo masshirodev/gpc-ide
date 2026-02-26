@@ -1,9 +1,12 @@
-import type { GameSummary, GameConfig } from '$lib/types/config';
-import { listGames, getGameConfig } from '$lib/tauri/commands';
+import type { GameSummary, GameConfig, GameMeta } from '$lib/types/config';
+import { listGames, getGameConfig, loadGameMeta } from '$lib/tauri/commands';
 
 interface GameStore {
 	games: GameSummary[];
 	selectedGame: GameSummary | null;
+	/** Game metadata from game.json (flow-based games) */
+	selectedMeta: GameMeta | null;
+	/** Legacy config from config.toml (config-based games, read-only) */
 	selectedConfig: GameConfig | null;
 	loading: boolean;
 	error: string | null;
@@ -12,6 +15,7 @@ interface GameStore {
 let store = $state<GameStore>({
 	games: [],
 	selectedGame: null,
+	selectedMeta: null,
 	selectedConfig: null,
 	loading: false,
 	error: null
@@ -36,9 +40,15 @@ export async function loadGames(workspacePaths?: string[]) {
 export async function selectGame(game: GameSummary) {
 	store.error = null;
 	store.selectedGame = game;
+	store.selectedMeta = null;
 	store.selectedConfig = null;
 	try {
-		store.selectedConfig = await getGameConfig(game.path);
+		if (game.generation_mode === 'flow') {
+			store.selectedMeta = await loadGameMeta(game.path);
+		} else {
+			// Legacy config-based game (read-only support)
+			store.selectedConfig = await getGameConfig(game.path);
+		}
 	} catch (e) {
 		store.error = e instanceof Error ? e.message : String(e);
 	}
@@ -46,6 +56,7 @@ export async function selectGame(game: GameSummary) {
 
 export function clearSelection() {
 	store.selectedGame = null;
+	store.selectedMeta = null;
 	store.selectedConfig = null;
 }
 

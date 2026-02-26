@@ -23,7 +23,6 @@
 		onToggleDir: (path: string) => void;
 		onFileClick: (path: string) => void;
 		onDeleteFile: (e: MouseEvent, path: string) => void;
-		onAddModule: () => void;
 		onNewFile: () => void;
 		onImportTemplate: () => void;
 	}
@@ -36,7 +35,6 @@
 		onToggleDir,
 		onFileClick,
 		onDeleteFile,
-		onAddModule,
 		onNewFile,
 		onImportTemplate
 	}: Props = $props();
@@ -46,13 +44,6 @@
 	<!-- File Tree Header -->
 	<div class="p-2" style="border-bottom: 1px solid {themeAccent.treeBorder}; background: {themeAccent.treeHeaderBg}">
 		<div class="flex gap-1">
-			<button
-				class="flex-1 rounded border border-emerald-600/50 bg-emerald-600/10 px-2 py-1.5 text-xs font-medium text-emerald-400 hover:border-emerald-500 hover:bg-emerald-600/20"
-				onclick={onAddModule}
-				title="Add Module"
-			>
-				+
-			</button>
 			<button
 				class="flex-1 rounded border border-zinc-600 bg-zinc-800 px-2 py-1.5 text-xs font-medium text-zinc-300 hover:border-zinc-500 hover:bg-zinc-700"
 				onclick={onNewFile}

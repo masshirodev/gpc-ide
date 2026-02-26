@@ -1,16 +1,11 @@
 use crate::models::config::GameConfig;
-use crate::pipeline::generate::Generator;
-use crate::pipeline::modules;
-use crate::commands::game::app_root;
 use std::path::PathBuf;
-use std::collections::HashMap;
 
-/// Save a game configuration back to config.toml, preserving comments and formatting
+/// Save a game configuration back to config.toml (legacy config-based games)
 #[tauri::command]
 pub fn save_game_config(game_path: String, config: GameConfig) -> Result<(), String> {
     let config_path = PathBuf::from(&game_path).join("config.toml");
 
-    // Serialize the config to TOML
     let content = toml::to_string_pretty(&config)
         .map_err(|e| format!("Failed to serialize config: {}", e))?;
 
@@ -43,7 +38,6 @@ pub fn read_file_tree(path: String) -> Result<Vec<FileTreeEntry>, String> {
     let mut entries = Vec::new();
     collect_tree_entries(&root, &root, &mut entries)?;
     entries.sort_by(|a, b| {
-        // Directories first, then files, alphabetically
         match (a.is_dir, b.is_dir) {
             (true, false) => std::cmp::Ordering::Less,
             (false, true) => std::cmp::Ordering::Greater,
@@ -108,14 +102,12 @@ fn collect_tree_entries(
 /// Create a new standalone .gpc file in the game directory
 #[tauri::command]
 pub fn create_standalone_file(game_path: String, filename: String) -> Result<String, String> {
-    // Ensure filename ends with .gpc
     let filename = if filename.ends_with(".gpc") {
         filename
     } else {
         format!("{}.gpc", filename)
     };
 
-    // Validate filename (no slashes, no special chars)
     if filename.contains('/') || filename.contains('\\') {
         return Err("Filename cannot contain slashes".to_string());
     }
@@ -126,7 +118,6 @@ pub fn create_standalone_file(game_path: String, filename: String) -> Result<Str
         return Err(format!("File already exists: {}", filename));
     }
 
-    // Create empty file with a header comment
     let content = format!(
         "// {}\n// Created by Cronus IDE\n\n// Add your code here\n",
         filename
@@ -137,7 +128,7 @@ pub fn create_standalone_file(game_path: String, filename: String) -> Result<Str
     Ok(file_path.to_string_lossy().to_string())
 }
 
-/// Delete a file (only allows deletion of user-created files, not module files)
+/// Delete a file (prevents deletion of critical game files)
 #[tauri::command]
 pub fn delete_file(file_path: String) -> Result<(), String> {
     let path = PathBuf::from(&file_path);
@@ -146,343 +137,14 @@ pub fn delete_file(file_path: String) -> Result<(), String> {
         return Err("File not found".to_string());
     }
 
-    // Safety check: Prevent deleting config.toml (needed for generation)
-    let forbidden = vec![
-        "config.toml",
-    ];
-
     if let Some(filename) = path.file_name().and_then(|f| f.to_str()) {
-        if forbidden.contains(&filename) {
+        // Protect critical game files
+        if filename == "config.toml" || filename == "game.json" {
             return Err(format!("Cannot delete protected file: {}", filename));
-        }
-
-        // Prevent deleting files in modules/ directory (these are from modules)
-        if file_path.contains("/modules/") || file_path.contains("\\modules\\") {
-            return Err("Cannot delete module files. Remove the module instead.".to_string());
         }
     }
 
     std::fs::remove_file(&path).map_err(|e| format!("Failed to delete file: {}", e))?;
 
     Ok(())
-}
-
-/// Regenerate a specific generated file (for files that can be safely regenerated)
-#[tauri::command]
-pub fn regenerate_file(game_path: String, file_path: String) -> Result<String, String> {
-    let game_dir = PathBuf::from(&game_path);
-    let full_path = PathBuf::from(&file_path);
-
-    // Get the relative path from game directory
-    let rel_path = full_path
-        .strip_prefix(&game_dir)
-        .map_err(|_| "File is not in game directory".to_string())?
-        .to_string_lossy()
-        .to_string();
-
-    // List of files that can be regenerated
-    let regenerable = vec![
-        "modules/core.gpc",
-        "main.gpc",
-        "define.gpc",
-        "menu.gpc",
-        "setting.gpc",
-        "persistence.gpc",
-    ];
-
-    // Check if this file can be regenerated
-    let can_regenerate = regenerable.iter().any(|&pattern| {
-        rel_path == pattern || rel_path.starts_with("modules/") && rel_path.ends_with(".gpc")
-    });
-
-    if !can_regenerate {
-        return Err(format!("File '{}' cannot be auto-regenerated. Only generated module files and core files can be regenerated.", rel_path));
-    }
-
-    // Load config and modules
-    let config_path = game_dir.join("config.toml");
-    let config_content = std::fs::read_to_string(&config_path)
-        .map_err(|e| format!("Failed to read config.toml: {}", e))?;
-    let game_config: GameConfig = toml::from_str(&config_content)
-        .map_err(|e| format!("Failed to parse config.toml: {}", e))?;
-
-    // Load all modules
-    let root = app_root();
-    let all_modules = modules::load_all_modules(&root)?;
-    let modules_metadata: HashMap<String, crate::models::module::ModuleDefinition> = all_modules
-        .iter()
-        .map(|m| (m.id.clone(), m.clone()))
-        .collect();
-
-    // Calculate game depth
-    let game_depth = game_dir
-        .strip_prefix(game_dir.parent().unwrap())
-        .ok()
-        .and_then(|p| p.components().count().checked_sub(1))
-        .unwrap_or(1);
-
-    // Generate all files
-    let mut generator = Generator::new(game_config, modules_metadata, game_depth);
-    let result = generator.generate_all();
-
-    // Find the specific file to regenerate
-    let file_content = result
-        .files
-        .iter()
-        .find(|(path, _)| path == &rel_path)
-        .map(|(_, content)| content.clone())
-        .ok_or_else(|| format!("File '{}' not found in generated files", rel_path))?;
-
-    // Write the regenerated file
-    std::fs::write(&full_path, &file_content)
-        .map_err(|e| format!("Failed to write file: {}", e))?;
-
-    Ok(file_content)
-}
-
-/// Preview regeneration — returns diffs without writing files
-#[tauri::command]
-pub fn regenerate_preview(game_path: String) -> Result<Vec<FileDiff>, String> {
-    let game_dir = PathBuf::from(&game_path);
-
-    let config_path = game_dir.join("config.toml");
-    let config_content = std::fs::read_to_string(&config_path)
-        .map_err(|e| format!("Failed to read config.toml: {}", e))?;
-    let game_config: GameConfig = toml::from_str(&config_content)
-        .map_err(|e| format!("Failed to parse config.toml: {}", e))?;
-
-    let root = app_root();
-    let all_modules = modules::load_all_modules(&root)?;
-    let modules_metadata: HashMap<String, crate::models::module::ModuleDefinition> = all_modules
-        .iter()
-        .map(|m| (m.id.clone(), m.clone()))
-        .collect();
-
-    let game_depth = game_dir
-        .strip_prefix(game_dir.parent().unwrap())
-        .ok()
-        .and_then(|p| p.components().count().checked_sub(1))
-        .unwrap_or(1);
-
-    let mut generator = Generator::new(game_config, modules_metadata, game_depth);
-    let result = generator.generate_all();
-
-    let mut diffs = Vec::new();
-    for (rel_path, new_content) in &result.files {
-        let full_path = game_dir.join(rel_path);
-        let old_content = std::fs::read_to_string(&full_path).unwrap_or_default();
-
-        if old_content != *new_content {
-            diffs.push(FileDiff {
-                path: rel_path.clone(),
-                old_content,
-                new_content: new_content.clone(),
-            });
-        }
-    }
-
-    Ok(diffs)
-}
-
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct FileDiff {
-    pub path: String,
-    pub old_content: String,
-    pub new_content: String,
-}
-
-/// Commit regenerated files — writes specific files with provided content
-#[tauri::command]
-pub fn regenerate_commit(game_path: String, files: Vec<FileWrite>) -> Result<Vec<String>, String> {
-    let game_dir = PathBuf::from(&game_path);
-    let mut written = Vec::new();
-
-    for file in &files {
-        let full_path = game_dir.join(&file.path);
-        if let Some(parent) = full_path.parent() {
-            std::fs::create_dir_all(parent)
-                .map_err(|e| format!("Failed to create directory: {}", e))?;
-        }
-        std::fs::write(&full_path, &file.content)
-            .map_err(|e| format!("Failed to write {}: {}", file.path, e))?;
-        written.push(file.path.clone());
-    }
-
-    Ok(written)
-}
-
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct FileWrite {
-    pub path: String,
-    pub content: String,
-}
-
-/// Regenerate all generated files from config.toml
-#[tauri::command]
-pub fn regenerate_all(game_path: String) -> Result<Vec<String>, String> {
-    let game_dir = PathBuf::from(&game_path);
-
-    // Load config and modules
-    let config_path = game_dir.join("config.toml");
-    let config_content = std::fs::read_to_string(&config_path)
-        .map_err(|e| format!("Failed to read config.toml: {}", e))?;
-    let game_config: GameConfig = toml::from_str(&config_content)
-        .map_err(|e| format!("Failed to parse config.toml: {}", e))?;
-
-    let root = app_root();
-    let all_modules = modules::load_all_modules(&root)?;
-    let modules_metadata: HashMap<String, crate::models::module::ModuleDefinition> = all_modules
-        .iter()
-        .map(|m| (m.id.clone(), m.clone()))
-        .collect();
-
-    let game_depth = game_dir
-        .strip_prefix(game_dir.parent().unwrap())
-        .ok()
-        .and_then(|p| p.components().count().checked_sub(1))
-        .unwrap_or(1);
-
-    // Generate all files
-    let mut generator = Generator::new(game_config, modules_metadata, game_depth);
-    let result = generator.generate_all();
-
-    // Write all generated files
-    let mut written = Vec::new();
-    for (rel_path, content) in &result.files {
-        let full_path = game_dir.join(rel_path);
-        if let Some(parent) = full_path.parent() {
-            std::fs::create_dir_all(parent)
-                .map_err(|e| format!("Failed to create directory: {}", e))?;
-        }
-        std::fs::write(&full_path, content)
-            .map_err(|e| format!("Failed to write {}: {}", rel_path, e))?;
-        written.push(rel_path.clone());
-    }
-
-    Ok(written)
-}
-
-/// Remove a module from a game's config and delete its associated files
-#[tauri::command]
-pub fn remove_module(game_path: String, menu_index: usize) -> Result<Vec<String>, String> {
-    let game_dir = PathBuf::from(&game_path);
-    let config_path = game_dir.join("config.toml");
-    let config_content = std::fs::read_to_string(&config_path)
-        .map_err(|e| format!("Failed to read config.toml: {}", e))?;
-
-    let mut doc: toml_edit::DocumentMut = config_content
-        .parse()
-        .map_err(|e| format!("Failed to parse config.toml: {}", e))?;
-
-    let mut removed_files = Vec::new();
-
-    // Get the menu item info before removing
-    let module_id = doc
-        .get("menu")
-        .and_then(|v| v.as_array_of_tables())
-        .and_then(|arr| arr.get(menu_index))
-        .and_then(|item| item.get("module").and_then(|v| v.as_str()))
-        .map(|s| s.to_string());
-
-    // Collect variable names from menu item options (to clean up extra_vars)
-    let option_vars: Vec<String> = doc
-        .get("menu")
-        .and_then(|v| v.as_array_of_tables())
-        .and_then(|arr| arr.get(menu_index))
-        .and_then(|item| item.get("options").and_then(|v| v.as_array_of_tables()))
-        .map(|opts| {
-            opts.iter()
-                .filter_map(|opt| opt.get("var").and_then(|v| v.as_str()).map(|s| s.to_string()))
-                .collect()
-        })
-        .unwrap_or_default();
-
-    // Also get status_var
-    let status_var: Option<String> = doc
-        .get("menu")
-        .and_then(|v| v.as_array_of_tables())
-        .and_then(|arr| arr.get(menu_index))
-        .and_then(|item| item.get("status_var").and_then(|v| v.as_str()))
-        .map(|s| s.to_string());
-
-    // Remove the menu entry
-    if let Some(menu_arr) = doc.get_mut("menu").and_then(|v| v.as_array_of_tables_mut()) {
-        if menu_index < menu_arr.len() {
-            menu_arr.remove(menu_index);
-        } else {
-            return Err(format!("Menu index {} out of range", menu_index));
-        }
-    } else {
-        return Err("No menu section found in config".to_string());
-    }
-
-    // Remove module_params section if module_id exists
-    if let Some(ref mid) = module_id {
-        if let Some(mp) = doc.get_mut("module_params").and_then(|v| v.as_table_mut()) {
-            mp.remove(mid);
-        }
-
-        // Remove keyboard quick_toggle entry
-        if let Some(kb) = doc.get_mut("keyboard").and_then(|v| v.as_table_mut()) {
-            let qt_key = format!("quick_toggle_{}", mid);
-            kb.remove(&qt_key);
-        }
-    }
-
-    // Remove extra_vars entries for option variables
-    if let Some(ev) = doc.get_mut("extra_vars").and_then(|v| v.as_table_mut()) {
-        for var in &option_vars {
-            ev.remove(var);
-        }
-        if let Some(ref sv) = status_var {
-            ev.remove(sv);
-        }
-    }
-
-    // Write updated config
-    std::fs::write(&config_path, doc.to_string())
-        .map_err(|e| format!("Failed to write config.toml: {}", e))?;
-    removed_files.push("config.toml".to_string());
-
-    // Delete module GPC file if module_id exists
-    if let Some(ref mid) = module_id {
-        let module_file = game_dir.join(format!("modules/{}.gpc", mid));
-        if module_file.exists() {
-            std::fs::remove_file(&module_file)
-                .map_err(|e| format!("Failed to delete module file: {}", e))?;
-            removed_files.push(format!("modules/{}.gpc", mid));
-        }
-    }
-
-    // Regenerate core.gpc since module list changed
-    let updated_content = std::fs::read_to_string(&config_path)
-        .map_err(|e| format!("Failed to re-read config.toml: {}", e))?;
-    let game_config: GameConfig = toml::from_str(&updated_content)
-        .map_err(|e| format!("Failed to parse updated config.toml: {}", e))?;
-
-    let root = app_root();
-    let all_modules = modules::load_all_modules(&root)?;
-    let modules_metadata: HashMap<String, crate::models::module::ModuleDefinition> = all_modules
-        .iter()
-        .map(|m| (m.id.clone(), m.clone()))
-        .collect();
-
-    let game_depth = game_dir
-        .strip_prefix(game_dir.parent().unwrap())
-        .ok()
-        .and_then(|p| p.components().count().checked_sub(1))
-        .unwrap_or(1);
-
-    let mut generator = Generator::new(game_config, modules_metadata, game_depth);
-    let result = generator.generate_all();
-
-    // Only regenerate core.gpc
-    if let Some(core_content) = result.files.iter().find(|(p, _)| p == "modules/core.gpc") {
-        let core_path = game_dir.join("modules/core.gpc");
-        std::fs::write(&core_path, &core_content.1)
-            .map_err(|e| format!("Failed to regenerate core.gpc: {}", e))?;
-        removed_files.push("modules/core.gpc (regenerated)".to_string());
-    }
-
-    Ok(removed_files)
 }

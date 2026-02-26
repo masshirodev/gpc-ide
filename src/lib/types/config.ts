@@ -82,4 +82,15 @@ export interface GameSummary {
 	version: number;
 	title: string;
 	module_count: number;
+	generation_mode: 'flow' | 'config';
+}
+
+export interface GameMeta {
+	name: string;
+	filename: string;
+	version: number;
+	game_type: string;
+	console_type: string;
+	username?: string;
+	generation_mode: string;
 }

@@ -118,21 +118,6 @@ export function canDeleteFile(path: string): boolean {
 	return true;
 }
 
-export function canRegenerateFile(path: string): boolean {
-	const regenerable = [
-		'/modules/core.gpc',
-		'/main.gpc',
-		'/define.gpc',
-		'/menu.gpc',
-		'/setting.gpc',
-		'/persistence.gpc'
-	];
-
-	return (
-		regenerable.some((pattern) => path.endsWith(pattern)) ||
-		(path.includes('/modules/') && path.endsWith('.gpc') && !path.endsWith('/core.gpc'))
-	);
-}
 
 export function formatSnapshotDate(ts: number): string {
 	return new Date(ts * 1000).toLocaleString();

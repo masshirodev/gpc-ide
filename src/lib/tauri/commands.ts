@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
-import type { GameConfig, GameSummary } from '$lib/types/config';
+import type { GameConfig, GameSummary, GameMeta } from '$lib/types/config';
 import type { ModuleSummary, ModuleDefinition } from '$lib/types/module';
 
 export async function listGames(workspacePaths?: string[]): Promise<GameSummary[]> {
@@ -66,17 +66,11 @@ export interface CreateGameParams {
 	game_type: string;
 	console_type?: string;
 	version: number;
-	profiles: number;
-	module_ids: string[];
-	module_params: Record<string, Record<string, string>>;
-	quick_toggles: Record<string, string>;
-	weapon_names: string[];
 	workspace_path?: string;
 }
 
 export interface CreateGameResult {
 	game_path: string;
-	config_path: string;
 	files_created: string[];
 }
 
@@ -142,61 +136,16 @@ export async function deleteFile(filePath: string): Promise<void> {
 	return invoke<void>('delete_file', { filePath });
 }
 
-export async function regenerateFile(gamePath: string, filePath: string): Promise<string> {
-	return invoke<string>('regenerate_file', { gamePath, filePath });
+// === Game Meta Commands ===
+
+export async function saveGameMeta(gamePath: string, meta: GameMeta): Promise<void> {
+	return invoke<void>('save_game_meta', { gamePath, meta });
 }
 
-export async function regenerateAll(gamePath: string): Promise<string[]> {
-	return invoke<string[]>('regenerate_all', { gamePath });
+export async function loadGameMeta(gamePath: string): Promise<GameMeta | null> {
+	return invoke<GameMeta | null>('load_game_meta', { gamePath });
 }
 
-export interface FileDiff {
-	path: string;
-	old_content: string;
-	new_content: string;
-}
-
-export async function regeneratePreview(gamePath: string): Promise<FileDiff[]> {
-	return invoke<FileDiff[]>('regenerate_preview', { gamePath });
-}
-
-export async function regenerateCommit(
-	gamePath: string,
-	files: { path: string; content: string }[]
-): Promise<string[]> {
-	return invoke<string[]>('regenerate_commit', { gamePath, files });
-}
-
-export async function removeModule(gamePath: string, menuIndex: number): Promise<string[]> {
-	return invoke<string[]>('remove_module', { gamePath, menuIndex });
-}
-
-// === Add Module Commands ===
-
-export interface AddModuleParams {
-	module_id: string;
-	module_params?: Record<string, string>;
-	quick_toggle_key?: string;
-	weapon_names?: string[];
-}
-
-export interface AddModuleResult {
-	success: boolean;
-	messages: string[];
-	files_modified: string[];
-}
-
-export async function addModule(
-	gamePath: string,
-	params: AddModuleParams,
-	workspacePaths?: string[]
-): Promise<AddModuleResult> {
-	return invoke<AddModuleResult>('add_module', {
-		gamePath,
-		params,
-		workspacePaths: workspacePaths ?? null
-	});
-}
 
 // === File Watcher Commands ===
 

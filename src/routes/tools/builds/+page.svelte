@@ -6,9 +6,7 @@
 		readFile,
 		getAppRoot,
 		listGames,
-		buildGame,
-		regeneratePreview,
-		regenerateCommit
+		buildGame
 	} from '$lib/tauri/commands';
 	import { addToast } from '$lib/stores/toast.svelte';
 	import { getSettings } from '$lib/stores/settings.svelte';
@@ -89,12 +87,6 @@
 			buildQueue[i].status = 'building';
 			buildQueue = [...buildQueue]; // trigger reactivity
 			try {
-				// Auto-regenerate before building
-				const diffs = await regeneratePreview(buildQueue[i].game.path);
-				if (diffs.length > 0) {
-					const files = diffs.map((d) => ({ path: d.path, content: d.new_content }));
-					await regenerateCommit(buildQueue[i].game.path, files);
-				}
 				const ws = getWorkspaceForGame(buildQueue[i].game.path);
 				const result = await buildGame(buildQueue[i].game.path, ws);
 				buildQueue[i].status = result.success ? 'success' : 'error';
