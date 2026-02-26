@@ -200,6 +200,75 @@ author = ""
     Ok(dir.to_string_lossy().to_string())
 }
 
+/// Collect merged hooks from all enabled plugins in a workspace.
+/// Used by the build pipeline to inject plugin code.
+pub fn collect_enabled_hooks(workspace_path: &str) -> PluginHooks {
+    let enabled_ids = load_enabled(workspace_path);
+    if enabled_ids.is_empty() {
+        return PluginHooks::default();
+    }
+
+    let dir = plugins_dir(workspace_path);
+    if !dir.exists() {
+        return PluginHooks::default();
+    }
+
+    let mut merged = PluginHooks::default();
+
+    for entry in std::fs::read_dir(&dir).into_iter().flatten().flatten() {
+        let path = entry.path();
+        if !path.is_dir() {
+            continue;
+        }
+        let manifest_path = path.join("plugin.toml");
+        if !manifest_path.exists() {
+            continue;
+        }
+        let manifest = match load_manifest(&manifest_path) {
+            Ok(m) => m,
+            Err(_) => continue,
+        };
+        if !enabled_ids.contains(&manifest.id) {
+            continue;
+        }
+
+        let hooks = &manifest.hooks;
+        if let Some(ref code) = hooks.pre_build {
+            let existing = merged.pre_build.get_or_insert_with(String::new);
+            if !existing.is_empty() {
+                existing.push('\n');
+            }
+            existing.push_str(code);
+        }
+        if let Some(ref code) = hooks.post_build {
+            let existing = merged.post_build.get_or_insert_with(String::new);
+            if !existing.is_empty() {
+                existing.push('\n');
+            }
+            existing.push_str(code);
+        }
+        if let Some(ref includes) = hooks.includes {
+            let plugin_dir_str = path.to_string_lossy().to_string();
+            let existing = merged.includes.get_or_insert_with(Vec::new);
+            for inc in includes {
+                // Resolve include path relative to plugin directory
+                let resolved = format!("{}/{}", plugin_dir_str, inc);
+                existing.push(resolved);
+            }
+        }
+        if let Some(ref vars) = hooks.extra_vars {
+            let existing = merged.extra_vars.get_or_insert_with(std::collections::HashMap::new);
+            existing.extend(vars.iter().map(|(k, v)| (k.clone(), v.clone())));
+        }
+        if let Some(ref defines) = hooks.extra_defines {
+            let existing = merged.extra_defines.get_or_insert_with(std::collections::HashMap::new);
+            existing.extend(defines.iter().map(|(k, v)| (k.clone(), v.clone())));
+        }
+    }
+
+    merged
+}
+
 /// Delete a plugin
 #[tauri::command]
 pub fn delete_plugin(plugin_path: String) -> Result<(), String> {

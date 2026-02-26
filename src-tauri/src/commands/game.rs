@@ -1,7 +1,39 @@
 use crate::models::config::{GameConfig, GameSummary};
 use crate::models::game_meta::GameMeta;
 use std::path::{Path, PathBuf};
+use std::time::SystemTime;
 use walkdir::WalkDir;
+
+/// Get the most recent modification time (ms since epoch) of key files in a game directory.
+fn game_dir_modified_ms(game_dir: &Path) -> u64 {
+    let candidates = ["game.json", "config.toml", "main.gpc"];
+    let mut latest: u64 = 0;
+    for name in &candidates {
+        if let Ok(meta) = std::fs::metadata(game_dir.join(name)) {
+            if let Ok(modified) = meta.modified() {
+                let ms = modified
+                    .duration_since(SystemTime::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_millis() as u64;
+                if ms > latest {
+                    latest = ms;
+                }
+            }
+        }
+    }
+    // Fallback to dir itself
+    if latest == 0 {
+        if let Ok(meta) = std::fs::metadata(game_dir) {
+            if let Ok(modified) = meta.modified() {
+                latest = modified
+                    .duration_since(SystemTime::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_millis() as u64;
+            }
+        }
+    }
+    latest
+}
 
 /// Resolve the app root directory (where bundled resources like modules/, common/, drawings/ live).
 /// In dev mode, the exe is in src-tauri/target/debug/, so we walk up to find modules/.
@@ -130,6 +162,8 @@ fn parse_game_summary_from_meta(game_dir: &Path) -> Result<GameSummary, String> 
     let meta: GameMeta =
         serde_json::from_str(&content).map_err(|e| format!("Failed to parse game.json: {}", e))?;
 
+    let updated_at = game_dir_modified_ms(game_dir);
+
     Ok(GameSummary {
         name: meta.name.clone(),
         path: game_dir.to_string_lossy().to_string(),
@@ -139,6 +173,7 @@ fn parse_game_summary_from_meta(game_dir: &Path) -> Result<GameSummary, String> 
         title: meta.name.clone(),
         module_count: 0,
         generation_mode: meta.generation_mode.clone(),
+        updated_at,
     })
 }
 
@@ -160,6 +195,8 @@ fn parse_game_summary_from_config(config_path: &Path) -> Result<GameSummary, Str
     let game_type = config.r#type.clone().unwrap_or_else(|| "fps".to_string());
     let console_type = config.console_type.clone().unwrap_or_else(|| "ps5".to_string());
 
+    let updated_at = game_dir_modified_ms(game_dir);
+
     Ok(GameSummary {
         name,
         path: game_dir.to_string_lossy().to_string(),
@@ -169,6 +206,7 @@ fn parse_game_summary_from_config(config_path: &Path) -> Result<GameSummary, Str
         title: config.state_screen.title.clone(),
         module_count: config.menu.len(),
         generation_mode: "config".to_string(),
+        updated_at,
     })
 }
 

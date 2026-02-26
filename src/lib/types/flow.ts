@@ -30,6 +30,7 @@ export type SubNodeType =
 	| 'indicator'
 	| 'pixel-art'
 	| 'separator'
+	| 'blank'
 	| 'custom';
 
 export interface SubNode {
@@ -135,6 +136,8 @@ export interface FlowVariable {
 	type: FlowVariableType;
 	defaultValue: number | string;
 	persist: boolean;
+	/** If true, this variable has independent values per profile */
+	perProfile?: boolean;
 	min?: number;
 	max?: number;
 	arraySize?: number;
@@ -188,6 +191,8 @@ export type FlowConditionType =
 export interface FlowCondition {
 	type: FlowConditionType;
 	button?: string;
+	/** Modifier buttons that must be held (checked with get_val()) */
+	modifiers?: string[];
 	timeoutMs?: number;
 	variable?: string;
 	comparison?: '==' | '!=' | '>' | '<' | '>=' | '<=';
@@ -239,6 +244,24 @@ export interface FlowGraph {
 	updatedAt: number;
 }
 
+// ==================== Flow Profiles ====================
+
+export interface FlowProfile {
+	id: string;
+	name: string;
+	/** Per-profile variable overrides: varName -> value for this profile */
+	variableOverrides: Record<string, number>;
+}
+
+export interface ProfileSwitchConfig {
+	/** Button to switch to next profile */
+	next: string;
+	/** Button to switch to previous profile */
+	prev: string;
+	/** Optional modifier button that must be held */
+	modifier?: string;
+}
+
 // ==================== Flow Project (Multi-Flow Container) ====================
 
 export interface FlowProject {
@@ -246,6 +269,10 @@ export interface FlowProject {
 	flows: FlowGraph[];
 	sharedVariables: FlowVariable[];
 	sharedCode: string;
+	/** Profile definitions. Empty array = single implicit profile (no profile switching). */
+	profiles?: FlowProfile[];
+	/** Profile switch button configuration */
+	profileSwitch?: ProfileSwitchConfig;
 	updatedAt: number;
 }
 

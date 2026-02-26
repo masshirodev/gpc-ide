@@ -2,6 +2,7 @@
 	import FlowCanvas from './FlowCanvas.svelte';
 	import FlowToolbar from './FlowToolbar.svelte';
 	import FlowPropertyPanel from './FlowPropertyPanel.svelte';
+	import ProfilePanel from './ProfilePanel.svelte';
 	import ChunkLibrary from './ChunkLibrary.svelte';
 	import ChunkSaveModal from './ChunkSaveModal.svelte';
 	import FlowEmulator from './FlowEmulator.svelte';
@@ -49,6 +50,12 @@
 		reorderSubNodes,
 		undo,
 		redo,
+		getProfiles,
+		getProfileSwitch,
+		addProfile,
+		removeProfile,
+		updateProfile,
+		setProfileSwitch,
 	} from '$lib/stores/flow.svelte';
 	import { saveFlowProject, loadFlowProject, listModules, getModule, writeFile, buildGame } from '$lib/tauri/commands';
 	import { generateMergedFlowGpc } from '$lib/flow/codegen-merged';
@@ -70,9 +77,33 @@
 	let selectedSubNode = $derived(getSelectedSubNode());
 	let expandedNodes = $derived(getExpandedNodes());
 	let hasSelection = $derived(flowStore.selectedNodeId !== null || flowStore.selectedEdgeId !== null);
+	let profiles = $derived(getProfiles());
+	let profileSwitchConfig = $derived(getProfileSwitch());
+	let perProfileVars = $derived.by(() => {
+		if (!flowStore.project) return [];
+		const vars: import('$lib/types/flow').FlowVariable[] = [];
+		const seen = new Set<string>();
+		const addVars = (list: import('$lib/types/flow').FlowVariable[]) => {
+			for (const v of list) {
+				if (v.perProfile && !seen.has(v.name)) {
+					vars.push(v);
+					seen.add(v.name);
+				}
+			}
+		};
+		addVars(flowStore.project.sharedVariables);
+		for (const flow of flowStore.project.flows) {
+			addVars(flow.globalVariables);
+			for (const node of flow.nodes) {
+				addVars(node.variables);
+			}
+		}
+		return vars;
+	});
 	let showChunkSave = $state(false);
 	let showChunkLibrary = $state(true);
 	let showEmulator = $state(false);
+	let showProfiles = $state(false);
 	let availableModules = $state<ModuleSummary[]>([]);
 	let building = $state(false);
 
@@ -476,25 +507,57 @@
 			onZoom={setZoom}
 		/>
 
-		<!-- Property panel -->
-		<FlowPropertyPanel
-			{selectedNode}
-			{selectedEdge}
-			selectedSubNode={selectedSubNode}
-			allModuleNodes={flowStore.graph?.nodes.filter((n) => n.type === 'module' && n.moduleData) ?? []}
-			onUpdateNode={updateNode}
-			onUpdateEdge={updateEdge}
-			onSetInitial={setInitialState}
-			onDuplicate={duplicateNode}
-			onDelete={deleteSelected}
-			onEditOled={handleEditOled}
-			onSaveAsChunk={handleSaveAsChunk}
-			onAddSubNode={addSubNode}
-			onRemoveSubNode={removeSubNode}
-			onUpdateSubNode={updateSubNode}
-			onReorderSubNodes={reorderSubNodes}
-			onSelectSubNode={selectSubNode}
-		/>
+		<!-- Right panel: Properties / Profiles -->
+		<div class="flex h-full w-72 shrink-0 flex-col border-l border-zinc-800 bg-zinc-900">
+			<!-- Panel tabs -->
+			<div class="flex border-b border-zinc-800">
+				<button
+					class="flex-1 px-3 py-1.5 text-xs font-medium {!showProfiles ? 'border-b-2 border-emerald-500 text-emerald-400' : 'text-zinc-500 hover:text-zinc-300'}"
+					onclick={() => (showProfiles = false)}
+				>
+					Properties
+				</button>
+				<button
+					class="flex-1 px-3 py-1.5 text-xs font-medium {showProfiles ? 'border-b-2 border-emerald-500 text-emerald-400' : 'text-zinc-500 hover:text-zinc-300'}"
+					onclick={() => (showProfiles = true)}
+				>
+					Profiles{profiles.length > 0 ? ` (${profiles.length})` : ''}
+				</button>
+			</div>
+
+			<div class="min-h-0 flex-1 overflow-y-auto">
+				{#if showProfiles}
+					<ProfilePanel
+						{profiles}
+						profileSwitch={profileSwitchConfig}
+						{perProfileVars}
+						onAddProfile={addProfile}
+						onRemoveProfile={removeProfile}
+						onUpdateProfile={updateProfile}
+						onSetProfileSwitch={setProfileSwitch}
+					/>
+				{:else}
+					<FlowPropertyPanel
+						{selectedNode}
+						{selectedEdge}
+						selectedSubNode={selectedSubNode}
+						allModuleNodes={flowStore.graph?.nodes.filter((n) => n.type === 'module' && n.moduleData) ?? []}
+						onUpdateNode={updateNode}
+						onUpdateEdge={updateEdge}
+						onSetInitial={setInitialState}
+						onDuplicate={duplicateNode}
+						onDelete={deleteSelected}
+						onEditOled={handleEditOled}
+						onSaveAsChunk={handleSaveAsChunk}
+						onAddSubNode={addSubNode}
+						onRemoveSubNode={removeSubNode}
+						onUpdateSubNode={updateSubNode}
+						onReorderSubNodes={reorderSubNodes}
+						onSelectSubNode={selectSubNode}
+					/>
+				{/if}
+			</div>
+		</div>
 	{:else}
 		<div class="flex flex-1 items-center justify-center text-sm text-zinc-500">
 			<div class="text-center">

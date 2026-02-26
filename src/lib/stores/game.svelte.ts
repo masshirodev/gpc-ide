@@ -70,3 +70,28 @@ export function gamesByType(games: GameSummary[]): Record<string, GameSummary[]>
 	}
 	return grouped;
 }
+
+/** Group games by workspace path */
+export function gamesByWorkspace(
+	games: GameSummary[],
+	workspaces: string[]
+): { workspace: string; games: GameSummary[] }[] {
+	const groups: Map<string, GameSummary[]> = new Map();
+	for (const game of games) {
+		const ws = workspaces.find((w) => game.path.startsWith(w)) ?? 'Other';
+		if (!groups.has(ws)) groups.set(ws, []);
+		groups.get(ws)!.push(game);
+	}
+	// Sort each group by name
+	const result: { workspace: string; games: GameSummary[] }[] = [];
+	for (const [workspace, list] of groups) {
+		list.sort((a, b) => a.name.localeCompare(b.name));
+		result.push({ workspace, games: list });
+	}
+	return result;
+}
+
+/** Get N most recently edited games */
+export function recentGames(games: GameSummary[], count: number): GameSummary[] {
+	return [...games].sort((a, b) => (b.updated_at ?? 0) - (a.updated_at ?? 0)).slice(0, count);
+}

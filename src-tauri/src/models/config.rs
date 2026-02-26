@@ -151,6 +151,9 @@ pub struct GameSummary {
     /// "flow" for flow-based games, "config" for legacy config-based games
     #[serde(default = "default_generation_mode")]
     pub generation_mode: String,
+    /// Last modified time in milliseconds since epoch
+    #[serde(default)]
+    pub updated_at: u64,
 }
 
 fn default_generation_mode() -> String {

@@ -680,9 +680,30 @@ fn parse_balanced_args(source: &str, pos: &mut usize) -> Option<Vec<String>> {
 /// - `verbose`: enable verbose logging
 pub fn build_game(
     game_dir: &Path,
+    project_root: &Path,
+    dist_base: &Path,
+    verbose: bool,
+) -> BuildResult {
+    build_game_impl(game_dir, project_root, dist_base, verbose, None)
+}
+
+/// Build a game with plugin support from the given workspace path.
+pub fn build_game_with_plugins(
+    game_dir: &Path,
+    project_root: &Path,
+    dist_base: &Path,
+    verbose: bool,
+    workspace_path: &str,
+) -> BuildResult {
+    build_game_impl(game_dir, project_root, dist_base, verbose, Some(workspace_path))
+}
+
+fn build_game_impl(
+    game_dir: &Path,
     _project_root: &Path,
     dist_base: &Path,
     verbose: bool,
+    workspace_path: Option<&str>,
 ) -> BuildResult {
     let main_path = game_dir.join("main.gpc");
 
@@ -725,8 +746,55 @@ pub fn build_game(
         };
     }
 
+    // Collect plugin hooks if workspace path is provided
+    let plugin_hooks = workspace_path
+        .map(crate::commands::plugins::collect_enabled_hooks)
+        .unwrap_or_default();
+
+    // Build source with plugin injections (pre_build, defines, vars, includes)
+    let mut source = std::fs::read_to_string(&main_path)
+        .unwrap_or_default();
+
+    let mut plugin_prefix = String::new();
+    if let Some(ref defines) = plugin_hooks.extra_defines {
+        for (name, value) in defines {
+            plugin_prefix.push_str(&format!("define {} = {};\n", name, value));
+        }
+    }
+    if let Some(ref vars) = plugin_hooks.extra_vars {
+        for (name, var_type) in vars {
+            plugin_prefix.push_str(&format!("{} {};\n", var_type, name));
+        }
+    }
+    if let Some(ref includes) = plugin_hooks.includes {
+        for inc_path in includes {
+            plugin_prefix.push_str(&format!("#include \"{}\"\n", inc_path));
+        }
+    }
+    if let Some(ref pre) = plugin_hooks.pre_build {
+        plugin_prefix.push_str(pre);
+        plugin_prefix.push('\n');
+    }
+    if !plugin_prefix.is_empty() {
+        source = format!("{}\n{}", plugin_prefix, source);
+    }
+
+    // Write augmented source to a temp file for preprocessing
+    let temp_main = game_dir.join(".main_build.gpc");
+    if let Err(e) = std::fs::write(&temp_main, &source) {
+        return BuildResult {
+            output_path: output_path.to_string_lossy().to_string(),
+            success: false,
+            errors: vec![format!("Could not write temp build file: {}", e)],
+            warnings: Vec::new(),
+        };
+    }
+
     // Run preprocessor (import expansion)
-    let (processed, logs, preprocess_success) = preprocess(&main_path, verbose);
+    let (processed, logs, preprocess_success) = preprocess(&temp_main, verbose);
+
+    // Clean up temp file
+    let _ = std::fs::remove_file(&temp_main);
 
     let mut errors: Vec<String> = logs
         .iter()
@@ -743,8 +811,15 @@ pub fn build_game(
     let macro_defs = extract_macro_definitions(&processed);
     let stripped = strip_macro_definitions(&processed, &macro_defs);
     let mut macro_errors = Vec::new();
-    let expanded = expand_macro_calls(&stripped, &macro_defs, &mut macro_errors);
+    let mut expanded = expand_macro_calls(&stripped, &macro_defs, &mut macro_errors);
     errors.extend(macro_errors);
+
+    // Append post_build plugin code after all processing
+    if let Some(ref post) = plugin_hooks.post_build {
+        expanded.push('\n');
+        expanded.push_str(post);
+        expanded.push('\n');
+    }
 
     // Write output
     let header = format!(

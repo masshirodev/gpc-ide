@@ -83,6 +83,7 @@ export interface GameSummary {
 	title: string;
 	module_count: number;
 	generation_mode: 'flow' | 'config';
+	updated_at: number;
 }
 
 export interface GameMeta {

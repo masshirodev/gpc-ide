@@ -7,6 +7,8 @@ import type {
 	FlowNodeType,
 	FlowType,
 	FlowProject,
+	FlowProfile,
+	ProfileSwitchConfig,
 	SubNode,
 	SubNodeType,
 } from '$lib/types/flow';
@@ -535,22 +537,34 @@ export function addSubNode(nodeId: string, type: SubNodeType, label: string): Su
 
 	// Auto-create variable for toggle/value items
 	if ((type === 'toggle-item' || type === 'value-item') && node) {
-		const varName = label.toLowerCase().replace(/[^a-z0-9_]/g, '_').replace(/_+/g, '_');
-		const exists = node.variables.some((v) => v.name === varName) ||
-			state.graph!.globalVariables.some((v) => v.name === varName);
-		if (!exists) {
-			node.variables = [
-				...node.variables,
-				{
-					name: varName,
-					type: type === 'toggle-item' ? 'int' : 'int',
-					defaultValue: type === 'toggle-item' ? 0 : 0,
-					persist: false,
-					min: type === 'value-item' ? 0 : undefined,
-					max: type === 'value-item' ? 100 : undefined,
-				},
-			];
+		const sanitize = (s: string) =>
+			s.toLowerCase().replace(/[^a-z0-9_]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
+		const baseVarName = `${sanitize(node.label)}_${sanitize(label)}`;
+
+		// Check ALL nodes' variables + global variables for uniqueness
+		const allVarNames = new Set<string>();
+		for (const n of state.graph!.nodes) {
+			for (const v of n.variables) allVarNames.add(v.name);
 		}
+		for (const v of state.graph!.globalVariables) allVarNames.add(v.name);
+
+		let varName = baseVarName;
+		let suffix = 2;
+		while (allVarNames.has(varName)) {
+			varName = `${baseVarName}_${suffix++}`;
+		}
+
+		node.variables = [
+			...node.variables,
+			{
+				name: varName,
+				type: 'int' as const,
+				defaultValue: 0,
+				persist: false,
+				min: type === 'value-item' ? 0 : undefined,
+				max: type === 'value-item' ? 100 : undefined,
+			},
+		];
 		sn.boundVariable = varName;
 	}
 
@@ -631,4 +645,52 @@ export function isNodeExpanded(nodeId: string): boolean {
 
 export function getExpandedNodes(): Set<string> {
 	return expandedNodes;
+}
+
+// ==================== Profile Management ====================
+
+export function getProfiles(): FlowProfile[] {
+	return state.project?.profiles ?? [];
+}
+
+export function getProfileSwitch(): ProfileSwitchConfig | undefined {
+	return state.project?.profileSwitch;
+}
+
+export function addProfile(name: string) {
+	if (!state.project) return;
+	pushUndo('Add profile');
+	const profiles = [...(state.project.profiles ?? [])];
+	profiles.push({
+		id: crypto.randomUUID(),
+		name,
+		variableOverrides: {},
+	});
+	state.project = { ...state.project, profiles, updatedAt: Date.now() };
+	state.dirty = true;
+}
+
+export function removeProfile(profileId: string) {
+	if (!state.project) return;
+	pushUndo('Remove profile');
+	const profiles = (state.project.profiles ?? []).filter((p) => p.id !== profileId);
+	state.project = { ...state.project, profiles, updatedAt: Date.now() };
+	state.dirty = true;
+}
+
+export function updateProfile(profileId: string, updates: Partial<FlowProfile>) {
+	if (!state.project) return;
+	pushUndo('Update profile');
+	const profiles = (state.project.profiles ?? []).map((p) =>
+		p.id === profileId ? { ...p, ...updates } : p
+	);
+	state.project = { ...state.project, profiles, updatedAt: Date.now() };
+	state.dirty = true;
+}
+
+export function setProfileSwitch(config: ProfileSwitchConfig | undefined) {
+	if (!state.project) return;
+	pushUndo('Update profile switch');
+	state.project = { ...state.project, profileSwitch: config, updatedAt: Date.now() };
+	state.dirty = true;
 }

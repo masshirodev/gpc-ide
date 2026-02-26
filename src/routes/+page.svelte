@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { getGameStore, gamesByType, loadGames, clearSelection } from '$lib/stores/game.svelte';
+	import { getGameStore, gamesByType, gamesByWorkspace, recentGames, loadGames, clearSelection } from '$lib/stores/game.svelte';
 	import { selectGame } from '$lib/stores/game.svelte';
 	import {
 		getEditorStore,
@@ -111,6 +111,8 @@
 
 	let grouped = $derived(gamesByType(store.games));
 	let types = $derived(Object.keys(grouped).sort());
+	let workspaceGrouped = $derived(gamesByWorkspace(store.games, settings.workspaces));
+	let recent = $derived(recentGames(store.games, 3));
 	let gameConsoleType = $derived(
 		(store.selectedGame?.console_type ?? 'ps5') as import('$lib/utils/console-buttons').ConsoleType
 	);
@@ -811,8 +813,8 @@
 {:else}
 	<DashboardView
 		games={store.games}
-		{grouped}
-		{types}
+		{workspaceGrouped}
+		{recent}
 		loading={store.loading}
 		error={store.error}
 		onSelectGame={selectGame}

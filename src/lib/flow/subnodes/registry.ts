@@ -9,6 +9,7 @@ import { barDef } from './defs/bar';
 import { indicatorDef } from './defs/indicator';
 import { pixelArtDef } from './defs/pixel-art';
 import { separatorDef } from './defs/separator';
+import { blankDef } from './defs/blank';
 import { customDef } from './defs/custom';
 
 const ALL_SUBNODE_DEFS: SubNodeDef[] = [
@@ -22,6 +23,7 @@ const ALL_SUBNODE_DEFS: SubNodeDef[] = [
 	indicatorDef,
 	pixelArtDef,
 	separatorDef,
+	blankDef,
 	customDef,
 ];
 

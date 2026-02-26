@@ -5,8 +5,11 @@ import { computeSubNodePixelY, getSortedSubNodes } from '$lib/flow/layout';
 /**
  * Generate a complete GPC script from a FlowGraph.
  * Produces a self-contained state machine with OLED rendering.
+ *
+ * @param profileCount - When > 1, per-profile variables are declared as arrays
+ *                       and indexed with `[Flow_CurrentProfile]`.
  */
-export function generateFlowGpc(graph: FlowGraph): string {
+export function generateFlowGpc(graph: FlowGraph, profileCount: number = 0): string {
 	const lines: string[] = [];
 	const nodes = graph.nodes;
 	const edges = graph.edges;
@@ -57,11 +60,28 @@ export function generateFlowGpc(graph: FlowGraph): string {
 	}
 	lines.push(``);
 
+	// Collect per-profile variable names for indexing
+	const perProfileVars = new Set<string>();
+	if (profileCount > 1) {
+		for (const v of graph.globalVariables) {
+			if (v.perProfile) perProfileVars.add(v.name);
+		}
+		for (const node of nodes) {
+			for (const v of node.variables) {
+				if (v.perProfile) perProfileVars.add(v.name);
+			}
+		}
+	}
+
+	/** Apply profile indexing to a variable name if needed */
+	const profileVar = (name: string) =>
+		perProfileVars.has(name) ? `${name}[Flow_CurrentProfile]` : name;
+
 	// Global variables
 	if (graph.globalVariables.length > 0) {
 		lines.push(`// Global flow variables`);
 		for (const v of graph.globalVariables) {
-			lines.push(generateVarDeclaration(v));
+			lines.push(generateVarDeclaration(v, profileCount));
 		}
 		lines.push(``);
 	}
@@ -78,7 +98,7 @@ export function generateFlowGpc(graph: FlowGraph): string {
 
 		for (const v of node.variables) {
 			if (!declaredVars.has(v.name)) {
-				lines.push(generateVarDeclaration(v));
+				lines.push(generateVarDeclaration(v, profileCount));
 				declaredVars.add(v.name);
 			}
 		}
@@ -155,7 +175,8 @@ export function generateFlowGpc(graph: FlowGraph): string {
 				for (let i = 0; i < interactiveSubs.length; i++) {
 					const sub = interactiveSubs[i];
 					if (sub.type === 'toggle-item' && sub.boundVariable) {
-						lines.push(`    if(${cursorVar} == ${i} && event_press(${bm.confirm})) ${sub.boundVariable} = !${sub.boundVariable};`);
+						const bv = profileVar(sub.boundVariable);
+						lines.push(`    if(${cursorVar} == ${i} && event_press(${bm.confirm})) ${bv} = !${bv};`);
 					}
 				}
 			}
@@ -179,7 +200,7 @@ export function generateFlowGpc(graph: FlowGraph): string {
 					cursorIndex: sub.interactive ? cursorIndex : -1,
 					x: pixelX,
 					y: pixelY,
-					boundVariable: sub.boundVariable,
+					boundVariable: sub.boundVariable ? profileVar(sub.boundVariable) : undefined,
 					buttons: bm,
 				};
 
@@ -329,7 +350,12 @@ function getInteractiveSubNodes(node: FlowNode): SubNode[] {
 	return getSortedSubNodes(node).filter((sn) => sn.interactive);
 }
 
-function generateVarDeclaration(v: FlowVariable): string {
+function generateVarDeclaration(v: FlowVariable, profileCount: number = 0): string {
+	// Per-profile variables become arrays when multiple profiles exist
+	if (v.perProfile && profileCount > 1 && v.type !== 'string') {
+		const defaults = Array(profileCount).fill(v.defaultValue).join(', ');
+		return `${v.type} ${v.name}[${profileCount}] = { ${defaults} };`;
+	}
 	if (v.type === 'string') {
 		const size = v.arraySize ?? 32;
 		const defaultStr = typeof v.defaultValue === 'string' ? v.defaultValue : '';
@@ -353,26 +379,41 @@ function sanitizeName(name: string): string {
 
 function generateConditionCode(edge: FlowEdge): string | null {
 	const c = edge.condition;
+	const modChecks = (c.modifiers ?? [])
+		.filter(Boolean)
+		.map((btn) => `get_val(${btn})`);
+
+	let result: string | null = null;
 	switch (c.type) {
 		case 'button_press':
-			return c.button ? `event_press(${c.button})` : null;
+			result = c.button ? `event_press(${c.button})` : null;
+			break;
 		case 'button_hold':
-			return c.button && c.timeoutMs
+			result = c.button && c.timeoutMs
 				? `get_val(${c.button}) && FlowStateTimer > ${c.timeoutMs}`
 				: c.button
 					? `get_val(${c.button})`
 					: null;
+			break;
 		case 'timeout':
-			return c.timeoutMs ? `FlowStateTimer > ${c.timeoutMs}` : null;
+			result = c.timeoutMs ? `FlowStateTimer > ${c.timeoutMs}` : null;
+			break;
 		case 'variable':
-			return c.variable && c.comparison
+			result = c.variable && c.comparison
 				? `${c.variable} ${c.comparison} ${c.value ?? 0}`
 				: null;
+			break;
 		case 'custom':
-			return c.customCode?.trim() || null;
+			result = c.customCode?.trim() || null;
+			break;
 		default:
 			return null;
 	}
+
+	if (result && modChecks.length > 0) {
+		return [...modChecks, result].join(' && ');
+	}
+	return result;
 }
 
 function generateOledDrawFunction(node: FlowNode): string {

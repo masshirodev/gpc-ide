@@ -92,15 +92,39 @@
 
 	// Sync node → local state only when a different node is selected
 	let lastSyncedNodeId = '';
+	let syncedLabel = '';
+	let syncedGpcCode = '';
+	let syncedOnEnter = '';
+	let syncedOnExit = '';
+	let syncedComboCode = '';
+
+	// Commit pending node edits before switching away
+	function flushNodeEdits(nodeId: string) {
+		if (!nodeId) return;
+		const updates: Partial<FlowNode> = {};
+		if (editLabel !== syncedLabel) updates.label = editLabel;
+		if (editGpcCode !== syncedGpcCode) updates.gpcCode = editGpcCode;
+		if (editOnEnter !== syncedOnEnter) updates.onEnter = editOnEnter;
+		if (editOnExit !== syncedOnExit) updates.onExit = editOnExit;
+		if (editComboCode !== syncedComboCode) updates.comboCode = editComboCode;
+		if (Object.keys(updates).length > 0) {
+			onUpdateNode(nodeId, updates);
+		}
+	}
+
 	$effect(() => {
 		if (selectedNode && selectedNode.id !== lastSyncedNodeId) {
+			// If switching from one node to another, flush the old one
+			if (lastSyncedNodeId) flushNodeEdits(lastSyncedNodeId);
 			lastSyncedNodeId = selectedNode.id;
-			editLabel = selectedNode.label;
-			editGpcCode = selectedNode.gpcCode;
-			editOnEnter = selectedNode.onEnter;
-			editOnExit = selectedNode.onExit;
-			editComboCode = selectedNode.comboCode;
-		} else if (!selectedNode) {
+			editLabel = syncedLabel = selectedNode.label;
+			editGpcCode = syncedGpcCode = selectedNode.gpcCode;
+			editOnEnter = syncedOnEnter = selectedNode.onEnter;
+			editOnExit = syncedOnExit = selectedNode.onExit;
+			editComboCode = syncedComboCode = selectedNode.comboCode;
+		} else if (!selectedNode && lastSyncedNodeId) {
+			// Deselected — flush pending edits
+			flushNodeEdits(lastSyncedNodeId);
 			lastSyncedNodeId = '';
 		}
 	});
@@ -115,9 +139,25 @@
 	let isModuleNode = $derived(selectedNode?.type === 'module');
 
 	let lastSyncedModuleNodeId = '';
+	let lastSyncedModuleData: import('$lib/types/flow').ModuleNodeData | null = null;
+
+	function flushModuleEdits(nodeId: string) {
+		if (!nodeId || !lastSyncedModuleData) return;
+		const md = { ...lastSyncedModuleData };
+		let changed = false;
+		if (editInitCode !== (md.initCode ?? '')) { md.initCode = editInitCode; changed = true; }
+		if (editMainCode !== (md.mainCode || md.triggerCode || '')) { md.mainCode = editMainCode; md.triggerCode = undefined; changed = true; }
+		if (editFunctionsCode !== (md.functionsCode ?? '')) { md.functionsCode = editFunctionsCode; changed = true; }
+		if (editModuleComboCode !== md.comboCode) { md.comboCode = editModuleComboCode; changed = true; }
+		if (editEnableVariable !== md.enableVariable) { md.enableVariable = editEnableVariable; changed = true; }
+		if (changed) onUpdateNode(nodeId, { moduleData: md });
+	}
+
 	$effect(() => {
 		if (selectedNode && selectedNode.type === 'module' && selectedNode.id !== lastSyncedModuleNodeId) {
+			if (lastSyncedModuleNodeId) flushModuleEdits(lastSyncedModuleNodeId);
 			lastSyncedModuleNodeId = selectedNode.id;
+			lastSyncedModuleData = selectedNode.moduleData ? { ...selectedNode.moduleData } : null;
 			const md = selectedNode.moduleData;
 			editInitCode = md?.initCode ?? '';
 			editMainCode = md?.mainCode || md?.triggerCode || '';
@@ -125,7 +165,9 @@
 			editModuleComboCode = md?.comboCode ?? '';
 			editEnableVariable = md?.enableVariable ?? '';
 		} else if (!selectedNode || selectedNode.type !== 'module') {
+			if (lastSyncedModuleNodeId) flushModuleEdits(lastSyncedModuleNodeId);
 			lastSyncedModuleNodeId = '';
+			lastSyncedModuleData = null;
 		}
 	});
 
@@ -175,12 +217,23 @@
 	// Local editing state for sub-node
 	let editSubLabel = $state('');
 	let lastSyncedSubNodeId = '';
+	let lastSyncedSubNodeParentId = '';
+
+	function flushSubNodeEdits(parentId: string, subNodeId: string) {
+		if (!parentId || !subNodeId) return;
+		onUpdateSubNode(parentId, subNodeId, { label: editSubLabel });
+	}
+
 	$effect(() => {
 		if (selectedSubNode && selectedSubNode.id !== lastSyncedSubNodeId) {
+			if (lastSyncedSubNodeId) flushSubNodeEdits(lastSyncedSubNodeParentId, lastSyncedSubNodeId);
 			lastSyncedSubNodeId = selectedSubNode.id;
+			lastSyncedSubNodeParentId = selectedNode?.id ?? '';
 			editSubLabel = selectedSubNode.label;
-		} else if (!selectedSubNode) {
+		} else if (!selectedSubNode && lastSyncedSubNodeId) {
+			flushSubNodeEdits(lastSyncedSubNodeParentId, lastSyncedSubNodeId);
 			lastSyncedSubNodeId = '';
+			lastSyncedSubNodeParentId = '';
 		}
 	});
 
@@ -192,23 +245,48 @@
 	let editEdgeVariable = $state('');
 	let editEdgeComparison = $state('==');
 	let editEdgeValue = $state(0);
+	let editEdgeModifiers = $state<string[]>([]);
 
 	let lastSyncedEdgeKey = '';
+	let lastSyncedEdgeId = '';
+
+	function flushEdgeEdits(edgeId: string) {
+		if (!edgeId) return;
+		onUpdateEdge(edgeId, {
+			label: editEdgeLabel,
+			condition: {
+				type: (lastSyncedEdgeKey.split(':')[1] ?? 'button_press') as FlowConditionType,
+				button: editEdgeButton || undefined,
+				modifiers: editEdgeModifiers.filter(Boolean).length > 0 ? editEdgeModifiers.filter(Boolean) : undefined,
+				timeoutMs: editEdgeTimeoutMs || undefined,
+				customCode: editEdgeCustomCode || undefined,
+				variable: editEdgeVariable || undefined,
+				comparison: (editEdgeComparison as FlowEdge['condition']['comparison']) || undefined,
+				value: editEdgeValue,
+			},
+		});
+	}
+
 	$effect(() => {
 		if (selectedEdge) {
 			const key = `${selectedEdge.id}:${selectedEdge.condition.type}`;
 			if (key !== lastSyncedEdgeKey) {
+				if (lastSyncedEdgeId) flushEdgeEdits(lastSyncedEdgeId);
 				lastSyncedEdgeKey = key;
+				lastSyncedEdgeId = selectedEdge.id;
 				editEdgeLabel = selectedEdge.label;
 				editEdgeButton = selectedEdge.condition.button || '';
+				editEdgeModifiers = [...(selectedEdge.condition.modifiers ?? [])];
 				editEdgeTimeoutMs = selectedEdge.condition.timeoutMs ?? 3000;
 				editEdgeCustomCode = selectedEdge.condition.customCode || '';
 				editEdgeVariable = selectedEdge.condition.variable || '';
 				editEdgeComparison = selectedEdge.condition.comparison || '==';
 				editEdgeValue = selectedEdge.condition.value ?? 0;
 			}
-		} else {
+		} else if (lastSyncedEdgeId) {
+			flushEdgeEdits(lastSyncedEdgeId);
 			lastSyncedEdgeKey = '';
+			lastSyncedEdgeId = '';
 		}
 	});
 
@@ -255,11 +333,13 @@
 	function commitEdge() {
 		if (!selectedEdge) return;
 		const ctype = selectedEdge.condition.type;
+		const filteredModifiers = editEdgeModifiers.filter(Boolean);
 		onUpdateEdge(selectedEdge.id, {
 			label: editEdgeLabel,
 			condition: {
 				...selectedEdge.condition,
 				button: editEdgeButton || undefined,
+				modifiers: filteredModifiers.length > 0 ? filteredModifiers : undefined,
 				timeoutMs: ctype === 'button_hold' || ctype === 'timeout' ? editEdgeTimeoutMs : undefined,
 				customCode: editEdgeCustomCode || undefined,
 				variable: editEdgeVariable || undefined,
@@ -328,7 +408,7 @@
 	}
 </script>
 
-<div class="flex h-full w-72 flex-col border-l border-zinc-800 bg-zinc-900">
+<div class="flex h-full flex-col">
 	{#if selectedNode && selectedSubNode}
 		<!-- ==================== Sub-Node Properties ==================== -->
 		<div class="border-b border-zinc-800 px-3 py-2">
@@ -1149,6 +1229,43 @@
 						onchange={(v) => { editEdgeButton = v; commitEdge(); }}
 						placeholder="Search buttons..."
 					/>
+				</div>
+				<div class="mb-3">
+					<label class="mb-1 block text-xs text-zinc-400">Modifiers (held buttons)</label>
+					{#each editEdgeModifiers as mod, i}
+						<div class="mb-1 flex items-center gap-1">
+							<div class="flex-1">
+								<ButtonSelect
+									value={mod}
+									onchange={(v) => {
+										const mods = [...editEdgeModifiers];
+										mods[i] = v;
+										editEdgeModifiers = mods;
+										commitEdge();
+									}}
+									placeholder="Search buttons..."
+								/>
+							</div>
+							<button
+								class="rounded p-1 text-zinc-500 hover:bg-zinc-700 hover:text-red-400"
+								onclick={() => {
+									editEdgeModifiers = editEdgeModifiers.filter((_, idx) => idx !== i);
+									commitEdge();
+								}}
+								title="Remove modifier"
+							>
+								<svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+								</svg>
+							</button>
+						</div>
+					{/each}
+					<button
+						class="mt-1 text-xs text-emerald-500 hover:text-emerald-400"
+						onclick={() => { editEdgeModifiers = [...editEdgeModifiers, '']; }}
+					>
+						+ Add Modifier
+					</button>
 				</div>
 				{#if selectedEdge.condition.type === 'button_hold'}
 					<div class="mb-3">

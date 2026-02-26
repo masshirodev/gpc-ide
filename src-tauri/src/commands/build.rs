@@ -1,5 +1,5 @@
 use crate::commands::game::app_root;
-use crate::pipeline::build::{BuildResult, build_game};
+use crate::pipeline::build::{BuildResult, build_game, build_game_with_plugins};
 use std::path::PathBuf;
 
 /// Build a game by preprocessing its main.gpc and writing the output to {workspace}/dist/
@@ -14,10 +14,15 @@ pub fn build_game_cmd(game_path: String, workspace_path: Option<String>) -> Resu
 
     // Determine dist base: workspace path if provided, otherwise app root
     let dist_base = workspace_path
-        .map(PathBuf::from)
+        .as_ref()
+        .map(|p| PathBuf::from(p))
         .unwrap_or_else(|| root.clone());
 
-    let result = build_game(&game_dir, &root, &dist_base, true);
+    // Use plugin-aware build when workspace path is available
+    let result = match workspace_path.as_deref() {
+        Some(ws) => build_game_with_plugins(&game_dir, &root, &dist_base, true, ws),
+        None => build_game(&game_dir, &root, &dist_base, true),
+    };
     Ok(result)
 }
 

@@ -1,6 +1,7 @@
 <script lang="ts">
     import './layout.css';
     import favicon from '$lib/assets/favicon.svg';
+    import TitleBar from '$lib/components/layout/TitleBar.svelte';
     import Sidebar from '$lib/components/layout/Sidebar.svelte';
     import StatusBar from '$lib/components/layout/StatusBar.svelte';
     import BottomPanel from '$lib/components/layout/BottomPanel.svelte';
@@ -108,6 +109,7 @@
 <svelte:head><link rel="icon" href={favicon} /></svelte:head>
 
 <div class="flex h-screen flex-col">
+    <TitleBar gameName={gameStore.selectedGame?.name ?? ''} />
     <div class="relative flex min-h-0 flex-1 overflow-hidden">
         {#if ui.sidebarCollapsed}
             <div class="flex h-full w-10 shrink-0 flex-col border-r border-zinc-700 bg-zinc-900">
