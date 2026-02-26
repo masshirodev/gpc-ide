@@ -1,6 +1,6 @@
 # GPC IDE
 
-![GPC IDE Screenshot](https://imgur.com/MZ5sfQU.png)
+![GPC IDE Screenshot](https://github.com/masshirodev/gpc-ide/blob/main/screenshots/flow.png?raw=true)
 
 Desktop IDE for creating, editing, and building Cronus Zen GPC game scripts with OLED menu support.
 
