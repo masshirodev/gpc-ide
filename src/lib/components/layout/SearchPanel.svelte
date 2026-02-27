@@ -142,7 +142,7 @@
 	</div>
 
 	<!-- Results -->
-	<div class="flex-1 overflow-y-auto">
+	<div class="flex-1 overflow-y-auto select-text">
 		{#if search.searching}
 			<div class="flex h-full items-center justify-center text-sm text-zinc-500">
 				Searching...

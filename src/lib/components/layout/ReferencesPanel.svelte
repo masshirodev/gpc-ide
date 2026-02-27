@@ -40,7 +40,7 @@
 	{/if}
 
 	<!-- References list -->
-	<div class="flex-1 overflow-y-auto">
+	<div class="flex-1 overflow-y-auto select-text">
 		{#if grouped.length === 0}
 			<div class="flex h-full items-center justify-center text-sm text-zinc-500">
 				No references to show

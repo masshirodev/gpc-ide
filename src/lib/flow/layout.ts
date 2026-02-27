@@ -79,7 +79,7 @@ export function getPortPosition(
 	if (portType === 'input') {
 		return {
 			x: node.position.x,
-			y: node.position.y + height - FOOTER_HEIGHT / 2,
+			y: node.position.y + HEADER_HEIGHT / 2,
 		};
 	}
 

@@ -6,7 +6,7 @@
 
 	interface Props {
 		graph: FlowGraph;
-		selectedNodeId: string | null;
+		selectedNodeIds: string[];
 		selectedEdgeId: string | null;
 		selectedSubNodeId: string | null;
 		connecting: { sourceNodeId: string; sourcePort: string; sourceSubNodeId?: string | null; mouseX: number; mouseY: number } | null;
@@ -15,10 +15,13 @@
 		panY: number;
 		zoom: number;
 		onSelectNode: (nodeId: string | null) => void;
+		onSelectNodeMulti: (nodeId: string) => void;
+		onSelectNodesBatch: (nodeIds: string[]) => void;
 		onSelectEdge: (edgeId: string | null) => void;
 		onSelectSubNode: (nodeId: string, subNodeId: string) => void;
 		onMoveNode: (nodeId: string, position: { x: number; y: number }) => void;
-		onMoveNodeDone: (nodeId: string) => void;
+		onMoveNodes: (deltas: { nodeId: string; position: { x: number; y: number } }[]) => void;
+		onMoveNodeDone: (nodeId?: string) => void;
 		onStartConnect: (nodeId: string, port: string, e: MouseEvent, subNodeId?: string) => void;
 		onFinishConnect: (targetNodeId: string | null) => void;
 		onUpdateConnect: (mx: number, my: number) => void;
@@ -29,7 +32,7 @@
 
 	let {
 		graph,
-		selectedNodeId,
+		selectedNodeIds,
 		selectedEdgeId,
 		selectedSubNodeId,
 		connecting,
@@ -38,9 +41,12 @@
 		panY,
 		zoom,
 		onSelectNode,
+		onSelectNodeMulti,
+		onSelectNodesBatch,
 		onSelectEdge,
 		onSelectSubNode,
 		onMoveNode,
+		onMoveNodes,
 		onMoveNodeDone,
 		onStartConnect,
 		onFinishConnect,
@@ -49,6 +55,8 @@
 		onPan,
 		onZoom,
 	}: Props = $props();
+
+	let selectedNodeIdSet = $derived(new Set(selectedNodeIds));
 
 	// Build a set of module node IDs that have active conflicts
 	let conflictNodeIds = $derived.by(() => {
@@ -72,9 +80,17 @@
 	let containerWidth = $state(800);
 	let containerHeight = $state(600);
 
-	// Dragging state
-	let dragging = $state<{ nodeId: string; offsetX: number; offsetY: number } | null>(null);
+	// Dragging state (single or multi)
+	let dragging = $state<{
+		nodeId: string;
+		offsets: Map<string, { dx: number; dy: number }>;
+	} | null>(null);
 	let panning = $state<{ startX: number; startY: number; startPanX: number; startPanY: number } | null>(null);
+
+	// Rubber-band (marquee) selection
+	let rubberBand = $state<{ startX: number; startY: number; endX: number; endY: number } | null>(null);
+	let rubberBandCtrl = $state(false);
+	const RUBBER_BAND_THRESHOLD = 5; // pixels before rubber-band activates
 
 	// ResizeObserver for container size
 	$effect(() => {
@@ -111,9 +127,10 @@
 			e.preventDefault();
 			panning = { startX: e.clientX, startY: e.clientY, startPanX: panX, startPanY: panY };
 		} else if (e.button === 0) {
-			// Left click on background — clear selection
-			onSelectNode(null);
-			onSelectEdge(null);
+			// Left click on background — start rubber-band selection
+			const pos = screenToSvg(e.clientX, e.clientY);
+			rubberBand = { startX: pos.x, startY: pos.y, endX: pos.x, endY: pos.y };
+			rubberBandCtrl = e.ctrlKey || e.metaKey;
 		}
 	}
 
@@ -124,10 +141,24 @@
 			onPan(panning.startPanX + dx, panning.startPanY + dy);
 		} else if (dragging) {
 			const pos = screenToSvg(e.clientX, e.clientY);
-			onMoveNode(dragging.nodeId, {
-				x: pos.x - dragging.offsetX,
-				y: pos.y - dragging.offsetY,
-			});
+			if (dragging.offsets.size > 1) {
+				// Multi-node drag
+				const deltas: { nodeId: string; position: { x: number; y: number } }[] = [];
+				for (const [nid, offset] of dragging.offsets) {
+					deltas.push({ nodeId: nid, position: { x: pos.x - offset.dx, y: pos.y - offset.dy } });
+				}
+				onMoveNodes(deltas);
+			} else {
+				// Single node drag
+				const offset = dragging.offsets.get(dragging.nodeId)!;
+				onMoveNode(dragging.nodeId, {
+					x: pos.x - offset.dx,
+					y: pos.y - offset.dy,
+				});
+			}
+		} else if (rubberBand) {
+			const pos = screenToSvg(e.clientX, e.clientY);
+			rubberBand = { ...rubberBand, endX: pos.x, endY: pos.y };
 		} else if (connecting) {
 			const pos = screenToSvg(e.clientX, e.clientY);
 			onUpdateConnect(pos.x, pos.y);
@@ -142,6 +173,38 @@
 			onMoveNodeDone(dragging.nodeId);
 			dragging = null;
 		}
+		if (rubberBand) {
+			const dx = Math.abs(rubberBand.endX - rubberBand.startX);
+			const dy = Math.abs(rubberBand.endY - rubberBand.startY);
+			if (dx < RUBBER_BAND_THRESHOLD && dy < RUBBER_BAND_THRESHOLD) {
+				// Tiny drag = just a click on background → clear selection
+				onSelectNode(null);
+				onSelectEdge(null);
+			} else {
+				// Rubber-band → select intersecting nodes
+				const minX = Math.min(rubberBand.startX, rubberBand.endX);
+				const maxX = Math.max(rubberBand.startX, rubberBand.endX);
+				const minY = Math.min(rubberBand.startY, rubberBand.endY);
+				const maxY = Math.max(rubberBand.startY, rubberBand.endY);
+				const hitIds = graph.nodes
+					.filter((n) => {
+						const nh = getNodeHeight(n, expandedNodes.has(n.id));
+						const nx2 = n.position.x + NODE_WIDTH;
+						const ny2 = n.position.y + nh;
+						return n.position.x < maxX && nx2 > minX && n.position.y < maxY && ny2 > minY;
+					})
+					.map((n) => n.id);
+				if (rubberBandCtrl) {
+					// Ctrl+rubber-band: add to existing selection
+					const merged = new Set(selectedNodeIds);
+					for (const id of hitIds) merged.add(id);
+					onSelectNodesBatch([...merged]);
+				} else {
+					onSelectNodesBatch(hitIds);
+				}
+			}
+			rubberBand = null;
+		}
 		if (connecting) {
 			onFinishConnect(null);
 		}
@@ -154,13 +217,33 @@
 	function handleNodeMouseDown(nodeId: string, e: MouseEvent) {
 		const node = graph.nodes.find((n) => n.id === nodeId);
 		if (!node) return;
+
+		if (e.ctrlKey || e.metaKey) {
+			// Ctrl+Click: toggle multi-selection
+			onSelectNodeMulti(nodeId);
+			return;
+		}
+
 		const pos = screenToSvg(e.clientX, e.clientY);
-		dragging = {
-			nodeId,
-			offsetX: pos.x - node.position.x,
-			offsetY: pos.y - node.position.y,
-		};
-		onSelectNode(nodeId);
+		const isAlreadySelected = selectedNodeIdSet.has(nodeId);
+
+		if (isAlreadySelected && selectedNodeIds.length > 1) {
+			// Dragging one of multiple selected nodes — move all
+			const offsets = new Map<string, { dx: number; dy: number }>();
+			for (const nid of selectedNodeIds) {
+				const n = graph.nodes.find((nd) => nd.id === nid);
+				if (n) {
+					offsets.set(nid, { dx: pos.x - n.position.x, dy: pos.y - n.position.y });
+				}
+			}
+			dragging = { nodeId, offsets };
+		} else {
+			// Single node drag
+			onSelectNode(nodeId);
+			const offsets = new Map<string, { dx: number; dy: number }>();
+			offsets.set(nodeId, { dx: pos.x - node.position.x, dy: pos.y - node.position.y });
+			dragging = { nodeId, offsets };
+		}
 	}
 
 	function handleStartConnect(nodeId: string, port: string, e: MouseEvent, subNodeId?: string) {
@@ -181,6 +264,23 @@
 		const isExpanded = expandedNodes.has(sourceNode.id);
 		return getPortPosition(sourceNode, 'output', connecting.sourceSubNodeId, isExpanded);
 	});
+
+	// Rubber-band rect in SVG coordinates
+	let rbRect = $derived.by(() => {
+		if (!rubberBand) return null;
+		const dx = Math.abs(rubberBand.endX - rubberBand.startX);
+		const dy = Math.abs(rubberBand.endY - rubberBand.startY);
+		if (dx < RUBBER_BAND_THRESHOLD && dy < RUBBER_BAND_THRESHOLD) return null;
+		return {
+			x: Math.min(rubberBand.startX, rubberBand.endX),
+			y: Math.min(rubberBand.startY, rubberBand.endY),
+			width: dx,
+			height: dy,
+		};
+	});
+
+	// Primary selected node (last in array, used for sub-node panel)
+	let primaryNodeId = $derived(selectedNodeIds[selectedNodeIds.length - 1] ?? null);
 
 	// viewBox
 	let vb = $derived(
@@ -203,7 +303,7 @@
 		onmousemove={handleMouseMove}
 		onmouseup={handleMouseUp}
 		class="select-none"
-		style="cursor: {panning ? 'grabbing' : dragging ? 'grabbing' : 'default'}"
+		style="cursor: {panning ? 'grabbing' : dragging ? 'grabbing' : rubberBand ? 'crosshair' : 'default'}"
 	>
 		<defs>
 			<!-- Grid pattern -->
@@ -275,9 +375,9 @@
 			>
 				<FlowNode
 					{node}
-					selected={selectedNodeId === node.id}
+					selected={selectedNodeIdSet.has(node.id)}
 					expanded={expandedNodes.has(node.id)}
-					selectedSubNodeId={selectedNodeId === node.id ? selectedSubNodeId : null}
+					selectedSubNodeId={primaryNodeId === node.id ? selectedSubNodeId : null}
 					hasConflict={conflictNodeIds.has(node.id)}
 					onSelect={handleNodeSelect}
 					onSelectSubNode={onSelectSubNode}
@@ -287,6 +387,20 @@
 				/>
 			</g>
 		{/each}
+
+		<!-- Rubber-band selection rectangle -->
+		{#if rbRect}
+			<rect
+				x={rbRect.x}
+				y={rbRect.y}
+				width={rbRect.width}
+				height={rbRect.height}
+				fill="rgba(59, 130, 246, 0.1)"
+				stroke="#3b82f6"
+				stroke-width={1.5 / zoom}
+				stroke-dasharray="{4 / zoom},{2 / zoom}"
+			/>
+		{/if}
 	</svg>
 
 	<!-- Zoom indicator -->

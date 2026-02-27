@@ -365,10 +365,10 @@
 		</g>
 	{/if}
 
-	<!-- Input port (left, in footer area) -->
+	<!-- Input port (left, beside title) -->
 	<circle
 		cx={0}
-		cy={height - FOOTER_HEIGHT / 2}
+		cy={HEADER_HEIGHT / 2}
 		r={PORT_RADIUS}
 		fill="#27272a"
 		stroke="#71717a"

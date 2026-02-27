@@ -17,7 +17,7 @@
             <div
                 class="flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm shadow-lg {typeClasses[toast.type] || typeClasses.info}"
             >
-                <span class="flex-1">{toast.message}</span>
+                <span class="flex-1 select-text">{toast.message}</span>
                 <button
                     class="ml-2 shrink-0 opacity-60 hover:opacity-100"
                     onclick={() => dismissToast(toast.id)}

@@ -208,12 +208,18 @@ export class FlowEmulator {
 
 		// Back button: pop state stack to return to the caller
 		if (node.backButton && this.eventPress(node.backButton) && this.state.statePath.length >= 2) {
-			// Pop current state off the path
+			// Pop current state and skip auto-transitioning nodes (timeout-only)
 			this.state.statePath.pop();
-			const returnTo = this.state.statePath[this.state.statePath.length - 1];
-			if (returnTo) {
+			while (this.state.statePath.length >= 1) {
+				const candidateId = this.state.statePath[this.state.statePath.length - 1];
+				if (!candidateId) break;
+				// Check if this node only has timeout outgoing edges (auto-transition)
+				if (this.isAutoTransitionNode(candidateId) && this.state.statePath.length >= 2) {
+					this.state.statePath.pop();
+					continue;
+				}
 				this.state.prevNodeId = this.state.currentNodeId;
-				this.state.currentNodeId = returnTo;
+				this.state.currentNodeId = candidateId;
 				this.state.stateTimer = 0;
 				this.pressedThisFrame.clear();
 				return;
@@ -234,6 +240,13 @@ export class FlowEmulator {
 	}
 
 	// ==================== Transitions ====================
+
+	/** Check if a node only has timeout outgoing edges (would auto-transition away). */
+	private isAutoTransitionNode(nodeId: string): boolean {
+		const outEdges = this.graph.edges.filter((e) => e.sourceNodeId === nodeId);
+		if (outEdges.length === 0) return false;
+		return outEdges.every((e) => e.condition.type === 'timeout');
+	}
 
 	private evaluateCondition(edge: FlowEdge, currentNode: FlowNode): boolean {
 		const c = edge.condition;
@@ -282,9 +295,17 @@ export class FlowEmulator {
 		this.state.prevNodeId = this.state.currentNodeId;
 		this.state.currentNodeId = targetNodeId;
 		this.state.stateTimer = 0;
-		this.state.statePath.push(targetNodeId);
-		if (this.state.statePath.length > 100) {
-			this.state.statePath = this.state.statePath.slice(-50);
+
+		// If the target is already on the stack, truncate to that point
+		// instead of pushing a duplicate (prevents back-navigation loops)
+		const existingIdx = this.state.statePath.indexOf(targetNodeId);
+		if (existingIdx >= 0) {
+			this.state.statePath = this.state.statePath.slice(0, existingIdx + 1);
+		} else {
+			this.state.statePath.push(targetNodeId);
+			if (this.state.statePath.length > 100) {
+				this.state.statePath = this.state.statePath.slice(-50);
+			}
 		}
 	}
 

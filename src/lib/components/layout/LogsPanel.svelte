@@ -33,7 +33,7 @@
 </script>
 
 <div class="flex h-full flex-col">
-	<div class="flex-1 overflow-y-auto font-mono text-xs" bind:this={container}>
+	<div class="flex-1 overflow-y-auto select-text font-mono text-xs" bind:this={container}>
 		{#if logs.length === 0}
 			<div class="flex h-full items-center justify-center text-sm text-zinc-500">
 				No log entries

@@ -20,7 +20,7 @@ import {
 	createSubNode,
 } from '$lib/types/flow';
 import { migrateFlowGraphV1toV2, ensureFlowProjectFlows } from '$lib/flow/migration';
-import { syncModuleToggles } from '$lib/flow/auto-link';
+import { syncModuleMenus } from '$lib/flow/auto-link';
 import { getSubNodeDef } from '$lib/flow/subnodes/registry';
 
 // ==================== Canvas State ====================
@@ -39,6 +39,7 @@ interface FlowEditorState {
 	graph: FlowGraph | null; // working copy of the active flow
 	gamePath: string | null;
 	selectedNodeId: string | null;
+	selectedNodeIds: string[]; // all selected nodes (multi-select)
 	selectedEdgeId: string | null;
 	selectedSubNodeId: string | null;
 	canvas: CanvasState;
@@ -88,6 +89,7 @@ let state = $state<FlowEditorState>({
 	graph: null,
 	gamePath: null,
 	selectedNodeId: null,
+	selectedNodeIds: [],
 	selectedEdgeId: null,
 	selectedSubNodeId: null,
 	canvas: { panX: 0, panY: 0, zoom: 1 },
@@ -161,6 +163,7 @@ export function newGraph(name: string, gamePath?: string) {
 	state.activeFlowType = 'menu';
 	state.gamePath = gamePath ?? null;
 	state.selectedNodeId = null;
+	state.selectedNodeIds = [];
 	state.selectedEdgeId = null;
 	state.selectedSubNodeId = null;
 	state.dirty = true;
@@ -191,6 +194,7 @@ export function loadProject(project: FlowProject, gamePath: string) {
 	state.activeFlowType = 'menu';
 	state.gamePath = gamePath;
 	state.selectedNodeId = null;
+	state.selectedNodeIds = [];
 	state.selectedEdgeId = null;
 	state.selectedSubNodeId = null;
 	state.dirty = false;
@@ -204,6 +208,7 @@ export function closeGraph() {
 	state.graph = null;
 	state.gamePath = null;
 	state.selectedNodeId = null;
+	state.selectedNodeIds = [];
 	state.selectedEdgeId = null;
 	state.selectedSubNodeId = null;
 	state.dirty = false;
@@ -225,6 +230,7 @@ export function switchFlow(flowType: FlowType) {
 	// Switch
 	state.activeFlowType = flowType;
 	state.selectedNodeId = null;
+	state.selectedNodeIds = [];
 	state.selectedEdgeId = null;
 	state.selectedSubNodeId = null;
 	state.connecting = null;
@@ -236,7 +242,7 @@ export function switchFlow(flowType: FlowType) {
 export function getSyncedProject(): FlowProject | null {
 	if (!state.project) return null;
 	syncGraphToProject();
-	syncModuleToggles(state.project);
+	syncModuleMenus(state.project);
 	// Reload active flow in case auto-link modified it
 	loadActiveFlow();
 	return state.project;
@@ -269,6 +275,27 @@ export function removeNode(nodeId: string) {
 		state.graph.nodes[0].isInitialState = true;
 	}
 	if (state.selectedNodeId === nodeId) state.selectedNodeId = null;
+	state.selectedNodeIds = state.selectedNodeIds.filter((id) => id !== nodeId);
+	state.graph.updatedAt = Date.now();
+	state.dirty = true;
+}
+
+/** Remove multiple nodes at once (bulk delete). */
+export function removeNodes(nodeIds: string[]) {
+	if (!state.graph || nodeIds.length === 0) return;
+	pushUndo('Remove nodes');
+	const idSet = new Set(nodeIds);
+	state.graph.edges = state.graph.edges.filter(
+		(e) => !idSet.has(e.sourceNodeId) && !idSet.has(e.targetNodeId)
+	);
+	const wasInitial = state.graph.nodes.some((n) => idSet.has(n.id) && n.isInitialState);
+	state.graph.nodes = state.graph.nodes.filter((n) => !idSet.has(n.id));
+	if (wasInitial && state.graph.nodes.length > 0) {
+		state.graph.nodes[0].isInitialState = true;
+	}
+	state.selectedNodeId = null;
+	state.selectedNodeIds = [];
+	state.selectedSubNodeId = null;
 	state.graph.updatedAt = Date.now();
 	state.dirty = true;
 }
@@ -292,7 +319,18 @@ export function moveNode(nodeId: string, position: { x: number; y: number }) {
 	state.dirty = true;
 }
 
-export function moveNodeDone(nodeId: string) {
+/** Move multiple nodes by a delta (for multi-select drag). */
+export function moveNodes(deltas: { nodeId: string; position: { x: number; y: number } }[]) {
+	if (!state.graph) return;
+	const deltaMap = new Map(deltas.map((d) => [d.nodeId, d.position]));
+	state.graph.nodes = state.graph.nodes.map((n) => {
+		const pos = deltaMap.get(n.id);
+		return pos ? { ...n, position: pos } : n;
+	});
+	state.dirty = true;
+}
+
+export function moveNodeDone(_nodeId?: string) {
 	// Push undo after drag is complete
 	pushUndo('Move node');
 }
@@ -380,6 +418,31 @@ export function updateEdge(edgeId: string, updates: Partial<FlowEdge>) {
 
 export function selectNode(nodeId: string | null) {
 	state.selectedNodeId = nodeId;
+	state.selectedNodeIds = nodeId ? [nodeId] : [];
+	state.selectedEdgeId = null;
+	state.selectedSubNodeId = null;
+}
+
+/** Toggle a node in the multi-selection (Ctrl+Click). */
+export function selectNodeMulti(nodeId: string) {
+	const idx = state.selectedNodeIds.indexOf(nodeId);
+	if (idx >= 0) {
+		// Remove from selection
+		state.selectedNodeIds = state.selectedNodeIds.filter((id) => id !== nodeId);
+		state.selectedNodeId = state.selectedNodeIds[state.selectedNodeIds.length - 1] ?? null;
+	} else {
+		// Add to selection
+		state.selectedNodeIds = [...state.selectedNodeIds, nodeId];
+		state.selectedNodeId = nodeId;
+	}
+	state.selectedEdgeId = null;
+	state.selectedSubNodeId = null;
+}
+
+/** Replace selection with a set of node IDs (rubber-band). */
+export function selectNodesBatch(nodeIds: string[]) {
+	state.selectedNodeIds = nodeIds;
+	state.selectedNodeId = nodeIds[nodeIds.length - 1] ?? null;
 	state.selectedEdgeId = null;
 	state.selectedSubNodeId = null;
 }
@@ -387,11 +450,13 @@ export function selectNode(nodeId: string | null) {
 export function selectEdge(edgeId: string | null) {
 	state.selectedEdgeId = edgeId;
 	state.selectedNodeId = null;
+	state.selectedNodeIds = [];
 	state.selectedSubNodeId = null;
 }
 
 export function clearSelection() {
 	state.selectedNodeId = null;
+	state.selectedNodeIds = [];
 	state.selectedEdgeId = null;
 	state.selectedSubNodeId = null;
 }
@@ -510,6 +575,7 @@ export function updateGlobalCode(code: string) {
 
 export function selectSubNode(nodeId: string, subNodeId: string | null) {
 	state.selectedNodeId = nodeId;
+	state.selectedNodeIds = [nodeId];
 	state.selectedSubNodeId = subNodeId;
 	state.selectedEdgeId = null;
 }

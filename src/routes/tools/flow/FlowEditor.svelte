@@ -25,14 +25,18 @@
 		getSyncedProject,
 		addNode,
 		removeNode,
+		removeNodes,
 		updateNode,
 		moveNode,
+		moveNodes,
 		moveNodeDone,
 		setInitialState,
 		duplicateNode,
 		removeEdge,
 		updateEdge,
 		selectNode,
+		selectNodeMulti,
+		selectNodesBatch,
 		selectSubNode,
 		selectEdge,
 		clearSelection,
@@ -76,7 +80,7 @@
 	let selectedEdge = $derived(getSelectedEdge());
 	let selectedSubNode = $derived(getSelectedSubNode());
 	let expandedNodes = $derived(getExpandedNodes());
-	let hasSelection = $derived(flowStore.selectedNodeId !== null || flowStore.selectedEdgeId !== null);
+	let hasSelection = $derived(flowStore.selectedNodeIds.length > 0 || flowStore.selectedEdgeId !== null);
 	let profiles = $derived(getProfiles());
 	let profileSwitchConfig = $derived(getProfileSwitch());
 	let perProfileVars = $derived.by(() => {
@@ -176,6 +180,7 @@
 	// Keyboard shortcuts
 	function handleKeydown(e: KeyboardEvent) {
 		if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement) return;
+		if (showEmulator) return;
 
 		if (e.key === 'Delete' || e.key === 'Backspace') {
 			deleteSelected();
@@ -248,7 +253,9 @@
 	}
 
 	function deleteSelected() {
-		if (flowStore.selectedNodeId) {
+		if (flowStore.selectedNodeIds.length > 1) {
+			removeNodes([...flowStore.selectedNodeIds]);
+		} else if (flowStore.selectedNodeId) {
 			removeNode(flowStore.selectedNodeId);
 		} else if (flowStore.selectedEdgeId) {
 			removeEdge(flowStore.selectedEdgeId);
@@ -486,7 +493,7 @@
 		<!-- Canvas -->
 		<FlowCanvas
 			graph={flowStore.graph}
-			selectedNodeId={flowStore.selectedNodeId}
+			selectedNodeIds={flowStore.selectedNodeIds}
 			selectedEdgeId={flowStore.selectedEdgeId}
 			selectedSubNodeId={flowStore.selectedSubNodeId}
 			connecting={flowStore.connecting}
@@ -495,9 +502,12 @@
 			panY={flowStore.canvas.panY}
 			zoom={flowStore.canvas.zoom}
 			onSelectNode={selectNode}
+			onSelectNodeMulti={selectNodeMulti}
+			onSelectNodesBatch={selectNodesBatch}
 			onSelectEdge={selectEdge}
 			onSelectSubNode={selectSubNode}
 			onMoveNode={moveNode}
+			onMoveNodes={moveNodes}
 			onMoveNodeDone={moveNodeDone}
 			onStartConnect={handleStartConnect}
 			onFinishConnect={finishConnecting}

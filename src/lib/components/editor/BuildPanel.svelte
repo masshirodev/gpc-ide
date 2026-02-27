@@ -46,7 +46,7 @@
 
 	{#if buildResult}
 		<!-- Build Status -->
-		<div class="rounded-lg border border-zinc-800 bg-zinc-950 p-4 font-mono text-xs">
+		<div class="rounded-lg border border-zinc-800 bg-zinc-950 p-4 select-text font-mono text-xs">
 			{#if buildResult.success}
 				<div class="text-emerald-400">Build successful!</div>
 				<div class="mt-1 text-zinc-400">Output: {buildResult.output_path}</div>

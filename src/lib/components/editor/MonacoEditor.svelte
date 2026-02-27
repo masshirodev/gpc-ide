@@ -176,7 +176,7 @@
 	}
 </script>
 
-<div class="monaco-container" bind:this={container}></div>
+<div class="monaco-container select-text" bind:this={container}></div>
 
 <style>
 	.monaco-container {

@@ -1,6 +1,6 @@
 import { createEmptyFlowProject } from '$lib/types/flow';
 import { createModuleNode } from '$lib/flow/module-nodes';
-import { syncModuleToggles } from '$lib/flow/auto-link';
+import { syncModuleMenus } from '$lib/flow/auto-link';
 import type { ModuleDefinition } from '$lib/types/module';
 import type { FlowProject } from '$lib/types/flow';
 
@@ -30,8 +30,8 @@ export function createFlowProjectFromModules(modules: ModuleDefinition[]): FlowP
 		gameplayFlow.nodes.push(moduleNode);
 	}
 
-	// Auto-create menu toggles and shared enable variables
-	syncModuleToggles(project);
+	// Auto-create per-module settings menus and shared variables
+	syncModuleMenus(project);
 
 	return project;
 }
