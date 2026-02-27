@@ -174,6 +174,7 @@ fn parse_game_summary_from_meta(game_dir: &Path) -> Result<GameSummary, String> 
         module_count: 0,
         generation_mode: meta.generation_mode.clone(),
         updated_at,
+        tags: meta.tags.unwrap_or_default(),
     })
 }
 
@@ -207,6 +208,7 @@ fn parse_game_summary_from_config(config_path: &Path) -> Result<GameSummary, Str
         module_count: config.menu.len(),
         generation_mode: "config".to_string(),
         updated_at,
+        tags: Vec::new(),
     })
 }
 
@@ -265,4 +267,178 @@ pub fn delete_game(game_path: String) -> Result<(), String> {
 #[tauri::command]
 pub fn get_app_root() -> String {
     app_root().to_string_lossy().to_string()
+}
+
+/// Copy external files into a game directory
+#[tauri::command]
+pub fn import_files(game_path: String, file_paths: Vec<String>) -> Result<Vec<String>, String> {
+    let dest = Path::new(&game_path);
+    if !dest.is_dir() {
+        return Err(format!("Game directory does not exist: {}", game_path));
+    }
+    let mut imported = Vec::new();
+    for src_path in file_paths {
+        let src = Path::new(&src_path);
+        if !src.is_file() {
+            continue;
+        }
+        let file_name = src
+            .file_name()
+            .ok_or_else(|| format!("Invalid file name: {}", src_path))?;
+        let target = dest.join(file_name);
+        std::fs::copy(src, &target)
+            .map_err(|e| format!("Failed to copy {}: {}", src_path, e))?;
+        imported.push(target.to_string_lossy().to_string());
+    }
+    Ok(imported)
+}
+
+/// Export a game directory as a zip archive
+#[tauri::command]
+pub fn export_game_zip(game_path: String, output_path: String) -> Result<String, String> {
+    use std::io::Write;
+
+    let game_dir = Path::new(&game_path);
+    if !game_dir.is_dir() {
+        return Err(format!("Game directory not found: {}", game_path));
+    }
+
+    let file = std::fs::File::create(&output_path)
+        .map_err(|e| format!("Failed to create zip file: {}", e))?;
+    let mut zip = zip::ZipWriter::new(file);
+    let options = zip::write::SimpleFileOptions::default()
+        .compression_method(zip::CompressionMethod::Deflated);
+
+    for entry in WalkDir::new(game_dir).into_iter().filter_map(|e| e.ok()) {
+        let path = entry.path();
+        let name = path
+            .strip_prefix(game_dir)
+            .map_err(|e| format!("Path error: {}", e))?;
+        let name_str = name.to_string_lossy();
+
+        // Skip hidden files/dirs and build output
+        if name_str.starts_with('.') || name_str.contains("/.") || name_str.starts_with("build") {
+            continue;
+        }
+
+        if path.is_file() {
+            zip.start_file(name_str.to_string(), options)
+                .map_err(|e| format!("Failed to add file to zip: {}", e))?;
+            let data = std::fs::read(path)
+                .map_err(|e| format!("Failed to read {}: {}", name_str, e))?;
+            zip.write_all(&data)
+                .map_err(|e| format!("Failed to write to zip: {}", e))?;
+        } else if path.is_dir() && !name_str.is_empty() {
+            zip.add_directory(name_str.to_string(), options)
+                .map_err(|e| format!("Failed to add directory to zip: {}", e))?;
+        }
+    }
+
+    zip.finish()
+        .map_err(|e| format!("Failed to finalize zip: {}", e))?;
+
+    Ok(output_path)
+}
+
+/// Import a game from a zip archive into a workspace
+#[tauri::command]
+pub fn import_game_zip(zip_path: String, workspace_path: String) -> Result<String, String> {
+    use std::io::Read;
+
+    let zip_file = std::fs::File::open(&zip_path)
+        .map_err(|e| format!("Failed to open zip: {}", e))?;
+    let mut archive = zip::ZipArchive::new(zip_file)
+        .map_err(|e| format!("Invalid zip file: {}", e))?;
+
+    // Determine game name from zip filename
+    let zip_name = Path::new(&zip_path)
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("imported-game")
+        .to_string();
+
+    let ws_dir = Path::new(&workspace_path);
+    let game_dir = ws_dir.join(&zip_name);
+
+    if game_dir.exists() {
+        return Err(format!("Game '{}' already exists in workspace", zip_name));
+    }
+
+    std::fs::create_dir_all(&game_dir)
+        .map_err(|e| format!("Failed to create game directory: {}", e))?;
+
+    for i in 0..archive.len() {
+        let mut file = archive
+            .by_index(i)
+            .map_err(|e| format!("Failed to read zip entry: {}", e))?;
+
+        let name = file.name().to_string();
+
+        // Security: skip absolute paths and path traversal
+        if name.starts_with('/') || name.contains("..") {
+            continue;
+        }
+
+        let out_path = game_dir.join(&name);
+
+        if file.is_dir() {
+            std::fs::create_dir_all(&out_path)
+                .map_err(|e| format!("Failed to create dir: {}", e))?;
+        } else {
+            if let Some(parent) = out_path.parent() {
+                std::fs::create_dir_all(parent)
+                    .map_err(|e| format!("Failed to create parent dir: {}", e))?;
+            }
+            let mut data = Vec::new();
+            file.read_to_end(&mut data)
+                .map_err(|e| format!("Failed to read zip entry: {}", e))?;
+            std::fs::write(&out_path, &data)
+                .map_err(|e| format!("Failed to write file: {}", e))?;
+        }
+    }
+
+    Ok(game_dir.to_string_lossy().to_string())
+}
+
+/// Run a shell command in the context of a game directory
+#[tauri::command]
+pub fn run_task(game_path: String, command: String) -> Result<TaskResult, String> {
+    let game_dir = Path::new(&game_path);
+    if !game_dir.is_dir() {
+        return Err(format!("Game directory not found: {}", game_path));
+    }
+
+    let output = if cfg!(target_os = "windows") {
+        std::process::Command::new("cmd")
+            .args(["/C", &command])
+            .current_dir(game_dir)
+            .output()
+    } else {
+        std::process::Command::new("sh")
+            .args(["-c", &command])
+            .current_dir(game_dir)
+            .output()
+    };
+
+    match output {
+        Ok(out) => {
+            let stdout = String::from_utf8_lossy(&out.stdout).to_string();
+            let stderr = String::from_utf8_lossy(&out.stderr).to_string();
+            Ok(TaskResult {
+                success: out.status.success(),
+                exit_code: out.status.code().unwrap_or(-1),
+                stdout,
+                stderr,
+            })
+        }
+        Err(e) => Err(format!("Failed to run command: {}", e)),
+    }
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct TaskResult {
+    pub success: bool,
+    pub exit_code: i32,
+    pub stdout: String,
+    pub stderr: String,
 }

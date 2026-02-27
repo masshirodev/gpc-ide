@@ -13,7 +13,8 @@
 		closeAllTabs,
 		reloadTab,
 		getTab,
-		wasRecentlySaved
+		wasRecentlySaved,
+		restoreSession
 	} from '$lib/stores/editor.svelte';
 	import {
 		getUiStore,
@@ -38,17 +39,26 @@
 		getSnapshot,
 		rollbackSnapshot,
 		deleteSnapshot,
-		renameSnapshot
+		renameSnapshot,
+		importFiles,
+		gitStatus,
+		gitDiffFile,
+		gitIsRepo,
+		exportGameZip,
+		importGameZip
 	} from '$lib/tauri/commands';
 	import { onFileChange } from '$lib/tauri/events';
 	import type { BuildResult, FileTreeEntry, SnapshotMeta } from '$lib/tauri/commands';
 	import type { UnlistenFn } from '@tauri-apps/api/event';
+	import { getCurrentWindow } from '@tauri-apps/api/window';
+	import { save as saveDialog, open as openDialog } from '@tauri-apps/plugin-dialog';
 	import { onMount } from 'svelte';
 	import MonacoEditor from '$lib/components/editor/MonacoEditor.svelte';
 	import FlowEditor from './tools/flow/FlowEditor.svelte';
 	import NewFileModal from '$lib/components/modals/NewFileModal.svelte';
 	import TemplateImportModal from '$lib/components/modals/TemplateImportModal.svelte';
 	import ConfirmDialog from '$lib/components/modals/ConfirmDialog.svelte';
+	import SaveTemplateModal from '$lib/components/modals/SaveTemplateModal.svelte';
 	import { addToast } from '$lib/stores/toast.svelte';
 	import { getSettings } from '$lib/stores/settings.svelte';
 	import { getRecoilTransfer, clearRecoilTransfer } from '$lib/stores/recoil-transfer.svelte';
@@ -68,6 +78,8 @@
 		updateWeaponValues
 	} from '$lib/utils/recoil-parser';
 	import { parseBuildErrorLink } from '$lib/utils/editor-helpers';
+	import { parseDiffToLineChanges } from '$lib/utils/diff-parser';
+	import type { GitLineChange } from '$lib/components/editor/MonacoEditor.svelte';
 
 	// Extracted components
 	import DashboardView from '$lib/components/editor/DashboardView.svelte';
@@ -75,7 +87,13 @@
 	import FileTreePanel from '$lib/components/editor/FileTreePanel.svelte';
 	import EditorPanel from '$lib/components/editor/EditorPanel.svelte';
 	import BuildPanel from '$lib/components/editor/BuildPanel.svelte';
+	import TaskRunnerPanel from '$lib/components/editor/TaskRunnerPanel.svelte';
 	import HistoryPanel from '$lib/components/editor/HistoryPanel.svelte';
+	import GitPanel from '$lib/components/editor/GitPanel.svelte';
+	import { getDiagnosticsStore, getFileSeverityMap } from '$lib/stores/diagnostics.svelte';
+	import { getKeyCombo, matchesCombo } from '$lib/stores/keybindings.svelte';
+	import CommandPalette from '$lib/components/layout/CommandPalette.svelte';
+	import type { Command } from '$lib/components/layout/CommandPalette.svelte';
 
 	let store = getGameStore();
 	let editorStore = getEditorStore();
@@ -83,6 +101,8 @@
 	let lspStore = getLspStore();
 	let settingsStore = getSettings();
 	let settings = $derived($settingsStore);
+	let diagStore = getDiagnosticsStore();
+	let fileSeverities = $derived(getFileSeverityMap(diagStore.byUri));
 
 	// Theme accent colors for tree view
 	interface ThemeAccent {
@@ -126,9 +146,30 @@
 	let buildOutputContent = $state<string | null>(null);
 	let buildOutputLoading = $state(false);
 
+	// Command palette state
+	let showCommandPalette = $state(false);
+	let paletteCommands = $derived<Command[]>([
+		{ id: 'save', label: 'Save File', category: 'File', shortcut: getKeyCombo('save'), action: () => saveTab() },
+		{ id: 'build', label: 'Build Game', category: 'Build', shortcut: getKeyCombo('build'), action: () => { activeTab = 'build'; handleBuild(); } },
+		{ id: 'toggleBottom', label: 'Toggle Bottom Panel', category: 'View', shortcut: getKeyCombo('toggleBottomPanel'), action: () => toggleBottomPanel() },
+		{ id: 'search', label: 'Global Search', category: 'Search', shortcut: getKeyCombo('globalSearch'), action: () => { setBottomPanelActiveTab('search'); setBottomPanelOpen(true); } },
+		{ id: 'newFile', label: 'New File', category: 'File', action: () => { showNewFileModal = true; } },
+		{ id: 'closeTab', label: 'Close Active Tab', category: 'File', action: () => { if (editorStore.activeTabPath) closeTab(editorStore.activeTabPath); } },
+		{ id: 'closeAllTabs', label: 'Close All Tabs', category: 'File', action: () => closeAllTabs() },
+		{ id: 'tabOverview', label: 'Go to Overview', category: 'Navigate', action: () => { activeTab = 'overview'; } },
+		{ id: 'tabFiles', label: 'Go to Files', category: 'Navigate', action: () => { activeTab = 'files'; } },
+		{ id: 'tabBuild', label: 'Go to Build', category: 'Navigate', action: () => { activeTab = 'build'; } },
+		{ id: 'tabHistory', label: 'Go to History', category: 'Navigate', action: () => { activeTab = 'history'; } },
+		{ id: 'restartLsp', label: 'Restart Language Server', category: 'LSP', action: () => restartLsp() },
+		{ id: 'stopLsp', label: 'Stop Language Server', category: 'LSP', action: () => stopLsp() },
+		{ id: 'exportZip', label: 'Export Game as Zip', category: 'File', action: handleExportZip },
+		{ id: 'importZip', label: 'Import Game from Zip', category: 'File', action: handleImportZip }
+	]);
+
 	// Modal state
 	let showNewFileModal = $state(false);
 	let showTemplateImportModal = $state(false);
+	let showSaveTemplateModal = $state(false);
 	// Confirm dialog state
 	let confirmDialog = $state<{
 		open: boolean;
@@ -178,8 +219,26 @@
 	let fileTree = $state<FileTreeEntry[]>([]);
 	let expandedDirs = $state<Set<string>>(new Set());
 
+	// Drag & drop state
+	let fileDragOver = $state(false);
+
+	// Git status state
+	let gitFileStatuses = $state<Map<string, string>>(new Map());
+	let activeFileGitChanges = $state<GitLineChange[]>([]);
+
 	// Page tab state
-	let activeTab = $state<'overview' | 'files' | 'flow' | 'build' | 'history'>('overview');
+	let activeTab = $state<'overview' | 'files' | 'flow' | 'build' | 'history' | 'git'>('overview');
+
+	// Git repo detection
+	let isGitRepo = $state(false);
+	let gameTabs = $derived((() => {
+		const isFlow = store.selectedGame?.generation_mode === 'flow';
+		const tabs = ['overview', 'files'];
+		if (isFlow) tabs.push('flow');
+		tabs.push('build', 'history');
+		if (isGitRepo) tabs.push('git');
+		return tabs;
+	})());
 
 	// History state
 	let snapshots = $state<SnapshotMeta[]>([]);
@@ -286,6 +345,45 @@
 	let fsUnlisten: UnlistenFn | null = null;
 	let fsRefreshTimer: ReturnType<typeof setTimeout> | null = null;
 
+	// Restore previously open tabs on startup
+	onMount(() => {
+		restoreSession();
+	});
+
+	// Drag & drop file import
+	onMount(() => {
+		let unlisten: UnlistenFn | null = null;
+		const setup = async () => {
+			const win = getCurrentWindow();
+			unlisten = await win.onDragDropEvent(async (event) => {
+				if (event.payload.type === 'enter' || event.payload.type === 'over') {
+					fileDragOver = true;
+				} else if (event.payload.type === 'drop') {
+					fileDragOver = false;
+					const paths = event.payload.paths;
+					if (paths.length > 0 && store.selectedGame) {
+						try {
+							const imported = await importFiles(store.selectedGame.path, paths);
+							if (imported.length > 0) {
+								addToast(`Imported ${imported.length} file(s)`, 'success');
+								await refreshFileTree(store.selectedGame.path);
+								// Open the first imported file
+								openTab(imported[0]);
+								activeTab = 'files';
+							}
+						} catch (e) {
+							addToast(`Failed to import files: ${e}`, 'error');
+						}
+					}
+				} else {
+					fileDragOver = false;
+				}
+			});
+		};
+		setup();
+		return () => { unlisten?.(); };
+	});
+
 	onMount(() => {
 		const setupWatcher = async () => {
 			fsUnlisten = await onFileChange((event) => {
@@ -339,7 +437,45 @@
 		} catch (e) {
 			console.error('Failed to refresh file tree:', e);
 		}
+		refreshGitStatus(gamePath);
 	}
+
+	async function refreshGitStatus(gamePath: string) {
+		try {
+			const statuses = await gitStatus(gamePath);
+			const map = new Map<string, string>();
+			for (const s of statuses) map.set(s.path, s.status);
+			gitFileStatuses = map;
+		} catch {
+			gitFileStatuses = new Map();
+		}
+	}
+
+	// Fetch git diff for the active editor file
+	$effect(() => {
+		const gamePath = store.selectedGame?.path;
+		const filePath = editorStore.activeTabPath;
+		if (!gamePath || !filePath) {
+			activeFileGitChanges = [];
+			return;
+		}
+		const status = gitFileStatuses.get(filePath);
+		if (!status || status === '?') {
+			// Untracked or no git status — no diff to show
+			activeFileGitChanges = [];
+			return;
+		}
+		gitDiffFile(gamePath, filePath)
+			.then((diff) => {
+				// Only update if we're still on the same file
+				if (editorStore.activeTabPath === filePath) {
+					activeFileGitChanges = parseDiffToLineChanges(diff);
+				}
+			})
+			.catch(() => {
+				activeFileGitChanges = [];
+			});
+	});
 
 	// Auto-collapse sidebar when switching to files tab
 	$effect(() => {
@@ -372,6 +508,7 @@
 			}
 			startLsp(game.path);
 			watchDirectory(game.path).catch((e) => console.warn('File watcher setup failed:', e));
+			gitIsRepo(game.path).then((v) => (isGitRepo = v)).catch(() => (isGitRepo = false));
 		}
 	});
 
@@ -599,6 +736,44 @@
 		}
 	});
 
+	async function handleExportZip() {
+		if (!store.selectedGame) return;
+		const gameName = store.selectedGame.name;
+		const outputPath = await saveDialog({
+			title: 'Export Game as Zip',
+			defaultPath: `${gameName}.zip`,
+			filters: [{ name: 'Zip Archive', extensions: ['zip'] }]
+		});
+		if (!outputPath) return;
+		try {
+			await exportGameZip(store.selectedGame.path, outputPath);
+			addToast(`Exported "${gameName}" to ${outputPath.split('/').pop()}`, 'success');
+		} catch (e) {
+			addToast(`Export failed: ${e}`, 'error');
+		}
+	}
+
+	async function handleImportZip() {
+		const zipPath = await openDialog({
+			title: 'Import Game from Zip',
+			filters: [{ name: 'Zip Archive', extensions: ['zip'] }],
+			multiple: false
+		});
+		if (!zipPath) return;
+		const workspace = settings.workspaces[0];
+		if (!workspace) {
+			addToast('No workspace configured', 'error');
+			return;
+		}
+		try {
+			const gamePath = await importGameZip(zipPath as string, workspace);
+			addToast(`Imported game to ${gamePath.split('/').pop()}`, 'success');
+			await loadGames(settings.workspaces);
+		} catch (e) {
+			addToast(`Import failed: ${e}`, 'error');
+		}
+	}
+
 	async function handleBuildErrorClick(error: string) {
 		const link = parseBuildErrorLink(error);
 		if (!link) return;
@@ -636,23 +811,23 @@
 	}
 
 	function handleKeydown(e: KeyboardEvent) {
-		if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+		if (matchesCombo(e, getKeyCombo('save'))) {
 			e.preventDefault();
 			saveTab();
-		}
-		if ((e.ctrlKey || e.metaKey) && e.key === 'b') {
+		} else if (matchesCombo(e, getKeyCombo('build'))) {
 			e.preventDefault();
 			activeTab = 'build';
 			handleBuild();
-		}
-		if ((e.ctrlKey || e.metaKey) && e.key === 'j') {
+		} else if (matchesCombo(e, getKeyCombo('toggleBottomPanel'))) {
 			e.preventDefault();
 			toggleBottomPanel();
-		}
-		if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'F') {
+		} else if (matchesCombo(e, getKeyCombo('globalSearch'))) {
 			e.preventDefault();
 			setBottomPanelActiveTab('search');
 			setBottomPanelOpen(true);
+		} else if (matchesCombo(e, getKeyCombo('commandPalette'))) {
+			e.preventDefault();
+			showCommandPalette = !showCommandPalette;
 		}
 	}
 
@@ -713,7 +888,7 @@
 
 		<!-- Tab Bar -->
 		<div class="mb-4 flex gap-1 border-b border-zinc-800 {activeTab === 'files' || activeTab === 'flow' ? 'px-4' : ''}">
-			{#each isFlowGame ? ['overview', 'files', 'flow', 'build', 'history'] : ['overview', 'files', 'build', 'history'] as tab}
+			{#each gameTabs as tab}
 				<button
 					class="border-b-2 px-4 py-2 text-sm font-medium transition-colors"
 					class:border-emerald-400={activeTab === tab}
@@ -723,15 +898,7 @@
 					class:hover:text-zinc-200={activeTab !== tab}
 					onclick={() => (activeTab = tab as typeof activeTab)}
 				>
-					{tab === 'overview'
-						? 'Overview'
-						: tab === 'files'
-							? 'Files'
-							: tab === 'flow'
-								? 'Flow'
-								: tab === 'build'
-									? 'Build'
-									: 'History'}
+					{{ overview: 'Overview', files: 'Files', flow: 'Flow', build: 'Build', history: 'History', git: 'Git' }[tab]}
 					{#if tab === 'build' && buildResult}
 						<span
 							class="ml-1 inline-block h-2 w-2 rounded-full"
@@ -748,6 +915,9 @@
 				game={store.selectedGame}
 				meta={store.selectedMeta}
 				config={store.selectedConfig}
+				onTagsChanged={async () => { await loadGames(settings.workspaces); }}
+				onSaveAsTemplate={() => (showSaveTemplateModal = true)}
+				onExportZip={handleExportZip}
 			/>
 		{:else if activeTab === 'files'}
 			<!-- File Browser - Full Width -->
@@ -757,6 +927,9 @@
 					{expandedDirs}
 					activeFilePath={editorStore.activeTabPath}
 					{themeAccent}
+					{fileSeverities}
+					{gitFileStatuses}
+					dragOver={fileDragOver}
 					onToggleDir={toggleDir}
 					onFileClick={handleFileClick}
 					onDeleteFile={handleDeleteFile}
@@ -770,6 +943,7 @@
 					gamePath={store.selectedGame?.path ?? ''}
 					consoleType={gameConsoleType}
 					{themeAccent}
+					gitChanges={activeFileGitChanges}
 					onCloseTab={handleCloseTab}
 					onContentChange={(path, content) => updateTabContent(path, content)}
 					onEditorReady={handleEditorReady}
@@ -789,6 +963,9 @@
 				onBuildErrorClick={handleBuildErrorClick}
 				onCopyBuildOutput={handleCopyBuildOutput}
 			/>
+			<div class="mt-4">
+				<TaskRunnerPanel gamePath={store.selectedGame?.path ?? ''} />
+			</div>
 		{:else if activeTab === 'history'}
 			<HistoryPanel
 				{snapshots}
@@ -796,6 +973,8 @@
 				{snapshotPreview}
 				{renamingSnapshotId}
 				{renameLabel}
+				gamePath={store.selectedGame?.path ?? ''}
+				currentConfigContent={editorStore.tabs.find(t => t.path.endsWith('config.toml'))?.content ?? ''}
 				onCreateSnapshot={handleCreateSnapshot}
 				onPreviewSnapshot={handlePreviewSnapshot}
 				onRollback={handleRollback}
@@ -807,6 +986,15 @@
 				onCancelRename={() => (renamingSnapshotId = null)}
 				onRenameSnapshot={handleRenameSnapshot}
 				onRenameLabelChange={(v) => (renameLabel = v)}
+			/>
+		{:else if activeTab === 'git'}
+			<GitPanel
+				gamePath={store.selectedGame?.path ?? ''}
+				onCommitted={async () => {
+					if (store.selectedGame) {
+						await refreshFileTree(store.selectedGame.path);
+					}
+				}}
 			/>
 		{/if}
 	</div>
@@ -846,6 +1034,13 @@
 			}
 		}}
 	/>
+
+	<SaveTemplateModal
+		open={showSaveTemplateModal}
+		gamePath={store.selectedGame.path}
+		gameName={store.selectedGame.name}
+		onclose={() => (showSaveTemplateModal = false)}
+	/>
 {/if}
 
 <ConfirmDialog
@@ -856,5 +1051,11 @@
 	variant={confirmDialog.variant}
 	onconfirm={confirmDialog.onconfirm}
 	oncancel={confirmDialogCancel}
+/>
+
+<CommandPalette
+	open={showCommandPalette}
+	commands={paletteCommands}
+	onclose={() => { showCommandPalette = false; }}
 />
 

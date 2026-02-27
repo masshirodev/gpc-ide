@@ -9,6 +9,7 @@ pub fn run() {
         .manage(commands::lsp::LspState::default())
         .manage(commands::watcher::WatcherState::default())
         .manage(commands::watcher::WorkspaceWatcherState::default())
+        .manage(commands::runner::RunnerState::default())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
@@ -25,9 +26,13 @@ pub fn run() {
             commands::game::list_games,
             commands::game::get_game_config,
             commands::game::get_app_root,
+            commands::game::import_files,
             commands::game::delete_game,
             commands::game::save_game_meta,
             commands::game::load_game_meta,
+            commands::game::export_game_zip,
+            commands::game::import_game_zip,
+            commands::game::run_task,
             commands::module::list_modules,
             commands::module::list_available_modules,
             commands::module::get_module,
@@ -55,6 +60,10 @@ pub fn run() {
             commands::templates::list_templates,
             commands::templates::read_template,
             commands::templates::import_template,
+            commands::templates::save_project_template,
+            commands::templates::list_project_templates,
+            commands::templates::create_game_from_template,
+            commands::templates::delete_project_template,
             commands::search::search_in_files,
             commands::search::replace_in_file,
             commands::plugins::list_plugins,
@@ -78,6 +87,15 @@ pub fn run() {
             commands::flow::save_chunk,
             commands::flow::delete_chunk,
             commands::flow::get_chunk,
+            commands::git::git_is_repo,
+            commands::git::git_status,
+            commands::git::git_diff_file,
+            commands::git::git_stage,
+            commands::git::git_unstage,
+            commands::git::git_commit,
+            commands::git::git_status_detailed,
+            commands::runner::run_command,
+            commands::runner::kill_command,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

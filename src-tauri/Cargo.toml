@@ -28,6 +28,7 @@ walkdir = "2"
 tokio = { version = "1", features = ["process", "io-util", "sync", "rt", "time"] }
 notify = "7"
 regex = "1"
+zip = { version = "2", default-features = false, features = ["deflate"] }
 ersa_lsp_core = { path = "../../ersa-lsp-core" }
 
 [dev-dependencies]

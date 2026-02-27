@@ -4,9 +4,11 @@
     import TitleBar from '$lib/components/layout/TitleBar.svelte';
     import Sidebar from '$lib/components/layout/Sidebar.svelte';
     import StatusBar from '$lib/components/layout/StatusBar.svelte';
+    import NotificationsPanel from '$lib/components/layout/NotificationsPanel.svelte';
     import BottomPanel from '$lib/components/layout/BottomPanel.svelte';
     import SettingsModal from '$lib/components/layout/SettingsModal.svelte';
     import ToastContainer from '$lib/components/layout/ToastContainer.svelte';
+    import NewFromTemplateModal from '$lib/components/modals/NewFromTemplateModal.svelte';
     import { loadGames, selectGame, getGameStore, clearSelection } from '$lib/stores/game.svelte';
     import { getUiStore, toggleSidebar, setSidebarCollapsed } from '$lib/stores/ui.svelte';
     import { getSettings, addWorkspace } from '$lib/stores/settings.svelte';
@@ -26,6 +28,8 @@
     let settingsStore = getSettings();
     let settings = $derived($settingsStore);
     let settingsOpen = $state(false);
+    let notificationsOpen = $state(false);
+    let showNewFromTemplate = $state(false);
 
     let wsUnlisten: UnlistenFn | null = null;
     let wsRefreshTimer: ReturnType<typeof setTimeout> | null = null;
@@ -141,7 +145,7 @@
                 aria-label="Close sidebar"
             ></button>
             <div class="absolute left-0 top-0 z-50 h-full">
-                <Sidebar onSelectGame={handleSelectGame} onDeleteGame={handleDeleteGame} onCollapse={toggleSidebar} onOpenSettings={() => settingsOpen = true} />
+                <Sidebar onSelectGame={handleSelectGame} onDeleteGame={handleDeleteGame} onCollapse={toggleSidebar} onOpenSettings={() => settingsOpen = true} onNewFromTemplate={() => (showNewFromTemplate = true)} />
             </div>
         {/if}
         <main class="flex-1 overflow-y-auto bg-zinc-950">
@@ -151,7 +155,7 @@
     {#if isScriptView}
         <BottomPanel />
     {/if}
-    <StatusBar {isScriptView} />
+    <StatusBar {isScriptView} onToggleNotifications={() => { notificationsOpen = !notificationsOpen; }} />
 </div>
 
 {#if needsSetup}
@@ -191,4 +195,6 @@
 {/if}
 
 <SettingsModal open={settingsOpen} onclose={() => settingsOpen = false} />
+<NotificationsPanel open={notificationsOpen} onclose={() => { notificationsOpen = false; }} />
+<NewFromTemplateModal open={showNewFromTemplate} onclose={() => (showNewFromTemplate = false)} />
 <ToastContainer />

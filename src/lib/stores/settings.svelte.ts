@@ -17,12 +17,21 @@ interface AppSettings {
     editorTabSize: number;
     editorFontFamily: string;
     editorTheme: string;
+    editorMinimap: boolean;
+    editorStickyScroll: boolean;
+    autoSave: boolean;
+    autoSaveDelay: number;
+    sessionRestore: boolean;
     workspaces: string[];
     customGameTypes: string[];
     snippets: Snippet[];
+    pinnedGames: string[];
+    recentFiles: string[];
 }
 
 const BUILTIN_GAME_TYPES = ['fps', 'tps', 'fgs'];
+
+const MAX_RECENT_FILES = 20;
 
 const DEFAULTS: AppSettings = {
     username: '',
@@ -31,9 +40,16 @@ const DEFAULTS: AppSettings = {
     editorTabSize: 4,
     editorFontFamily: 'JetBrains Mono, Fira Code, Cascadia Code, monospace',
     editorTheme: 'gpc-dark',
+    editorMinimap: false,
+    editorStickyScroll: true,
+    autoSave: false,
+    autoSaveDelay: 1000,
+    sessionRestore: true,
     workspaces: [],
     customGameTypes: [],
     snippets: [],
+    pinnedGames: [],
+    recentFiles: [],
 };
 
 const STORAGE_KEY = 'gpc-ide-settings';
@@ -341,4 +357,49 @@ export function getAllSnippets(settings: AppSettings): Snippet[] {
 
 export function isBuiltinSnippet(id: string): boolean {
     return id.startsWith('builtin-');
+}
+
+// === Pinned Games ===
+
+export function togglePinnedGame(gamePath: string) {
+    store.update(current => {
+        const pinned = current.pinnedGames.includes(gamePath)
+            ? current.pinnedGames.filter(p => p !== gamePath)
+            : [...current.pinnedGames, gamePath];
+        const updated = { ...current, pinnedGames: pinned };
+        persist(updated);
+        return updated;
+    });
+}
+
+export function isGamePinned(settings: AppSettings, gamePath: string): boolean {
+    return settings.pinnedGames.includes(gamePath);
+}
+
+// === Recent Files ===
+
+export function addRecentFile(filePath: string) {
+    store.update(current => {
+        const filtered = current.recentFiles.filter(f => f !== filePath);
+        const recentFiles = [filePath, ...filtered].slice(0, MAX_RECENT_FILES);
+        const updated = { ...current, recentFiles };
+        persist(updated);
+        return updated;
+    });
+}
+
+export function clearRecentFiles() {
+    store.update(current => {
+        const updated = { ...current, recentFiles: [] };
+        persist(updated);
+        return updated;
+    });
+}
+
+export function removeRecentFile(filePath: string) {
+    store.update(current => {
+        const updated = { ...current, recentFiles: current.recentFiles.filter(f => f !== filePath) };
+        persist(updated);
+        return updated;
+    });
 }

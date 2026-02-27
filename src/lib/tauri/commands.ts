@@ -117,6 +117,74 @@ export async function writeFile(path: string, content: string): Promise<void> {
 	return invoke<void>('write_file', { path, content });
 }
 
+export async function importFiles(gamePath: string, filePaths: string[]): Promise<string[]> {
+	return invoke<string[]>('import_files', { gamePath, filePaths });
+}
+
+// === Export / Import ===
+
+export async function exportGameZip(gamePath: string, outputPath: string): Promise<string> {
+	return invoke<string>('export_game_zip', { gamePath, outputPath });
+}
+
+export async function importGameZip(zipPath: string, workspacePath: string): Promise<string> {
+	return invoke<string>('import_game_zip', { zipPath, workspacePath });
+}
+
+// === Task Runner ===
+
+export interface TaskResult {
+	success: boolean;
+	exit_code: number;
+	stdout: string;
+	stderr: string;
+}
+
+export async function runTask(gamePath: string, command: string): Promise<TaskResult> {
+	return invoke<TaskResult>('run_task', { gamePath, command });
+}
+
+// === Git Commands ===
+
+export interface GitFileStatus {
+	path: string;
+	status: string; // "M" | "A" | "D" | "?" | "R"
+}
+
+export async function gitIsRepo(gamePath: string): Promise<boolean> {
+	return invoke<boolean>('git_is_repo', { gamePath });
+}
+
+export async function gitStatus(gamePath: string): Promise<GitFileStatus[]> {
+	return invoke<GitFileStatus[]>('git_status', { gamePath });
+}
+
+export async function gitDiffFile(gamePath: string, filePath: string): Promise<string> {
+	return invoke<string>('git_diff_file', { gamePath, filePath });
+}
+
+export async function gitStage(gamePath: string, filePaths: string[]): Promise<void> {
+	return invoke<void>('git_stage', { gamePath, filePaths });
+}
+
+export async function gitUnstage(gamePath: string, filePaths: string[]): Promise<void> {
+	return invoke<void>('git_unstage', { gamePath, filePaths });
+}
+
+export async function gitCommit(gamePath: string, message: string): Promise<string> {
+	return invoke<string>('git_commit', { gamePath, message });
+}
+
+export interface GitDetailedStatus {
+	path: string;
+	index_status: string;
+	worktree_status: string;
+}
+
+export async function gitStatusDetailed(gamePath: string): Promise<GitDetailedStatus[]> {
+	return invoke<GitDetailedStatus[]>('git_status_detailed', { gamePath });
+}
+
 export interface FileTreeEntry {
 	name: string;
 	path: string;
@@ -199,6 +267,57 @@ export async function importTemplate(
 		templatePath,
 		targetFilename: targetFilename ?? null
 	});
+}
+
+// === Project Template Commands ===
+
+export interface ProjectTemplateMeta {
+	name: string;
+	description: string;
+	game_type: string;
+	console_type: string;
+	created_at: number;
+}
+
+export interface ProjectTemplateInfo {
+	id: string;
+	path: string;
+	meta: ProjectTemplateMeta;
+	file_count: number;
+}
+
+export async function saveProjectTemplate(
+	gamePath: string,
+	workspacePath: string,
+	name: string,
+	description: string
+): Promise<ProjectTemplateInfo> {
+	return invoke<ProjectTemplateInfo>('save_project_template', {
+		gamePath,
+		workspacePath,
+		name,
+		description
+	});
+}
+
+export async function listProjectTemplates(workspacePaths: string[]): Promise<ProjectTemplateInfo[]> {
+	return invoke<ProjectTemplateInfo[]>('list_project_templates', { workspacePaths });
+}
+
+export async function createGameFromTemplate(
+	templatePath: string,
+	gameName: string,
+	workspacePath: string
+): Promise<string> {
+	return invoke<string>('create_game_from_template', {
+		templatePath,
+		gameName,
+		workspacePath
+	});
+}
+
+export async function deleteProjectTemplate(templatePath: string): Promise<void> {
+	return invoke<void>('delete_project_template', { templatePath });
 }
 
 // === Search Commands ===
@@ -391,6 +510,16 @@ export async function deleteChunk(workspacePaths: string[], chunkId: string): Pr
 
 export async function getChunk(workspacePaths: string[], chunkId: string): Promise<FlowChunk> {
 	return invoke<FlowChunk>('get_chunk', { workspacePaths, chunkId });
+}
+
+// === Command Runner ===
+
+export async function runCommand(cwd: string, command: string): Promise<void> {
+	return invoke<void>('run_command', { cwd, command });
+}
+
+export async function killCommand(): Promise<void> {
+	return invoke<void>('kill_command');
 }
 
 // === Opener Commands ===

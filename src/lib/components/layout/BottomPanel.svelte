@@ -18,6 +18,7 @@
 	import LogsPanel from './LogsPanel.svelte';
 	import SearchPanel from './SearchPanel.svelte';
 	import ReferencesPanel from './ReferencesPanel.svelte';
+	import CommandRunnerPanel from './CommandRunnerPanel.svelte';
 
 	let ui = getUiStore();
 	let diagStore = getDiagnosticsStore();
@@ -27,6 +28,7 @@
 	let refsCount = $derived(getReferencesCount());
 	let dragging = $state(false);
 	let searchPanel: SearchPanel | undefined = $state();
+	let runnerPanel: CommandRunnerPanel | undefined = $state();
 
 	function onResizeStart(e: PointerEvent) {
 		e.preventDefault();
@@ -53,7 +55,8 @@
 		{ id: 'problems', label: 'Problems' },
 		{ id: 'search', label: 'Search' },
 		{ id: 'references', label: 'References' },
-		{ id: 'logs', label: 'Logs' }
+		{ id: 'logs', label: 'Logs' },
+		{ id: 'terminal', label: 'Terminal' }
 	];
 
 	function tabLabel(tab: { id: BottomPanelTab; label: string }): string {
@@ -128,6 +131,14 @@
 				>
 					Clear
 				</button>
+			{:else if ui.bottomPanel.activeTab === 'terminal'}
+				<button
+					class="px-2 py-1 text-xs text-zinc-500 hover:text-zinc-300"
+					onclick={() => runnerPanel?.clearOutput()}
+					title="Clear terminal"
+				>
+					Clear
+				</button>
 			{/if}
 
 			<!-- Close button -->
@@ -154,6 +165,8 @@
 				<ReferencesPanel />
 			{:else if ui.bottomPanel.activeTab === 'logs'}
 				<LogsPanel />
+			{:else if ui.bottomPanel.activeTab === 'terminal'}
+				<CommandRunnerPanel bind:this={runnerPanel} />
 			{/if}
 		</div>
 	</div>

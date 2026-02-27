@@ -1,5 +1,6 @@
 <script lang="ts">
 	import MonacoEditor from './MonacoEditor.svelte';
+	import Breadcrumbs from './Breadcrumbs.svelte';
 	import RecoilTableEditor from './RecoilTableEditor.svelte';
 	import KeyboardMapperEditor from './KeyboardMapperEditor.svelte';
 	import ConfigEditor from './ConfigEditor.svelte';
@@ -11,6 +12,8 @@
 	} from '$lib/stores/editor.svelte';
 	import { getLanguageForFile } from '$lib/utils/editor-helpers';
 	import type { ConsoleType } from '$lib/utils/console-buttons';
+	import type { GitLineChange } from './MonacoEditor.svelte';
+	import type * as Monaco from 'monaco-editor';
 
 	interface ThemeAccent {
 		bg: string;
@@ -34,6 +37,7 @@
 		onContentChange: (path: string, content: string) => void;
 		onEditorReady: (editor: import('monaco-editor').editor.IStandaloneCodeEditor) => void;
 		onOpenExternal: () => void;
+		gitChanges?: GitLineChange[];
 		editorComponent?: MonacoEditor;
 	}
 
@@ -46,6 +50,7 @@
 		onContentChange,
 		onEditorReady,
 		onOpenExternal,
+		gitChanges,
 		editorComponent = $bindable()
 	}: Props = $props();
 
@@ -74,6 +79,36 @@
 
 	// Check if current file is config.toml
 	let isConfigFile = $derived(currentTab?.path.endsWith('config.toml') ?? false);
+
+	// Track current Monaco editor instance for breadcrumbs
+	let currentMonacoEditor = $state<Monaco.editor.IStandaloneCodeEditor | null>(null);
+
+	// Show breadcrumbs only when viewing a code file (not visual/GUI subtab)
+	let showBreadcrumbs = $derived(
+		currentTab &&
+		!isConfigFile &&
+		!(hasVisualEditor && editorSubTab === 'visual')
+	);
+
+	// Split view state
+	let splitMode = $state(false);
+	let splitTabPath = $state<string | null>(null);
+	let splitTab = $derived(
+		splitTabPath ? editorStore.tabs.find((t) => t.path === splitTabPath) : undefined
+	);
+
+	// Auto-pick a split tab when entering split mode
+	$effect(() => {
+		if (splitMode && !splitTab && editorStore.tabs.length > 1 && currentTab) {
+			const other = editorStore.tabs.find((t) => t.path !== currentTab.path);
+			if (other) splitTabPath = other.path;
+		}
+	});
+
+	function toggleSplit() {
+		splitMode = !splitMode;
+		if (!splitMode) splitTabPath = null;
+	}
 
 	// Expose configSubTab for external use (overview panel clicks)
 	export function setConfigSubTab(tab: 'gui' | 'editor') {
@@ -116,6 +151,18 @@
 				{/each}
 			</div>
 			<div class="flex shrink-0 items-center gap-2 px-2">
+				{#if currentTab && editorStore.tabs.length > 1}
+					<button
+						class="p-1.5 transition-colors {splitMode ? 'text-emerald-400' : 'text-zinc-500 hover:text-zinc-300'}"
+						onclick={toggleSplit}
+						title={splitMode ? 'Close split view' : 'Split editor'}
+					>
+						<svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+							<rect x="3" y="3" width="18" height="18" rx="2" />
+							<line x1="12" y1="3" x2="12" y2="21" />
+						</svg>
+					</button>
+				{/if}
 				{#if currentTab}
 					<button
 						class="p-1.5 text-zinc-500 transition-colors hover:text-zinc-300"
@@ -184,41 +231,78 @@
 				</div>
 			{/if}
 
-			<div class="flex-1 overflow-hidden">
-				{#if hasVisualEditor && editorSubTab === 'visual' && isKeyboardFile}
-					{#key editorStore.activeTabPath}
-						<KeyboardMapperEditor
-							content={currentTab.content}
-							gamePath={gamePath}
-							filePath={currentTab.path}
-							consoleType={consoleType}
-							onchange={(v) => onContentChange(currentTab!.path, v)}
-						/>
-					{/key}
-				{:else if hasVisualEditor && editorSubTab === 'visual'}
-					{#key editorStore.activeTabPath}
-						<RecoilTableEditor
-							content={currentTab.content}
-							gamePath={gamePath}
-							filePath={currentTab.path}
-							onchange={(v) => onContentChange(currentTab!.path, v)}
-						/>
-					{/key}
-				{:else if isConfigFile && configSubTab === 'gui'}
-					{#key editorStore.activeTabPath}
-						<ConfigEditor gamePath={gamePath} />
-					{/key}
-				{:else}
-					{#key editorStore.activeTabPath}
-						<MonacoEditor
-							bind:this={editorComponent}
-							value={currentTab.content}
-							language={getLanguageForFile(currentTab.path)}
-							filePath={currentTab.path}
-							onchange={(v) => onContentChange(currentTab!.path, v)}
-							onready={onEditorReady}
-						/>
-					{/key}
+			{#if showBreadcrumbs}
+				<Breadcrumbs editor={currentMonacoEditor} filePath={currentTab?.path ?? null} {gamePath} />
+			{/if}
+
+			<div class="flex flex-1 overflow-hidden {splitMode ? 'flex-row' : 'flex-col'}">
+				<!-- Primary editor pane -->
+				<div class="flex min-w-0 flex-1 flex-col overflow-hidden">
+					{#if hasVisualEditor && editorSubTab === 'visual' && isKeyboardFile}
+						{#key editorStore.activeTabPath}
+							<KeyboardMapperEditor
+								content={currentTab.content}
+								gamePath={gamePath}
+								filePath={currentTab.path}
+								consoleType={consoleType}
+								onchange={(v) => onContentChange(currentTab!.path, v)}
+							/>
+						{/key}
+					{:else if hasVisualEditor && editorSubTab === 'visual'}
+						{#key editorStore.activeTabPath}
+							<RecoilTableEditor
+								content={currentTab.content}
+								gamePath={gamePath}
+								filePath={currentTab.path}
+								onchange={(v) => onContentChange(currentTab!.path, v)}
+							/>
+						{/key}
+					{:else if isConfigFile && configSubTab === 'gui'}
+						{#key editorStore.activeTabPath}
+							<ConfigEditor gamePath={gamePath} />
+						{/key}
+					{:else}
+						{#key editorStore.activeTabPath}
+							<MonacoEditor
+								bind:this={editorComponent}
+								value={currentTab.content}
+								language={getLanguageForFile(currentTab.path)}
+								filePath={currentTab.path}
+								{gitChanges}
+								onchange={(v) => onContentChange(currentTab!.path, v)}
+								onready={(ed) => { currentMonacoEditor = ed; onEditorReady(ed); }}
+							/>
+						{/key}
+					{/if}
+				</div>
+
+				<!-- Split pane -->
+				{#if splitMode}
+					<div class="w-px shrink-0" style="background: {themeAccent.treeBorder}"></div>
+					<div class="flex min-w-0 flex-1 flex-col overflow-hidden">
+						<!-- Split pane tab selector -->
+						<div class="flex items-center" style="background: {themeAccent.tabBarBg}; border-bottom: 1px solid {themeAccent.treeBorder}">
+							<select
+								class="flex-1 border-none bg-transparent px-2 py-1 text-xs text-zinc-300 outline-none"
+								bind:value={splitTabPath}
+							>
+								{#each editorStore.tabs.filter(t => t.path !== currentTab?.path) as tab}
+									<option value={tab.path}>{tab.name}</option>
+								{/each}
+							</select>
+						</div>
+						{#if splitTab}
+							{#key splitTabPath}
+								<MonacoEditor
+									value={splitTab.content}
+									language={getLanguageForFile(splitTab.path)}
+									filePath={splitTab.path}
+									onchange={(v) => onContentChange(splitTab!.path, v)}
+									onready={() => {}}
+								/>
+							{/key}
+						{/if}
+					</div>
 				{/if}
 			</div>
 		{:else}

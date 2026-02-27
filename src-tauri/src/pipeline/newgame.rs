@@ -60,6 +60,7 @@ pub fn create_game(
         console_type,
         username: params.username.clone(),
         generation_mode: "flow".to_string(),
+        tags: None,
     };
 
     let meta_content = serde_json::to_string_pretty(&meta)

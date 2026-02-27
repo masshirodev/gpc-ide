@@ -12,3 +12,5 @@ pub mod history;
 pub mod plugins;
 pub mod search;
 pub mod workspace;
+pub mod git;
+pub mod runner;

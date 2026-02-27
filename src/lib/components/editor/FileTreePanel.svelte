@@ -20,6 +20,9 @@
 		expandedDirs: Set<string>;
 		activeFilePath: string | null;
 		themeAccent: ThemeAccent;
+		fileSeverities?: Map<string, number>;
+		gitFileStatuses?: Map<string, string>;
+		dragOver?: boolean;
 		onToggleDir: (path: string) => void;
 		onFileClick: (path: string) => void;
 		onDeleteFile: (e: MouseEvent, path: string) => void;
@@ -32,15 +35,39 @@
 		expandedDirs,
 		activeFilePath,
 		themeAccent,
+		fileSeverities = new Map(),
+		gitFileStatuses = new Map(),
+		dragOver = false,
 		onToggleDir,
 		onFileClick,
 		onDeleteFile,
 		onNewFile,
 		onImportTemplate
 	}: Props = $props();
+
+	function severityDot(path: string): string | null {
+		const sev = fileSeverities.get(path);
+		if (sev === 1) return 'bg-red-500';
+		if (sev === 2) return 'bg-amber-400';
+		return null;
+	}
+
+	const gitStatusColors: Record<string, string> = {
+		'M': 'text-amber-400',
+		'A': 'text-emerald-400',
+		'D': 'text-red-400',
+		'?': 'text-zinc-500',
+		'R': 'text-blue-400'
+	};
+
+	function gitBadge(path: string): { label: string; color: string } | null {
+		const status = gitFileStatuses.get(path);
+		if (!status) return null;
+		return { label: status, color: gitStatusColors[status] ?? 'text-zinc-500' };
+	}
 </script>
 
-<div class="file-tree flex w-52 shrink-0 flex-col" style="background: {themeAccent.treeBg}; border-right: 1px solid {themeAccent.treeBorder}; --tree-hover: {themeAccent.treeHover}; --tree-border: {themeAccent.treeBorder}">
+<div class="file-tree flex w-52 shrink-0 flex-col {dragOver ? 'ring-2 ring-inset ring-emerald-500/50' : ''}" style="background: {themeAccent.treeBg}; border-right: 1px solid {themeAccent.treeBorder}; --tree-hover: {themeAccent.treeHover}; --tree-border: {themeAccent.treeBorder}">
 	<!-- File Tree Header -->
 	<div class="p-2" style="border-bottom: 1px solid {themeAccent.treeBorder}; background: {themeAccent.treeHeaderBg}">
 		<div class="flex gap-1">
@@ -113,6 +140,7 @@
 															<path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
 														</svg>
 														{grandchild.name}
+														{#if severityDot(grandchild.path)}<span class="ml-auto h-1.5 w-1.5 shrink-0 rounded-full {severityDot(grandchild.path)}"></span>{/if}
 													</button>
 													{#if canDeleteFile(grandchild.path)}
 														<button
@@ -144,6 +172,7 @@
 											<path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
 										</svg>
 										{child.name}
+										{#if severityDot(child.path)}<span class="ml-auto h-1.5 w-1.5 shrink-0 rounded-full {severityDot(child.path)}"></span>{/if}
 									</button>
 									{#if canDeleteFile(child.path)}
 										<button
@@ -175,7 +204,9 @@
 							<path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
 						</svg>
 						{entry.name}
+						{#if gitBadge(entry.path)}<span class="ml-auto text-[9px] font-bold {gitBadge(entry.path)?.color}">{gitBadge(entry.path)?.label}</span>{/if}
 					</button>
+						{#if severityDot(entry.path)}<span class="ml-auto h-1.5 w-1.5 shrink-0 rounded-full {severityDot(entry.path)}"></span>{/if}
 					{#if canDeleteFile(entry.path)}
 						<button
 							class="p-1 text-zinc-500 opacity-0 transition-opacity group-hover:opacity-100 hover:text-red-400"

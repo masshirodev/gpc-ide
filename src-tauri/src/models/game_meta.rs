@@ -14,6 +14,8 @@ pub struct GameMeta {
     /// Always "flow" for new games. Legacy config-based games use config.toml instead.
     #[serde(default = "default_generation_mode")]
     pub generation_mode: String,
+    #[serde(default)]
+    pub tags: Option<Vec<String>>,
 }
 
 fn default_generation_mode() -> String {

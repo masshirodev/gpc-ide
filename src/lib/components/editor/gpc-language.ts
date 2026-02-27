@@ -258,6 +258,12 @@ export function registerGpcLanguage(monaco: typeof Monaco) {
 			['[', ']'],
 			['(', ')']
 		],
+		folding: {
+			markers: {
+				start: /^\s*\/\/\s*#region\b/,
+				end: /^\s*\/\/\s*#endregion\b/
+			}
+		},
 		autoClosingPairs: [
 			{ open: '{', close: '}' },
 			{ open: '[', close: ']' },

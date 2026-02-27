@@ -32,3 +32,23 @@ export function onWorkspaceChange(callback: (event: FileChangeEvent) => void): P
         callback(event.payload);
     });
 }
+
+// === Command Runner Events ===
+
+export function onRunnerStdout(callback: (line: string) => void): Promise<UnlistenFn> {
+    return listen<string>('runner:stdout', (event) => {
+        callback(event.payload);
+    });
+}
+
+export function onRunnerStderr(callback: (line: string) => void): Promise<UnlistenFn> {
+    return listen<string>('runner:stderr', (event) => {
+        callback(event.payload);
+    });
+}
+
+export function onRunnerExit(callback: (exitCode: number) => void): Promise<UnlistenFn> {
+    return listen<number>('runner:exit', (event) => {
+        callback(event.payload);
+    });
+}

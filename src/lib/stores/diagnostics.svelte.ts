@@ -47,6 +47,22 @@ export function getDiagnosticCounts(byUri: Map<string, FileDiagnostics>) {
 	return { errors, warnings, infos, total: errors + warnings + infos };
 }
 
+/** Get a map of file path → worst severity (1=error, 2=warning, 3=info) */
+export function getFileSeverityMap(byUri: Map<string, FileDiagnostics>): Map<string, number> {
+	const result = new Map<string, number>();
+	for (const file of byUri.values()) {
+		let worst = Infinity;
+		for (const d of file.diagnostics) {
+			const sev = d.severity ?? 1;
+			if (sev < worst) worst = sev;
+		}
+		if (worst !== Infinity) {
+			result.set(file.path, worst);
+		}
+	}
+	return result;
+}
+
 export function getAllDiagnosticsGrouped(byUri: Map<string, FileDiagnostics>): FileDiagnostics[] {
 	const files = Array.from(byUri.values());
 	// Sort files by most severe diagnostic first

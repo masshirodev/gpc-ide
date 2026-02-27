@@ -2,18 +2,193 @@
 	import { getGameStore, gamesByType, clearSelection } from '$lib/stores/game.svelte';
 	import { goto } from '$app/navigation';
 	import type { GameSummary } from '$lib/types/config';
+	import { getSettings, togglePinnedGame, isGamePinned, removeRecentFile, clearRecentFiles } from '$lib/stores/settings.svelte';
+	import { openTab } from '$lib/stores/editor.svelte';
 
 	interface Props {
 		onSelectGame: (game: GameSummary) => void;
 		onDeleteGame?: (game: GameSummary) => void;
 		onCollapse?: () => void;
 		onOpenSettings?: () => void;
+		onNewFromTemplate?: () => void;
 	}
 
-	let { onSelectGame, onDeleteGame, onCollapse, onOpenSettings }: Props = $props();
+	let { onSelectGame, onDeleteGame, onCollapse, onOpenSettings, onNewFromTemplate }: Props = $props();
 	let store = getGameStore();
+	let settingsStore = getSettings();
+	let settings = $derived($settingsStore);
 	let grouped = $derived(gamesByType(store.games));
 	let types = $derived(Object.keys(grouped).sort());
+
+	// Pinned games derived from settings + game list
+	let pinnedGames = $derived(
+		store.games.filter(g => settings.pinnedGames.includes(g.path))
+	);
+
+	// Recent files (just filenames for display)
+	let recentFiles = $derived(settings.recentFiles);
+	let showRecentFiles = $state(false);
+
+	interface ToolItem {
+		href: string;
+		label: string;
+		icon: string;
+		stroke?: boolean;
+	}
+
+	interface ToolCategory {
+		name: string;
+		tools: ToolItem[];
+	}
+
+	const toolCategories: ToolCategory[] = [
+		{
+			name: 'OLED',
+			tools: [
+				{
+					href: '/tools/oled',
+					label: 'OLED Creator',
+					icon: 'M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z'
+				},
+				{
+					href: '/tools/oled-widgets',
+					label: 'OLED Widgets',
+					icon: 'M2 4a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1H3a1 1 0 01-1-1V4zm6 0a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1H9a1 1 0 01-1-1V4zm7-1a1 1 0 00-1 1v12a1 1 0 001 1h2a1 1 0 001-1V4a1 1 0 00-1-1h-2z'
+				},
+				{
+					href: '/tools/font-import',
+					label: 'Font Import',
+					icon: 'M4 6h16M4 12h16m-7 6h7',
+					stroke: true
+				},
+				{
+					href: '/tools/sprite-import',
+					label: 'Sprite Import',
+					icon: 'M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z',
+					stroke: true
+				}
+			]
+		},
+		{
+			name: 'Combat',
+			tools: [
+				{
+					href: '/tools/recoil',
+					label: 'Spray Pattern',
+					icon: 'M10 18a8 8 0 100-16 8 8 0 000 16zm.75-11.25a.75.75 0 00-1.5 0v2.5h-2.5a.75.75 0 000 1.5h2.5v2.5a.75.75 0 001.5 0v-2.5h2.5a.75.75 0 000-1.5h-2.5v-2.5z'
+				},
+				{
+					href: '/tools/combo',
+					label: 'Combo Maker',
+					icon: 'M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h8a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h4a1 1 0 110 2H4a1 1 0 01-1-1z'
+				}
+			]
+		},
+		{
+			name: 'Code',
+			tools: [
+				{
+					href: '/tools/templates',
+					label: 'Templates',
+					icon: 'M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zm0 6a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zm10 0a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z'
+				},
+				{
+					href: '/tools/snippets',
+					label: 'Snippets',
+					icon: 'M12.316 3.051a1 1 0 01.633 1.265l-4 12a1 1 0 11-1.898-.632l4-12a1 1 0 011.265-.633zM5.707 6.293a1 1 0 010 1.414L3.414 10l2.293 2.293a1 1 0 11-1.414 1.414l-3-3a1 1 0 010-1.414l3-3a1 1 0 011.414 0zm8.586 0a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 11-1.414-1.414L16.586 10l-2.293-2.293a1 1 0 010-1.414z'
+				},
+				{
+					href: '/tools/string-to-array',
+					label: 'String to Array',
+					icon: 'M3 5a2 2 0 012-2h10a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V5zm4 1a1 1 0 00-1 1v1a1 1 0 002 0V7a1 1 0 00-1-1zm3 0a1 1 0 00-1 1v3a1 1 0 002 0V7a1 1 0 00-1-1zm3 0a1 1 0 00-1 1v5a1 1 0 002 0V7a1 1 0 00-1-1z'
+				},
+				{
+					href: '/tools/obfuscate',
+					label: 'Obfuscator',
+					icon: 'M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z'
+				}
+			]
+		},
+		{
+			name: 'Project',
+			tools: [
+				{
+					href: '/tools/modules',
+					label: 'Module Manager',
+					icon: 'M7 3a1 1 0 000 2h6a1 1 0 100-2H7zM4 7a1 1 0 011-1h10a1 1 0 110 2H5a1 1 0 01-1-1zM2 11a2 2 0 012-2h12a2 2 0 012 2v4a2 2 0 01-2 2H4a2 2 0 01-2-2v-4z'
+				},
+				{
+					href: '/tools/builds',
+					label: 'Built Games',
+					icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z',
+					stroke: true
+				},
+				{
+					href: '/tools/depgraph',
+					label: 'Dep Graph',
+					icon: 'M17 10a.75.75 0 01-.75.75H5.612l4.158 3.96a.75.75 0 11-1.04 1.08l-5.5-5.25a.75.75 0 010-1.08l5.5-5.25a.75.75 0 011.04 1.08L5.612 9.25H16.25A.75.75 0 0117 10z'
+				},
+				{
+					href: '/tools/plugins',
+					label: 'Plugins',
+					icon: 'M17 14v6m-3-3h6M6 10h2a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v2a2 2 0 002 2zm10 0h2a2 2 0 002-2V6a2 2 0 00-2-2h-2a2 2 0 00-2 2v2a2 2 0 002 2zM6 20h2a2 2 0 002-2v-2a2 2 0 00-2-2H6a2 2 0 00-2 2v2a2 2 0 002 2z'
+				},
+				{
+					href: '/tools/compare',
+					label: 'Compare Games',
+					icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2',
+					stroke: true
+				}
+			]
+		},
+		{
+			name: 'Testing',
+			tools: [
+				{
+					href: '/tools/simulator',
+					label: 'Simulator',
+					icon: 'M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z'
+				},
+				{
+					href: '/tools/keyboard',
+					label: 'Keyboard Mapper',
+					icon: 'M3 5a2 2 0 012-2h10a2 2 0 012 2v8a2 2 0 01-2 2h-2.22l.123.489.804.804A1 1 0 0113 18H7a1 1 0 01-.707-1.707l.804-.804L7.22 15H5a2 2 0 01-2-2V5zm5.771 7H5V5h10v7H8.771z'
+				}
+			]
+		},
+		{
+			name: 'Reference',
+			tools: [
+				{
+					href: '/tools/docs',
+					label: 'Documentation',
+					icon: 'M9 4.804A7.968 7.968 0 005.5 4c-1.255 0-2.443.29-3.5.804v10A7.969 7.969 0 015.5 14c1.669 0 3.218.51 4.5 1.385A7.962 7.962 0 0114.5 14c1.255 0 2.443.29 3.5.804v-10A7.968 7.968 0 0014.5 4c-1.255 0-2.443.29-3.5.804V12a1 1 0 11-2 0V4.804z'
+				}
+			]
+		}
+	];
+
+	// --- Tag filtering ---
+	let activeTagFilter = $state<string | null>(null);
+	let allTags = $derived(
+		[...new Set(store.games.flatMap(g => g.tags ?? []))].sort()
+	);
+	let filteredGrouped = $derived(() => {
+		if (!activeTagFilter) return grouped;
+		const filtered: Record<string, typeof store.games> = {};
+		for (const [type, games] of Object.entries(grouped)) {
+			const matching = games.filter(g => g.tags?.includes(activeTagFilter!));
+			if (matching.length > 0) filtered[type] = matching;
+		}
+		return filtered;
+	});
+	let filteredTypes = $derived(Object.keys(filteredGrouped()).sort());
+
+	let collapsedCategories = $state<Record<string, boolean>>({});
+
+	function toggleCategory(name: string) {
+		collapsedCategories[name] = !collapsedCategories[name];
+	}
 </script>
 
 <aside
@@ -66,14 +241,123 @@
 			Dashboard
 		</button>
 
+		<!-- Pinned Games -->
+		{#if pinnedGames.length > 0}
+			<div class="mt-4 mb-2 px-3 text-xs font-medium tracking-wider text-zinc-500 uppercase">
+				Pinned
+			</div>
+			{#each pinnedGames as game}
+				<div
+					class="group flex w-full items-center justify-between rounded px-3 py-1.5 text-left text-sm text-zinc-300 hover:bg-zinc-800"
+					class:bg-zinc-800={store.selectedGame?.path === game.path}
+					class:text-emerald-400={store.selectedGame?.path === game.path}
+				>
+					<button class="flex-1 truncate text-left" onclick={() => onSelectGame(game)}>
+						{game.name}
+					</button>
+					<div class="flex items-center gap-1">
+						<span class="text-xs text-zinc-500">v{game.version}</span>
+						<button
+							class="rounded p-0.5 text-amber-500/70 opacity-0 group-hover:opacity-100 hover:text-amber-400"
+							data-no-collapse
+							onclick={(e) => {
+								e.stopPropagation();
+								togglePinnedGame(game.path);
+							}}
+							title="Unpin game"
+						>
+							<svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+								<path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+							</svg>
+						</button>
+					</div>
+				</div>
+			{/each}
+		{/if}
+
+		<!-- Recent Files -->
+		{#if recentFiles.length > 0}
+			<div class="mt-4 mb-1 flex items-center justify-between px-3">
+				<button
+					class="flex items-center gap-1 text-xs font-medium tracking-wider text-zinc-500 uppercase hover:text-zinc-400"
+					data-no-collapse
+					onclick={() => (showRecentFiles = !showRecentFiles)}
+				>
+					<svg
+						class="h-3 w-3 transition-transform"
+						class:rotate-90={showRecentFiles}
+						viewBox="0 0 20 20"
+						fill="currentColor"
+					>
+						<path
+							fill-rule="evenodd"
+							d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z"
+							clip-rule="evenodd"
+						/>
+					</svg>
+					Recent
+				</button>
+				<button
+					class="text-xs text-zinc-600 hover:text-zinc-400"
+					data-no-collapse
+					onclick={() => clearRecentFiles()}
+					title="Clear recent files"
+				>
+					Clear
+				</button>
+			</div>
+			{#if showRecentFiles}
+				{#each recentFiles.slice(0, 10) as filePath}
+					<div
+						class="group flex w-full items-center rounded px-3 py-1 text-left text-xs text-zinc-400 hover:bg-zinc-800 hover:text-zinc-300"
+					>
+						<button
+							class="flex-1 truncate text-left"
+							onclick={() => openTab(filePath)}
+							title={filePath}
+						>
+							{filePath.split('/').pop()}
+						</button>
+						<button
+							class="rounded p-0.5 text-zinc-600 opacity-0 group-hover:opacity-100 hover:text-red-400"
+							data-no-collapse
+							onclick={(e) => {
+								e.stopPropagation();
+								removeRecentFile(filePath);
+							}}
+							title="Remove from recent"
+						>
+							<svg class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
+								<path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
+							</svg>
+						</button>
+					</div>
+				{/each}
+			{/if}
+		{/if}
+
 		<div class="mt-4 mb-2 px-3 text-xs font-medium tracking-wider text-zinc-500 uppercase">
 			Games
 		</div>
 
-		{#each types as type}
+		{#if allTags.length > 0}
+			<div class="mb-2 flex flex-wrap gap-1 px-3">
+				{#each allTags as tag}
+					<button
+						class="rounded-full px-2 py-0.5 text-[10px] font-medium transition-colors {activeTagFilter === tag ? 'bg-emerald-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-300'}"
+						data-no-collapse
+						onclick={() => { activeTagFilter = activeTagFilter === tag ? null : tag; }}
+					>
+						{tag}
+					</button>
+				{/each}
+			</div>
+		{/if}
+
+		{#each filteredTypes as type}
 			<div class="mb-1">
 				<div class="px-3 py-1 text-xs font-medium text-zinc-500">{type}</div>
-				{#each grouped[type] as game}
+				{#each filteredGrouped()[type] as game}
 					<div
 						class="group flex w-full items-center justify-between rounded px-3 py-1.5 text-left text-sm text-zinc-300 hover:bg-zinc-800"
 						class:bg-zinc-800={store.selectedGame?.path === game.path}
@@ -84,6 +368,20 @@
 						</button>
 						<div class="flex items-center gap-1">
 							<span class="text-xs text-zinc-500">v{game.version}</span>
+							<button
+								class="rounded p-0.5 opacity-0 group-hover:opacity-100 {isGamePinned(settings, game.path) ? 'text-amber-500/70 hover:text-amber-400' : 'text-zinc-600 hover:text-amber-400'}"
+								class:opacity-100={isGamePinned(settings, game.path)}
+								data-no-collapse
+								onclick={(e) => {
+									e.stopPropagation();
+									togglePinnedGame(game.path);
+								}}
+								title={isGamePinned(settings, game.path) ? 'Unpin game' : 'Pin game'}
+							>
+								<svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+									<path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+								</svg>
+							</button>
 							{#if onDeleteGame}
 								<button
 									class="rounded p-0.5 text-zinc-600 opacity-0 group-hover:opacity-100 hover:text-red-400"
@@ -121,188 +419,58 @@
 		<div class="mt-4 mb-2 px-3 text-xs font-medium tracking-wider text-zinc-500 uppercase">
 			Tools
 		</div>
-		<a
-			href="/tools/recoil"
-			class="mb-1 flex items-center gap-2 rounded px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800"
-		>
-			<svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-				<path
-					fill-rule="evenodd"
-					d="M10 18a8 8 0 100-16 8 8 0 000 16zm.75-11.25a.75.75 0 00-1.5 0v2.5h-2.5a.75.75 0 000 1.5h2.5v2.5a.75.75 0 001.5 0v-2.5h2.5a.75.75 0 000-1.5h-2.5v-2.5z"
-					clip-rule="evenodd"
-				/>
-			</svg>
-			Spray Pattern
-		</a>
-		<a
-			href="/tools/oled"
-			class="mb-1 flex items-center gap-2 rounded px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800"
-		>
-			<svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-				<path
-					fill-rule="evenodd"
-					d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z"
-					clip-rule="evenodd"
-				/>
-			</svg>
-			OLED Creator
-		</a>
-		<a
-			href="/tools/oled-widgets"
-			class="mb-1 flex items-center gap-2 rounded px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800"
-		>
-			<svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-				<path
-					d="M2 4a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1H3a1 1 0 01-1-1V4zm6 0a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1H9a1 1 0 01-1-1V4zm7-1a1 1 0 00-1 1v12a1 1 0 001 1h2a1 1 0 001-1V4a1 1 0 00-1-1h-2z"
-				/>
-			</svg>
-			OLED Widgets
-		</a>
-		<a
-			href="/tools/templates"
-			class="mb-1 flex items-center gap-2 rounded px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800"
-		>
-			<svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-				<path
-					d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zm0 6a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zm10 0a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z"
-				/>
-			</svg>
-			Templates
-		</a>
-		<a
-			href="/tools/string-to-array"
-			class="mb-1 flex items-center gap-2 rounded px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800"
-		>
-			<svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-				<path
-					d="M3 5a2 2 0 012-2h10a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V5zm4 1a1 1 0 00-1 1v1a1 1 0 002 0V7a1 1 0 00-1-1zm3 0a1 1 0 00-1 1v3a1 1 0 002 0V7a1 1 0 00-1-1zm3 0a1 1 0 00-1 1v5a1 1 0 002 0V7a1 1 0 00-1-1z"
-				/>
-			</svg>
-			String to Array
-		</a>
-		<a
-			href="/tools/combo"
-			class="mb-1 flex items-center gap-2 rounded px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800"
-		>
-			<svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-				<path
-					fill-rule="evenodd"
-					d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h8a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h4a1 1 0 110 2H4a1 1 0 01-1-1z"
-					clip-rule="evenodd"
-				/>
-			</svg>
-			Combo Maker
-		</a>
-		<a
-			href="/tools/keyboard"
-			class="mb-1 flex items-center gap-2 rounded px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800"
-		>
-			<svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-				<path
-					fill-rule="evenodd"
-					d="M3 5a2 2 0 012-2h10a2 2 0 012 2v8a2 2 0 01-2 2h-2.22l.123.489.804.804A1 1 0 0113 18H7a1 1 0 01-.707-1.707l.804-.804L7.22 15H5a2 2 0 01-2-2V5zm5.771 7H5V5h10v7H8.771z"
-					clip-rule="evenodd"
-				/>
-			</svg>
-			Keyboard Mapper
-		</a>
-		<a
-			href="/tools/modules"
-			class="mb-1 flex items-center gap-2 rounded px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800"
-		>
-			<svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-				<path
-					d="M7 3a1 1 0 000 2h6a1 1 0 100-2H7zM4 7a1 1 0 011-1h10a1 1 0 110 2H5a1 1 0 01-1-1zM2 11a2 2 0 012-2h12a2 2 0 012 2v4a2 2 0 01-2 2H4a2 2 0 01-2-2v-4z"
-				/>
-			</svg>
-			Module Manager
-		</a>
-		<a
-			href="/tools/builds"
-			class="mb-1 flex items-center gap-2 rounded px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800"
-		>
-			<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-				<path
-					stroke-linecap="round"
-					stroke-linejoin="round"
-					stroke-width="2"
-					d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-				/>
-			</svg>
-			Built Games
-		</a>
-		<a
-			href="/tools/snippets"
-			class="mb-1 flex items-center gap-2 rounded px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800"
-		>
-			<svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-				<path
-					d="M12.316 3.051a1 1 0 01.633 1.265l-4 12a1 1 0 11-1.898-.632l4-12a1 1 0 011.265-.633zM5.707 6.293a1 1 0 010 1.414L3.414 10l2.293 2.293a1 1 0 11-1.414 1.414l-3-3a1 1 0 010-1.414l3-3a1 1 0 011.414 0zm8.586 0a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 11-1.414-1.414L16.586 10l-2.293-2.293a1 1 0 010-1.414z"
-				/>
-			</svg>
-			Snippets
-		</a>
-		<a
-			href="/tools/depgraph"
-			class="mb-1 flex items-center gap-2 rounded px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800"
-		>
-			<svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-				<path
-					fill-rule="evenodd"
-					d="M17 10a.75.75 0 01-.75.75H5.612l4.158 3.96a.75.75 0 11-1.04 1.08l-5.5-5.25a.75.75 0 010-1.08l5.5-5.25a.75.75 0 011.04 1.08L5.612 9.25H16.25A.75.75 0 0117 10z"
-					clip-rule="evenodd"
-				/>
-			</svg>
-			Dep Graph
-		</a>
-		<a
-			href="/tools/plugins"
-			class="mb-1 flex items-center gap-2 rounded px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800"
-		>
-			<svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-				<path
-					d="M17 14v6m-3-3h6M6 10h2a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v2a2 2 0 002 2zm10 0h2a2 2 0 002-2V6a2 2 0 00-2-2h-2a2 2 0 00-2 2v2a2 2 0 002 2zM6 20h2a2 2 0 002-2v-2a2 2 0 00-2-2H6a2 2 0 00-2 2v2a2 2 0 002 2z"
-				/>
-			</svg>
-			Plugins
-		</a>
-		<a
-			href="/tools/simulator"
-			class="mb-1 flex items-center gap-2 rounded px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800"
-		>
-			<svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-				<path
-					fill-rule="evenodd"
-					d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z"
-					clip-rule="evenodd"
-				/>
-			</svg>
-			Simulator
-		</a>
-		<a
-			href="/tools/obfuscate"
-			class="mb-1 flex items-center gap-2 rounded px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800"
-		>
-			<svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-				<path
-					fill-rule="evenodd"
-					d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z"
-					clip-rule="evenodd"
-				/>
-			</svg>
-			Obfuscator
-		</a>
-		<a
-			href="/tools/docs"
-			class="mb-1 flex items-center gap-2 rounded px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800"
-		>
-			<svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-				<path
-					d="M9 4.804A7.968 7.968 0 005.5 4c-1.255 0-2.443.29-3.5.804v10A7.969 7.969 0 015.5 14c1.669 0 3.218.51 4.5 1.385A7.962 7.962 0 0114.5 14c1.255 0 2.443.29 3.5.804v-10A7.968 7.968 0 0014.5 4c-1.255 0-2.443.29-3.5.804V12a1 1 0 11-2 0V4.804z"
-				/>
-			</svg>
-			Documentation
-		</a>
+		{#each toolCategories as category}
+			<div class="mb-1">
+				<button
+					class="flex w-full items-center gap-1 px-3 py-1 text-xs font-medium text-zinc-500 hover:text-zinc-400"
+					data-no-collapse
+					onclick={() => toggleCategory(category.name)}
+				>
+					<svg
+						class="h-3 w-3 transition-transform"
+						class:rotate-90={!collapsedCategories[category.name]}
+						viewBox="0 0 20 20"
+						fill="currentColor"
+					>
+						<path
+							fill-rule="evenodd"
+							d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z"
+							clip-rule="evenodd"
+						/>
+					</svg>
+					{category.name}
+				</button>
+				{#if !collapsedCategories[category.name]}
+					{#each category.tools as tool}
+						<a
+							href={tool.href}
+							class="mb-0.5 flex items-center gap-2 rounded px-3 py-1.5 pl-6 text-sm text-zinc-300 hover:bg-zinc-800"
+						>
+							{#if tool.stroke}
+								<svg
+									class="h-4 w-4 shrink-0"
+									fill="none"
+									viewBox="0 0 24 24"
+									stroke="currentColor"
+								>
+									<path
+										stroke-linecap="round"
+										stroke-linejoin="round"
+										stroke-width="2"
+										d={tool.icon}
+									/>
+								</svg>
+							{:else}
+								<svg class="h-4 w-4 shrink-0" viewBox="0 0 20 20" fill="currentColor">
+									<path d={tool.icon} />
+								</svg>
+							{/if}
+							{tool.label}
+						</a>
+					{/each}
+				{/if}
+			</div>
+		{/each}
 	</nav>
 
 	<div class="space-y-1.5 border-t border-zinc-700 p-2">
@@ -317,6 +485,17 @@
 			</svg>
 			New Game
 		</a>
+		{#if onNewFromTemplate}
+			<button
+				class="flex w-full items-center gap-2 rounded border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-800"
+				onclick={onNewFromTemplate}
+			>
+				<svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+					<path d="M6 2a2 2 0 00-2 2v12a2 2 0 002 2h8a2 2 0 002-2V7.414A2 2 0 0015.414 6L12 2.586A2 2 0 0010.586 2H6zm5 6a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V8z" />
+				</svg>
+				From Template
+			</button>
+		{/if}
 		{#if onOpenSettings}
 			<button
 				class="flex w-full items-center gap-2 rounded px-3 py-1.5 text-xs text-zinc-400 hover:bg-zinc-800 hover:text-zinc-300"

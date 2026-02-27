@@ -84,6 +84,7 @@ export interface GameSummary {
 	module_count: number;
 	generation_mode: 'flow' | 'config';
 	updated_at: number;
+	tags?: string[];
 }
 
 export interface GameMeta {
@@ -94,4 +95,5 @@ export interface GameMeta {
 	console_type: string;
 	username?: string;
 	generation_mode: string;
+	tags?: string[];
 }

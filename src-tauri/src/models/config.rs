@@ -154,6 +154,8 @@ pub struct GameSummary {
     /// Last modified time in milliseconds since epoch
     #[serde(default)]
     pub updated_at: u64,
+    #[serde(default)]
+    pub tags: Vec<String>,
 }
 
 fn default_generation_mode() -> String {

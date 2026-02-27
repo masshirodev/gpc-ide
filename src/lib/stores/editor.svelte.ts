@@ -2,6 +2,7 @@ import { readFile, writeFile } from '$lib/tauri/commands';
 import { getLspClient } from '$lib/stores/lsp.svelte';
 import { pathToUri } from '$lib/lsp/MonacoLspBridge';
 import { addToast } from '$lib/stores/toast.svelte';
+import { addRecentFile, getSettings } from '$lib/stores/settings.svelte';
 
 export interface EditorTab {
     path: string;
@@ -67,6 +68,8 @@ export async function openTab(path: string) {
         };
         store.tabs = [...store.tabs, tab];
         store.activeTabPath = path;
+        addRecentFile(path);
+        persistSession();
 
         // Notify LSP that the document was opened (GPC files only)
         if (path.endsWith('.gpc')) {
@@ -101,6 +104,7 @@ export function closeTab(path: string) {
             store.activeTabPath = store.tabs[newIdx].path;
         }
     }
+    persistSession();
 
     // Clear debounce timer
     const timer = changeTimers.get(path);
@@ -121,6 +125,7 @@ export function closeTab(path: string) {
 
 export function activateTab(path: string) {
     store.activeTabPath = path;
+    persistSession();
 }
 
 export function updateTabContent(path: string, content: string) {
@@ -128,6 +133,13 @@ export function updateTabContent(path: string, content: string) {
     if (tab) {
         tab.content = content;
         tab.dirty = content !== tab.originalContent;
+
+        // Schedule auto-save if enabled
+        if (tab.dirty) {
+            scheduleAutoSave(path);
+        } else {
+            cancelAutoSave(path);
+        }
     }
 
     // Debounced LSP didChange notification (150ms, GPC files only)
@@ -209,6 +221,7 @@ export function closeAllTabs() {
 
     store.tabs = [];
     store.activeTabPath = null;
+    persistSession();
 }
 
 export function hasUnsavedChanges(): boolean {
@@ -262,4 +275,94 @@ export function consumePendingJump(forPath: string): number | null {
         return line;
     }
     return null;
+}
+
+// --- Auto-save ---
+
+let autoSaveTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+export function scheduleAutoSave(path: string) {
+    const existing = autoSaveTimers.get(path);
+    if (existing) clearTimeout(existing);
+
+    let delay: number;
+    try {
+        const settings = getSettings();
+        let currentSettings: { autoSave: boolean; autoSaveDelay: number } | undefined;
+        const unsub = settings.subscribe(s => { currentSettings = s; });
+        unsub();
+        if (!currentSettings?.autoSave) return;
+        delay = currentSettings.autoSaveDelay;
+    } catch {
+        return;
+    }
+
+    autoSaveTimers.set(
+        path,
+        setTimeout(() => {
+            autoSaveTimers.delete(path);
+            saveTab(path);
+        }, delay)
+    );
+}
+
+export function cancelAutoSave(path: string) {
+    const timer = autoSaveTimers.get(path);
+    if (timer) {
+        clearTimeout(timer);
+        autoSaveTimers.delete(path);
+    }
+}
+
+// --- Session persistence ---
+
+const SESSION_KEY = 'gpc-ide-session';
+
+interface SessionData {
+    tabPaths: string[];
+    activeTabPath: string | null;
+}
+
+function persistSession() {
+    try {
+        const data: SessionData = {
+            tabPaths: store.tabs.map(t => t.path),
+            activeTabPath: store.activeTabPath,
+        };
+        localStorage.setItem(SESSION_KEY, JSON.stringify(data));
+    } catch {
+        // Ignore write errors
+    }
+}
+
+export async function restoreSession(): Promise<boolean> {
+    try {
+        let enabled = true;
+        const settings = getSettings();
+        const unsub = settings.subscribe(s => { enabled = s.sessionRestore; });
+        unsub();
+        if (!enabled) return false;
+
+        const raw = localStorage.getItem(SESSION_KEY);
+        if (!raw) return false;
+
+        const data: SessionData = JSON.parse(raw);
+        if (!data.tabPaths?.length) return false;
+
+        for (const path of data.tabPaths) {
+            try {
+                await openTab(path);
+            } catch {
+                // Skip files that no longer exist
+            }
+        }
+
+        if (data.activeTabPath && store.tabs.some(t => t.path === data.activeTabPath)) {
+            store.activeTabPath = data.activeTabPath;
+        }
+
+        return store.tabs.length > 0;
+    } catch {
+        return false;
+    }
 }

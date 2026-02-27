@@ -11,6 +11,7 @@
 		getVisibleSubNodeCount,
 		getSortedSubNodes,
 	} from '$lib/flow/layout';
+	import { renderNodePreview, pixelsToDataUrl } from '$lib/flow/oled-preview';
 
 	interface Props {
 		node: FlowNode;
@@ -54,6 +55,13 @@
 	let hasMainCode = $derived((node.moduleData?.mainCode || node.moduleData?.triggerCode || '').trim().length > 0);
 	let hasFunctionsCode = $derived((node.moduleData?.functionsCode ?? '').trim().length > 0);
 	let hasModuleComboCode = $derived((node.moduleData?.comboCode ?? '').trim().length > 0);
+
+	// OLED preview thumbnail (only for nodes with sub-nodes)
+	let oledPreview = $derived(
+		hasSubNodes && typeof document !== 'undefined'
+			? pixelsToDataUrl(renderNodePreview(node))
+			: ''
+	);
 
 	// Sub-node type abbreviations for the row icon
 	const TYPE_ABBREVS: Record<string, string> = {
@@ -320,6 +328,20 @@
 				</g>
 			{/if}
 		</g>
+	{/if}
+
+	<!-- OLED Preview thumbnail (above footer) -->
+	{#if oledPreview && hasSubNodes}
+		{@const previewW = 64}
+		{@const previewH = 32}
+		<image
+			href={oledPreview}
+			x={NODE_WIDTH - previewW - 4}
+			y={height - FOOTER_HEIGHT - previewH - 2}
+			width={previewW}
+			height={previewH}
+			style="image-rendering: pixelated; opacity: 0.85; pointer-events: none;"
+		/>
 	{/if}
 
 	<!-- Footer separator -->
