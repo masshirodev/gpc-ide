@@ -14,6 +14,7 @@
 	import type { ConsoleType } from '$lib/utils/console-buttons';
 	import type { GitLineChange } from './MonacoEditor.svelte';
 	import type * as Monaco from 'monaco-editor';
+	import * as m from '$lib/paraglide/messages.js';
 
 	interface ThemeAccent {
 		bg: string;
@@ -155,7 +156,7 @@
 					<button
 						class="p-1.5 transition-colors {splitMode ? 'text-emerald-400' : 'text-zinc-500 hover:text-zinc-300'}"
 						onclick={toggleSplit}
-						title={splitMode ? 'Close split view' : 'Split editor'}
+						title={splitMode ? m.editor_split_close() : m.editor_split_open()}
 					>
 						<svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
 							<rect x="3" y="3" width="18" height="18" rx="2" />
@@ -167,7 +168,7 @@
 					<button
 						class="p-1.5 text-zinc-500 transition-colors hover:text-zinc-300"
 						onclick={onOpenExternal}
-						title="Open in external editor"
+						title={m.editor_open_external()}
 					>
 						<svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
 							<path
@@ -185,7 +186,7 @@
 						onclick={() => saveTab()}
 						disabled={editorStore.saving}
 					>
-						{editorStore.saving ? 'Saving...' : 'Save'}
+						{editorStore.saving ? m.common_saving() : m.common_save()}
 					</button>
 				{/if}
 			</div>
@@ -203,14 +204,14 @@
 							style={editorSubTab === 'visual' ? `color: ${themeAccent.text}; border-bottom: 2px solid ${themeAccent.text}` : ''}
 							onclick={() => (editorSubTab = 'visual')}
 						>
-							Visual
+							{m.editor_subtab_visual()}
 						</button>
 						<button
 							class="px-4 py-1.5 text-xs font-medium transition-colors {editorSubTab === 'code' ? '' : 'text-zinc-500 hover:text-zinc-300'}"
 							style={editorSubTab === 'code' ? `color: ${themeAccent.text}; border-bottom: 2px solid ${themeAccent.text}` : ''}
 							onclick={() => (editorSubTab = 'code')}
 						>
-							Code
+							{m.editor_subtab_code()}
 						</button>
 					{:else if isConfigFile}
 						<button
@@ -218,14 +219,14 @@
 							style={configSubTab === 'gui' ? `color: ${themeAccent.text}; border-bottom: 2px solid ${themeAccent.text}` : ''}
 							onclick={() => (configSubTab = 'gui')}
 						>
-							GUI
+							{m.editor_subtab_gui()}
 						</button>
 						<button
 							class="px-4 py-1.5 text-xs font-medium transition-colors {configSubTab === 'editor' ? '' : 'text-zinc-500 hover:text-zinc-300'}"
 							style={configSubTab === 'editor' ? `color: ${themeAccent.text}; border-bottom: 2px solid ${themeAccent.text}` : ''}
 							onclick={() => (configSubTab = 'editor')}
 						>
-							Editor
+							{m.editor_subtab_editor()}
 						</button>
 					{/if}
 				</div>
@@ -309,7 +310,7 @@
 			<div
 				class="flex h-full items-center justify-center bg-zinc-950 text-sm text-zinc-600"
 			>
-				Select a file to edit
+				{m.editor_select_file()}
 			</div>
 		{/if}
 	</div>

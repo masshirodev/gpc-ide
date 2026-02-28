@@ -4,6 +4,7 @@
 	import type { GameSummary } from '$lib/types/config';
 	import { getSettings, togglePinnedGame, isGamePinned, removeRecentFile, clearRecentFiles } from '$lib/stores/settings.svelte';
 	import { openTab } from '$lib/stores/editor.svelte';
+	import * as m from '$lib/paraglide/messages.js';
 
 	interface Props {
 		onSelectGame: (game: GameSummary) => void;
@@ -40,6 +41,36 @@
 		name: string;
 		tools: ToolItem[];
 	}
+
+	const categoryLabels: Record<string, () => string> = {
+		'OLED': () => m.layout_sidebar_category_oled(),
+		'Combat': () => m.layout_sidebar_category_combat(),
+		'Code': () => m.layout_sidebar_category_code(),
+		'Project': () => m.layout_sidebar_category_project(),
+		'Testing': () => m.layout_sidebar_category_testing(),
+		'Reference': () => m.layout_sidebar_category_reference()
+	};
+
+	const toolLabels: Record<string, () => string> = {
+		'/tools/oled': () => m.layout_sidebar_tool_oled_creator(),
+		'/tools/oled-widgets': () => m.layout_sidebar_tool_oled_widgets(),
+		'/tools/font-import': () => m.layout_sidebar_tool_font_import(),
+		'/tools/sprite-import': () => m.layout_sidebar_tool_sprite_import(),
+		'/tools/recoil': () => m.layout_sidebar_tool_spray_pattern(),
+		'/tools/combo': () => m.layout_sidebar_tool_combo_maker(),
+		'/tools/templates': () => m.layout_sidebar_tool_templates(),
+		'/tools/snippets': () => m.layout_sidebar_tool_snippets(),
+		'/tools/string-to-array': () => m.layout_sidebar_tool_string_to_array(),
+		'/tools/obfuscate': () => m.layout_sidebar_tool_obfuscator(),
+		'/tools/modules': () => m.layout_sidebar_tool_module_manager(),
+		'/tools/builds': () => m.layout_sidebar_tool_built_games(),
+		'/tools/depgraph': () => m.layout_sidebar_tool_dep_graph(),
+		'/tools/plugins': () => m.layout_sidebar_tool_plugins(),
+		'/tools/compare': () => m.layout_sidebar_tool_compare_games(),
+		'/tools/simulator': () => m.layout_sidebar_tool_simulator(),
+		'/tools/keyboard': () => m.layout_sidebar_tool_keyboard_mapper(),
+		'/tools/docs': () => m.layout_sidebar_tool_documentation()
+	};
 
 	const toolCategories: ToolCategory[] = [
 		{
@@ -212,7 +243,7 @@
 				class="rounded p-1 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300"
 				data-no-collapse
 				onclick={onCollapse}
-				title="Collapse sidebar"
+				title={m.layout_sidebar_collapse()}
 			>
 				<svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
 					<path
@@ -238,13 +269,13 @@
 					d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z"
 				/>
 			</svg>
-			Dashboard
+			{m.layout_sidebar_dashboard()}
 		</button>
 
 		<!-- Pinned Games -->
 		{#if pinnedGames.length > 0}
 			<div class="mt-4 mb-2 px-3 text-xs font-medium tracking-wider text-zinc-500 uppercase">
-				Pinned
+				{m.layout_sidebar_pinned()}
 			</div>
 			{#each pinnedGames as game}
 				<div
@@ -264,7 +295,7 @@
 								e.stopPropagation();
 								togglePinnedGame(game.path);
 							}}
-							title="Unpin game"
+							title={m.layout_sidebar_unpin()}
 						>
 							<svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
 								<path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
@@ -295,15 +326,15 @@
 							clip-rule="evenodd"
 						/>
 					</svg>
-					Recent
+					{m.layout_sidebar_recent()}
 				</button>
 				<button
 					class="text-xs text-zinc-600 hover:text-zinc-400"
 					data-no-collapse
 					onclick={() => clearRecentFiles()}
-					title="Clear recent files"
+					title={m.layout_sidebar_clear_recent()}
 				>
-					Clear
+					{m.common_clear()}
 				</button>
 			</div>
 			{#if showRecentFiles}
@@ -325,7 +356,7 @@
 								e.stopPropagation();
 								removeRecentFile(filePath);
 							}}
-							title="Remove from recent"
+							title={m.layout_sidebar_remove_recent()}
 						>
 							<svg class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
 								<path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
@@ -337,7 +368,7 @@
 		{/if}
 
 		<div class="mt-4 mb-2 px-3 text-xs font-medium tracking-wider text-zinc-500 uppercase">
-			Games
+			{m.layout_sidebar_games()}
 		</div>
 
 		{#if allTags.length > 0}
@@ -376,7 +407,7 @@
 									e.stopPropagation();
 									togglePinnedGame(game.path);
 								}}
-								title={isGamePinned(settings, game.path) ? 'Unpin game' : 'Pin game'}
+								title={isGamePinned(settings, game.path) ? m.layout_sidebar_unpin() : m.layout_sidebar_pin()}
 							>
 								<svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
 									<path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
@@ -390,7 +421,7 @@
 										e.stopPropagation();
 										onDeleteGame(game);
 									}}
-									title="Delete game"
+									title={m.layout_sidebar_delete_game()}
 								>
 									<svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
 										<path
@@ -409,7 +440,7 @@
 		{/each}
 
 		{#if store.loading}
-			<div class="px-3 py-2 text-sm text-zinc-500">Loading...</div>
+			<div class="px-3 py-2 text-sm text-zinc-500">{m.common_loading()}</div>
 		{/if}
 
 		{#if store.error}
@@ -417,7 +448,7 @@
 		{/if}
 
 		<div class="mt-4 mb-2 px-3 text-xs font-medium tracking-wider text-zinc-500 uppercase">
-			Tools
+			{m.layout_sidebar_tools()}
 		</div>
 		{#each toolCategories as category}
 			<div class="mb-1">
@@ -438,7 +469,7 @@
 							clip-rule="evenodd"
 						/>
 					</svg>
-					{category.name}
+					{categoryLabels[category.name]?.() ?? category.name}
 				</button>
 				{#if !collapsedCategories[category.name]}
 					{#each category.tools as tool}
@@ -465,7 +496,7 @@
 									<path d={tool.icon} />
 								</svg>
 							{/if}
-							{tool.label}
+							{toolLabels[tool.href]?.() ?? tool.label}
 						</a>
 					{/each}
 				{/if}
@@ -483,7 +514,7 @@
 					d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z"
 				/>
 			</svg>
-			New Game
+			{m.layout_sidebar_new_game()}
 		</a>
 		{#if onNewFromTemplate}
 			<button
@@ -493,7 +524,7 @@
 				<svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
 					<path d="M6 2a2 2 0 00-2 2v12a2 2 0 002 2h8a2 2 0 002-2V7.414A2 2 0 0015.414 6L12 2.586A2 2 0 0010.586 2H6zm5 6a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V8z" />
 				</svg>
-				From Template
+				{m.layout_sidebar_from_template()}
 			</button>
 		{/if}
 		{#if onOpenSettings}
@@ -508,7 +539,7 @@
 						clip-rule="evenodd"
 					/>
 				</svg>
-				Settings
+				{m.layout_sidebar_settings()}
 			</button>
 		{/if}
 	</div>

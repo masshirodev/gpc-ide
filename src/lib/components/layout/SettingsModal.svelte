@@ -3,6 +3,19 @@
     import { themes } from '$lib/config/themes';
     import { pickWorkspaceDirectory, getDefaultWorkspace } from '$lib/tauri/commands';
     import { actions as kbActions, getKeyCombo, setKeyCombo, resetKeyCombo, resetAllKeybindings, eventToCombo } from '$lib/stores/keybindings.svelte';
+    import * as m from '$lib/paraglide/messages.js';
+    import { setLocale, locales } from '$lib/paraglide/runtime.js';
+
+    const LANGUAGE_NAMES: Record<string, string> = {
+        'en': 'English',
+        'pt-br': 'Português (Brasil)'
+    };
+
+    function handleLanguageChange(newLocale: string) {
+        updateSettings({ language: newLocale });
+        localStorage.setItem('gpc-ide-locale', newLocale);
+        setLocale(newLocale as any);
+    }
 
     interface Props {
         open: boolean;
@@ -85,7 +98,7 @@
         <div class="w-full max-w-lg rounded-lg border border-zinc-700 bg-zinc-900 shadow-2xl">
             <!-- Header -->
             <div class="flex items-center justify-between border-b border-zinc-700 px-5 py-3">
-                <h2 class="text-base font-semibold text-zinc-100">Settings</h2>
+                <h2 class="text-base font-semibold text-zinc-100">{m.settings_title()}</h2>
                 <button
                     class="rounded p-1 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
                     onclick={onclose}
@@ -98,24 +111,49 @@
 
             <!-- Body -->
             <div class="space-y-5 px-5 py-4" style="max-height: 70vh; overflow-y: auto;">
+                <!-- Language Section -->
+                <div>
+                    <h3 class="mb-2 text-sm font-medium text-zinc-300">{m.settings_language()}</h3>
+                    <div class="space-y-3">
+                        <div>
+                            <label class="mb-1 block text-xs text-zinc-400" for="language">
+                                {m.settings_language_label()}
+                            </label>
+                            <select
+                                id="language"
+                                class="w-full rounded border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-sm text-zinc-200 focus:border-emerald-500 focus:outline-none"
+                                value={settings.language}
+                                onchange={(e) => handleLanguageChange((e.target as HTMLSelectElement).value)}
+                            >
+                                {#each locales as locale}
+                                    <option value={locale}>{LANGUAGE_NAMES[locale] ?? locale}</option>
+                                {/each}
+                            </select>
+                            <p class="mt-1 text-xs text-zinc-500">
+                                {m.settings_language_hint()}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Username Section -->
                 <div>
-                    <h3 class="mb-2 text-sm font-medium text-zinc-300">Profile</h3>
+                    <h3 class="mb-2 text-sm font-medium text-zinc-300">{m.settings_profile()}</h3>
                     <div class="space-y-3">
                         <div>
                             <label class="mb-1 block text-xs text-zinc-400" for="username">
-                                Username
+                                {m.settings_username_label()}
                             </label>
                             <input
                                 id="username"
                                 type="text"
                                 class="w-full rounded border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-sm text-zinc-200 placeholder-zinc-500 focus:border-emerald-500 focus:outline-none"
-                                placeholder="e.g. Mash"
+                                placeholder={m.settings_username_placeholder()}
                                 value={settings.username}
                                 oninput={(e) => updateSettings({ username: (e.target as HTMLInputElement).value })}
                             />
                             <p class="mt-1 text-xs text-zinc-500">
-                                Used in the default filename for new game scripts (e.g. Mash-GameName-v1).
+                                {m.settings_username_hint()}
                             </p>
                         </div>
                     </div>
@@ -123,22 +161,22 @@
 
                 <!-- LSP Section -->
                 <div>
-                    <h3 class="mb-2 text-sm font-medium text-zinc-300">Language Server</h3>
+                    <h3 class="mb-2 text-sm font-medium text-zinc-300">{m.settings_lsp()}</h3>
                     <div class="space-y-3">
                         <div>
                             <label class="mb-1 block text-xs text-zinc-400" for="lsp-command">
-                                Custom LSP Command
+                                {m.settings_lsp_command_label()}
                             </label>
                             <input
                                 id="lsp-command"
                                 type="text"
                                 class="w-full rounded border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-sm text-zinc-200 placeholder-zinc-500 focus:border-emerald-500 focus:outline-none"
-                                placeholder="e.g. node /path/to/server.js --stdio"
+                                placeholder={m.settings_lsp_command_placeholder()}
                                 value={settings.customLspCommand}
                                 oninput={(e) => updateSettings({ customLspCommand: (e.target as HTMLInputElement).value })}
                             />
                             <p class="mt-1 text-xs text-zinc-500">
-                                Leave empty to use the bundled GPC language server. Restart the app after changing.
+                                {m.settings_lsp_command_hint()}
                             </p>
                         </div>
                     </div>
@@ -146,20 +184,20 @@
 
                 <!-- Workspaces Section -->
                 <div>
-                    <h3 class="mb-2 text-sm font-medium text-zinc-300">Workspaces</h3>
+                    <h3 class="mb-2 text-sm font-medium text-zinc-300">{m.settings_workspaces()}</h3>
                     <div class="space-y-2">
                         <p class="text-xs text-zinc-500">
-                            Configure directories to scan for game scripts. The IDE will search for scripts in all configured workspace directories.
+                            {m.settings_workspaces_description()}
                         </p>
 
                         {#if settings.workspaces.length === 0}
                             <div class="rounded border border-zinc-700 bg-zinc-800/50 px-3 py-2 text-center">
-                                <p class="text-xs text-zinc-400">No workspaces configured</p>
+                                <p class="text-xs text-zinc-400">{m.settings_workspaces_empty()}</p>
                                 <button
                                     class="mt-2 text-xs text-emerald-500 hover:text-emerald-400"
                                     onclick={handleAddDefaultWorkspace}
                                 >
-                                    Add default Games directory
+                                    {m.settings_workspaces_add_default()}
                                 </button>
                             </div>
                         {:else}
@@ -175,7 +213,7 @@
                                         <button
                                             class="flex-shrink-0 text-zinc-500 hover:text-red-400"
                                             onclick={() => handleRemoveWorkspace(workspace)}
-                                            title="Remove workspace"
+                                            title={m.settings_workspaces_remove()}
                                         >
                                             <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                                                 <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
@@ -193,17 +231,17 @@
                             <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
                             </svg>
-                            Add Workspace Directory
+                            {m.settings_workspaces_add()}
                         </button>
                     </div>
                 </div>
 
                 <!-- Game Types Section -->
                 <div>
-                    <h3 class="mb-2 text-sm font-medium text-zinc-300">Custom Game Types</h3>
+                    <h3 class="mb-2 text-sm font-medium text-zinc-300">{m.settings_game_types()}</h3>
                     <div class="space-y-2">
                         <p class="text-xs text-zinc-500">
-                            Add custom game types beyond the built-in FPS, TPS, and FGS.
+                            {m.settings_game_types_description()}
                         </p>
 
                         {#if settings.customGameTypes.length > 0}
@@ -214,7 +252,7 @@
                                         <button
                                             class="ml-0.5 text-zinc-500 hover:text-red-400"
                                             onclick={() => removeGameType(type)}
-                                            title="Remove type"
+                                            title={m.settings_game_types_remove()}
                                         >
                                             <svg class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
                                                 <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
@@ -229,7 +267,7 @@
                             <input
                                 type="text"
                                 class="flex-1 rounded border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-sm text-zinc-200 placeholder-zinc-500 focus:border-emerald-500 focus:outline-none"
-                                placeholder="e.g. racing"
+                                placeholder={m.settings_game_types_placeholder()}
                                 bind:value={newGameType}
                                 onkeydown={(e) => { if (e.key === 'Enter') handleAddGameType(); }}
                             />
@@ -246,12 +284,12 @@
 
                 <!-- Editor Section -->
                 <div>
-                    <h3 class="mb-2 text-sm font-medium text-zinc-300">Editor</h3>
+                    <h3 class="mb-2 text-sm font-medium text-zinc-300">{m.settings_editor()}</h3>
                     <div class="space-y-3">
                         <div class="grid grid-cols-2 gap-3">
                             <div>
                                 <label class="mb-1 block text-xs text-zinc-400" for="font-size">
-                                    Font Size
+                                    {m.settings_editor_font_size()}
                                 </label>
                                 <input
                                     id="font-size"
@@ -265,7 +303,7 @@
                             </div>
                             <div>
                                 <label class="mb-1 block text-xs text-zinc-400" for="tab-size">
-                                    Tab Size
+                                    {m.settings_editor_tab_size()}
                                 </label>
                                 <input
                                     id="tab-size"
@@ -280,14 +318,14 @@
                         </div>
                         <div>
                             <label class="mb-1 block text-xs text-zinc-400" for="font-family">
-                                Font Family
+                                {m.settings_editor_font_family()}
                             </label>
                             <input
                                 id="font-family"
                                 type="text"
                                 list="font-suggestions"
                                 class="w-full rounded border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-sm text-zinc-200 placeholder-zinc-500 focus:border-emerald-500 focus:outline-none"
-                                placeholder="e.g. Iosevka NF Mono, monospace"
+                                placeholder={m.settings_editor_font_family_placeholder()}
                                 value={settings.editorFontFamily}
                                 oninput={(e) => updateSettings({ editorFontFamily: (e.target as HTMLInputElement).value })}
                             />
@@ -303,12 +341,12 @@
                                 <option value="monospace">System Monospace</option>
                             </datalist>
                             <p class="mt-1 text-xs text-zinc-500">
-                                Type any font name. Use fallback fonts separated by commas (e.g., "MyFont, monospace").
+                                {m.settings_editor_font_family_hint()}
                             </p>
                         </div>
                         <div>
                             <label class="mb-1 block text-xs text-zinc-400" for="theme">
-                                Theme
+                                {m.settings_editor_theme()}
                             </label>
                             <select
                                 id="theme"
@@ -337,7 +375,7 @@
                                     checked={settings.editorMinimap}
                                     onchange={() => updateSettings({ editorMinimap: !settings.editorMinimap })}
                                 />
-                                Minimap
+                                {m.settings_editor_minimap()}
                             </label>
                             <label class="flex items-center gap-2 text-xs text-zinc-300 cursor-pointer">
                                 <input
@@ -346,7 +384,7 @@
                                     checked={settings.editorStickyScroll}
                                     onchange={() => updateSettings({ editorStickyScroll: !settings.editorStickyScroll })}
                                 />
-                                Sticky Scroll
+                                {m.settings_editor_sticky_scroll()}
                             </label>
                         </div>
                     </div>
@@ -354,7 +392,7 @@
 
                 <!-- Workflow Section -->
                 <div>
-                    <h3 class="mb-2 text-sm font-medium text-zinc-300">Workflow</h3>
+                    <h3 class="mb-2 text-sm font-medium text-zinc-300">{m.settings_workflow()}</h3>
                     <div class="space-y-3">
                         <div class="flex items-center justify-between">
                             <label class="flex items-center gap-2 text-xs text-zinc-300 cursor-pointer">
@@ -364,11 +402,11 @@
                                     checked={settings.autoSave}
                                     onchange={() => updateSettings({ autoSave: !settings.autoSave })}
                                 />
-                                Auto-save
+                                {m.settings_workflow_autosave()}
                             </label>
                             {#if settings.autoSave}
                                 <div class="flex items-center gap-2">
-                                    <label class="text-xs text-zinc-500" for="auto-save-delay">Delay</label>
+                                    <label class="text-xs text-zinc-500" for="auto-save-delay">{m.settings_workflow_autosave_delay()}</label>
                                     <input
                                         id="auto-save-delay"
                                         type="number"
@@ -390,7 +428,7 @@
                                 checked={settings.sessionRestore}
                                 onchange={() => updateSettings({ sessionRestore: !settings.sessionRestore })}
                             />
-                            Restore open tabs on startup
+                            {m.settings_workflow_session_restore()}
                         </label>
                     </div>
                 </div>
@@ -398,12 +436,12 @@
                 <!-- Keybindings Section -->
                 <div>
                     <div class="mb-2 flex items-center justify-between">
-                        <h3 class="text-sm font-medium text-zinc-300">Keyboard Shortcuts</h3>
+                        <h3 class="text-sm font-medium text-zinc-300">{m.settings_keybindings()}</h3>
                         <button
                             class="text-xs text-zinc-500 hover:text-zinc-300"
                             onclick={resetAllKeybindings}
                         >
-                            Reset all
+                            {m.settings_keybindings_reset_all()}
                         </button>
                     </div>
                     <div class="space-y-1">
@@ -416,13 +454,13 @@
                                 <div class="flex items-center gap-2">
                                     {#if recordingActionId === action.id}
                                         <span class="animate-pulse rounded border border-emerald-500 bg-zinc-800 px-2 py-0.5 text-xs text-emerald-400">
-                                            Press keys...
+                                            {m.settings_keybindings_press_keys()}
                                         </span>
                                     {:else}
                                         <button
                                             class="rounded border border-zinc-600 bg-zinc-800 px-2 py-0.5 text-xs font-mono text-zinc-300 hover:border-zinc-500"
                                             onclick={() => { recordingActionId = action.id; }}
-                                            title="Click to rebind"
+                                            title={m.settings_keybindings_click_to_rebind()}
                                         >
                                             {getKeyCombo(action.id)}
                                         </button>
@@ -431,7 +469,7 @@
                                         <button
                                             class="text-xs text-zinc-500 hover:text-zinc-300"
                                             onclick={() => resetKeyCombo(action.id)}
-                                            title="Reset to default"
+                                            title={m.settings_keybindings_reset_to_default()}
                                         >
                                             <svg class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
                                                 <path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd" />
@@ -451,7 +489,7 @@
                     class="text-xs text-zinc-500 hover:text-zinc-300"
                     onclick={handleReset}
                 >
-                    Reset to defaults
+                    {m.settings_reset_defaults()}
                 </button>
                 <button
                     class="rounded bg-emerald-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-emerald-500"

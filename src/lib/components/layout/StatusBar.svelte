@@ -5,6 +5,7 @@
 	import { setBottomPanelActiveTab, setBottomPanelOpen } from '$lib/stores/ui.svelte';
 	import { getVersion } from '@tauri-apps/api/app';
 	import { getUnreadCount } from '$lib/stores/toast.svelte';
+	import * as m from '$lib/paraglide/messages.js';
 
 	interface Props {
 		isScriptView?: boolean;
@@ -36,7 +37,7 @@
 				<span class="rounded bg-zinc-800 px-1.5 py-0.5 text-xs uppercase">{store.selectedGame.game_type}</span>
 			{/if}
 		{:else}
-			<span>No game selected</span>
+			<span>{m.layout_statusbar_no_game()}</span>
 		{/if}
 
 		{#if isScriptView}
@@ -57,21 +58,21 @@
 		{#if lspStore.status === 'running'}
 			<span class="flex items-center gap-1">
 				<span class="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
-				<span class="text-zinc-400">GPC LSP</span>
+				<span class="text-zinc-400">{m.layout_statusbar_lsp_running()}</span>
 			</span>
 		{:else if lspStore.status === 'starting'}
 			<span class="flex items-center gap-1">
 				<span class="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-400"></span>
-				<span class="text-zinc-500">LSP Starting...</span>
+				<span class="text-zinc-500">{m.layout_statusbar_lsp_starting()}</span>
 			</span>
 		{:else if lspStore.status === 'error'}
 			<span class="flex items-center gap-1" title={lspStore.error ?? 'Unknown error'}>
 				<span class="h-1.5 w-1.5 rounded-full bg-red-400"></span>
-				<span class="text-red-400">LSP Error</span>
+				<span class="text-red-400">{m.layout_statusbar_lsp_error()}</span>
 			</span>
 		{/if}
 		{#if onToggleNotifications}
-			<button class="relative flex items-center p-0.5 hover:text-zinc-300" onclick={onToggleNotifications} title="Notifications">
+			<button class="relative flex items-center p-0.5 hover:text-zinc-300" onclick={onToggleNotifications} title={m.layout_statusbar_notifications()}>
 				<svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
 					<path d="M10 2a6 6 0 00-6 6v3.586l-.707.707A1 1 0 004 14h12a1 1 0 00.707-1.707L16 11.586V8a6 6 0 00-6-6zM10 18a3 3 0 01-3-3h6a3 3 0 01-3 3z" />
 				</svg>

@@ -2,6 +2,7 @@
 	import { saveProjectTemplate } from '$lib/tauri/commands';
 	import { addToast } from '$lib/stores/toast.svelte';
 	import { getSettings } from '$lib/stores/settings.svelte';
+	import * as m from '$lib/paraglide/messages.js';
 
 	interface Props {
 		open: boolean;
@@ -35,11 +36,11 @@
 		saving = true;
 		try {
 			const result = await saveProjectTemplate(gamePath, selectedWorkspace, name.trim(), description.trim());
-			addToast(`Template "${result.meta.name}" saved (${result.file_count} files)`, 'success');
+			addToast(m.toast_template_saved({ name: result.meta.name, count: result.file_count }), 'success');
 			onsuccess?.();
 			onclose();
 		} catch (e) {
-			addToast(`Failed to save template: ${e}`, 'error');
+			addToast(m.toast_failed_save_template({ error: String(e) }), 'error');
 		} finally {
 			saving = false;
 		}
@@ -62,32 +63,32 @@
 		onkeydown={handleKeydown}
 	>
 		<div class="w-full max-w-md rounded-lg border border-zinc-700 bg-zinc-900 p-5 shadow-2xl">
-			<h2 class="mb-4 text-base font-semibold text-zinc-100">Save as Project Template</h2>
+			<h2 class="mb-4 text-base font-semibold text-zinc-100">{m.modal_save_template_title()}</h2>
 
 			<div class="space-y-3">
 				<div>
-					<label class="mb-1 block text-xs text-zinc-400">Template Name</label>
+					<label class="mb-1 block text-xs text-zinc-400">{m.modal_save_template_name_label()}</label>
 					<input
 						type="text"
 						class="w-full rounded border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-sm text-zinc-200 focus:border-emerald-500 focus:outline-none"
 						bind:value={name}
-						placeholder="My Template"
+						placeholder={m.modal_save_template_name_placeholder()}
 					/>
 				</div>
 
 				<div>
-					<label class="mb-1 block text-xs text-zinc-400">Description (optional)</label>
+					<label class="mb-1 block text-xs text-zinc-400">{m.modal_save_template_description_label()}</label>
 					<textarea
 						class="w-full resize-none rounded border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-sm text-zinc-200 placeholder:text-zinc-600 focus:border-emerald-500 focus:outline-none"
 						rows="2"
 						bind:value={description}
-						placeholder="What this template is for..."
+						placeholder={m.modal_save_template_description_placeholder()}
 					></textarea>
 				</div>
 
 				{#if settings.workspaces.length > 1}
 					<div>
-						<label class="mb-1 block text-xs text-zinc-400">Save to Workspace</label>
+						<label class="mb-1 block text-xs text-zinc-400">{m.modal_save_template_workspace_label()}</label>
 						<select
 							class="w-full rounded border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-sm text-zinc-200 focus:border-emerald-500 focus:outline-none"
 							bind:value={selectedWorkspace}
@@ -105,14 +106,14 @@
 					class="rounded border border-zinc-700 px-4 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800"
 					onclick={onclose}
 				>
-					Cancel
+					{m.common_cancel()}
 				</button>
 				<button
 					class="rounded bg-emerald-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-40"
 					disabled={!name.trim() || saving}
 					onclick={handleSave}
 				>
-					{saving ? 'Saving...' : 'Save Template'}
+					{saving ? m.common_saving() : m.modal_save_template_save()}
 				</button>
 			</div>
 		</div>

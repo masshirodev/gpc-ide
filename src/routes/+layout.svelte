@@ -21,6 +21,7 @@
     import { onMount } from 'svelte';
     import type { GameSummary } from '$lib/types/config';
     import type { UnlistenFn } from '@tauri-apps/api/event';
+    import * as m from '$lib/paraglide/messages.js';
 
     let { children } = $props();
     let ui = getUiStore();
@@ -93,8 +94,8 @@
 
     async function handleDeleteGame(game: GameSummary) {
         const confirmed = await ask(
-            `Delete game "${game.name}"? This will permanently delete all files in the game directory.`,
-            { title: 'Delete Game', kind: 'warning' }
+            m.confirm_delete_game_message({ name: game.name }),
+            { title: m.confirm_delete_game_title(), kind: 'warning' }
         );
         if (!confirmed) return;
         try {
@@ -103,9 +104,9 @@
                 clearSelection();
             }
             await loadGames(settings.workspaces);
-            addToast(`Game "${game.name}" deleted`, 'success');
+            addToast(m.toast_game_deleted({ name: game.name }), 'success');
         } catch (e) {
-            addToast(`Failed to delete game: ${e}`, 'error');
+            addToast(m.toast_failed_delete_game({ error: String(e) }), 'error');
         }
     }
 </script>
@@ -120,7 +121,7 @@
                 <button
                     class="flex h-10 items-center justify-center text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
                     onclick={toggleSidebar}
-                    title="Expand sidebar"
+                    title={m.layout_sidebar_expand()}
                 >
                     <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                         <path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clip-rule="evenodd" />
@@ -130,7 +131,7 @@
                 <button
                     class="flex h-10 items-center justify-center border-t border-zinc-700 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
                     onclick={() => settingsOpen = true}
-                    title="Settings"
+                    title={m.settings_title()}
                 >
                     <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                         <path fill-rule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd" />
@@ -142,7 +143,7 @@
             <button
                 class="absolute inset-0 z-40 bg-black/30"
                 onclick={toggleSidebar}
-                aria-label="Close sidebar"
+                aria-label={m.layout_close_sidebar()}
             ></button>
             <div class="absolute left-0 top-0 z-50 h-full">
                 <Sidebar onSelectGame={handleSelectGame} onDeleteGame={handleDeleteGame} onCollapse={toggleSidebar} onOpenSettings={() => settingsOpen = true} onNewFromTemplate={() => (showNewFromTemplate = true)} />
@@ -165,9 +166,9 @@
                 <svg class="mx-auto mb-3 h-12 w-12 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
                 </svg>
-                <h2 class="text-lg font-semibold text-zinc-100">Set Up Workspace</h2>
+                <h2 class="text-lg font-semibold text-zinc-100">{m.layout_setup_title()}</h2>
                 <p class="mt-2 text-sm text-zinc-400">
-                    A workspace directory is needed to store your game scripts. Choose a custom location or use the default.
+                    {m.layout_setup_description()}
                 </p>
             </div>
             <div class="space-y-3">
@@ -178,7 +179,7 @@
                     <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
                     </svg>
-                    Use Default Directory
+                    {m.layout_setup_use_default()}
                 </button>
                 <button
                     class="flex w-full items-center justify-center gap-2 rounded-md border border-zinc-600 bg-zinc-800 px-4 py-2.5 text-sm font-medium text-zinc-200 hover:border-zinc-500 hover:bg-zinc-700"
@@ -187,7 +188,7 @@
                     <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
                     </svg>
-                    Choose Custom Directory
+                    {m.layout_setup_choose_custom()}
                 </button>
             </div>
         </div>

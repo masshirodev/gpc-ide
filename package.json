@@ -45,6 +45,7 @@
 		"vitest-browser-svelte": "^2.0.2"
 	},
 	"dependencies": {
+		"@inlang/paraglide-js": "^2.13.0",
 		"@tauri-apps/api": "^2.10.1",
 		"@tauri-apps/cli": "^2.10.0",
 		"@tauri-apps/plugin-dialog": "^2.6.0",

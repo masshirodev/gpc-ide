@@ -11,6 +11,7 @@ export interface Snippet {
 }
 
 interface AppSettings {
+    language: string;
     username: string;
     customLspCommand: string;
     editorFontSize: number;
@@ -34,6 +35,7 @@ const BUILTIN_GAME_TYPES = ['fps', 'tps', 'fgs'];
 const MAX_RECENT_FILES = 20;
 
 const DEFAULTS: AppSettings = {
+    language: 'en',
     username: '',
     customLspCommand: '',
     editorFontSize: 13,

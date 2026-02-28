@@ -5,6 +5,7 @@
 	import { loadGames } from '$lib/stores/game.svelte';
 	import { getSettings, getAllGameTypes } from '$lib/stores/settings.svelte';
 	import { CONSOLE_TYPES, CONSOLE_LABELS, type ConsoleType } from '$lib/utils/console-buttons';
+	import * as m from '$lib/paraglide/messages.js';
 
 	let settingsStore = getSettings();
 	let settings = $derived($settingsStore);
@@ -12,7 +13,11 @@
 
 	// Wizard state
 	let step = $state(0);
-	const steps = ['Game Info', 'Review'];
+	const stepKeys = ['wizard_step_game_info', 'wizard_step_review'] as const;
+	const stepLabels: Record<string, () => string> = {
+		wizard_step_game_info: () => m.wizard_step_game_info(),
+		wizard_step_review: () => m.wizard_step_review()
+	};
 
 	// Step 1: Game Info
 	let gameName = $state('');
@@ -78,7 +83,7 @@
 	<!-- Header -->
 	<div class="mb-8">
 		<div class="flex items-center gap-4">
-			<a href="/" class="text-zinc-400 hover:text-zinc-200" title="Back to dashboard">
+			<a href="/" class="text-zinc-400 hover:text-zinc-200" title={m.wizard_back_to_dashboard()}>
 				<svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
 					<path
 						fill-rule="evenodd"
@@ -87,13 +92,13 @@
 					/>
 				</svg>
 			</a>
-			<h1 class="text-2xl font-bold text-zinc-100">New Game</h1>
+			<h1 class="text-2xl font-bold text-zinc-100">{m.wizard_title()}</h1>
 		</div>
 	</div>
 
 	<!-- Step Indicator -->
 	<div class="mb-8 flex items-center gap-2">
-		{#each steps as label, i}
+		{#each stepKeys as key, i}
 			<div class="flex items-center gap-2">
 				<div
 					class="flex h-8 w-8 items-center justify-center rounded-full text-sm font-medium {i < step
@@ -117,10 +122,10 @@
 				<span
 					class="text-sm {i <= step ? 'text-zinc-200' : 'text-zinc-500'}"
 				>
-					{label}
+					{stepLabels[key]?.() ?? key}
 				</span>
 			</div>
-			{#if i < steps.length - 1}
+			{#if i < stepKeys.length - 1}
 				<div class="h-px flex-1 {i < step ? 'bg-emerald-600' : 'bg-zinc-700'}"></div>
 			{/if}
 		{/each}
@@ -130,45 +135,45 @@
 	<div class="rounded-lg border border-zinc-800 bg-zinc-900 p-6">
 		{#if step === 0}
 			<!-- Step 1: Game Info -->
-			<h2 class="mb-6 text-lg font-semibold text-zinc-100">Game Information</h2>
+			<h2 class="mb-6 text-lg font-semibold text-zinc-100">{m.wizard_game_information()}</h2>
 
 			<div class="space-y-5">
 				<div>
 					<label for="game-name" class="mb-1.5 block text-sm font-medium text-zinc-300">
-						Game Name
+						{m.wizard_game_name_label()}
 					</label>
 					<input
 						id="game-name"
 						type="text"
 						bind:value={gameName}
-						placeholder="e.g., Delta or Shooter/Delta"
+						placeholder={m.wizard_game_name_placeholder()}
 						class="w-full rounded-md border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
 					/>
 					<p class="mt-1 text-xs text-zinc-500">
-						Used for folder name. Use a path like "Shooter/Delta" for nested organization.
+						{m.wizard_game_name_hint()}
 					</p>
 				</div>
 
 				<div>
 					<label for="display-name" class="mb-1.5 block text-sm font-medium text-zinc-300">
-						Display Name <span class="text-zinc-500">(optional)</span>
+						{m.wizard_display_name_label()} <span class="text-zinc-500">{m.wizard_display_name_optional()}</span>
 					</label>
 					<input
 						id="display-name"
 						type="text"
 						bind:value={displayName}
-						placeholder="e.g., My Cool Game"
+						placeholder={m.wizard_display_name_placeholder()}
 						class="w-full rounded-md border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
 					/>
 					<p class="mt-1 text-xs text-zinc-500">
-						Shown in the sidebar and title. Supports spaces. Defaults to the game name if empty.
+						{m.wizard_display_name_hint()}
 					</p>
 				</div>
 
 				<div class="grid grid-cols-2 gap-4">
 					<div>
 						<label for="game-type" class="mb-1.5 block text-sm font-medium text-zinc-300">
-							Game Type
+							{m.wizard_game_type_label()}
 						</label>
 						<select
 							id="game-type"
@@ -182,7 +187,7 @@
 					</div>
 					<div>
 						<label for="console-type" class="mb-1.5 block text-sm font-medium text-zinc-300">
-							Console Type
+							{m.wizard_console_type_label()}
 						</label>
 						<select
 							id="console-type"
@@ -198,7 +203,7 @@
 
 				<div class="w-1/2">
 					<label for="version" class="mb-1.5 block text-sm font-medium text-zinc-300">
-						Version
+						{m.wizard_version_label()}
 					</label>
 					<input
 						id="version"
@@ -212,7 +217,7 @@
 
 		{:else if step === 1}
 			<!-- Step 2: Review -->
-			<h2 class="mb-6 text-lg font-semibold text-zinc-100">Review & Create</h2>
+			<h2 class="mb-6 text-lg font-semibold text-zinc-100">{m.wizard_review_title()}</h2>
 
 			{#if createError}
 				<div class="mb-4 rounded border border-red-800 bg-red-900/20 px-3 py-2 text-sm text-red-400">
@@ -223,36 +228,36 @@
 			<div class="space-y-4">
 				<div class="rounded border border-zinc-800 bg-zinc-800/50 p-4">
 					<h3 class="mb-3 text-xs font-semibold uppercase tracking-wider text-zinc-400">
-						Game Info
+						{m.wizard_review_game_info()}
 					</h3>
 					<div class="grid grid-cols-2 gap-y-2 text-sm">
-						<span class="text-zinc-400">Name</span>
+						<span class="text-zinc-400">{m.wizard_review_name()}</span>
 						<span class="text-zinc-200">{gameName}</span>
 						{#if displayName.trim()}
-							<span class="text-zinc-400">Display Name</span>
+							<span class="text-zinc-400">{m.wizard_review_display_name()}</span>
 							<span class="text-zinc-200">{displayName}</span>
 						{/if}
-						<span class="text-zinc-400">Type</span>
+						<span class="text-zinc-400">{m.wizard_review_type()}</span>
 						<span class="uppercase text-zinc-200">{gameType}</span>
-						<span class="text-zinc-400">Console</span>
+						<span class="text-zinc-400">{m.wizard_review_console()}</span>
 						<span class="text-zinc-200">{CONSOLE_LABELS[consoleType]}</span>
-						<span class="text-zinc-400">Version</span>
+						<span class="text-zinc-400">{m.wizard_review_version()}</span>
 						<span class="text-zinc-200">{version}</span>
 					</div>
 				</div>
 
 				<div class="rounded border border-zinc-800 bg-zinc-800/50 p-4">
 					<h3 class="mb-3 text-xs font-semibold uppercase tracking-wider text-zinc-400">
-						Generation Mode
+						{m.wizard_review_generation()}
 					</h3>
 					<div class="flex items-center gap-2">
-						<span class="rounded bg-blue-900/50 px-1.5 py-0.5 text-xs font-medium text-blue-400">Flow Editor</span>
-						<span class="text-sm text-zinc-500">Use the flow editor to create game logic</span>
+						<span class="rounded bg-blue-900/50 px-1.5 py-0.5 text-xs font-medium text-blue-400">{m.editor_overview_flow_editor()}</span>
+						<span class="text-sm text-zinc-500">{m.wizard_review_flow_hint()}</span>
 					</div>
 				</div>
 
 				<div class="rounded border border-zinc-700 bg-zinc-800 p-3 text-xs text-zinc-500">
-					Output: {settings.workspaces.length > 0 ? settings.workspaces[0] : 'Games'}/{gameName}/game.json
+					{m.wizard_output({ path: `${settings.workspaces.length > 0 ? settings.workspaces[0] : 'Games'}/${gameName}/game.json` })}
 				</div>
 			</div>
 		{/if}
@@ -266,18 +271,18 @@
 					onclick={prevStep}
 					class="rounded-md border border-zinc-700 bg-zinc-800 px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-700"
 				>
-					Back
+					{m.common_back()}
 				</button>
 			{/if}
 		</div>
 		<div>
-			{#if step < steps.length - 1}
+			{#if step < stepKeys.length - 1}
 				<button
 					onclick={nextStep}
 					disabled={step === 0 && !step1Valid}
 					class="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
 				>
-					Continue
+					{m.wizard_continue()}
 				</button>
 			{:else}
 				<button
@@ -286,9 +291,9 @@
 					class="rounded-md bg-emerald-600 px-6 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
 				>
 					{#if creating}
-						Creating...
+						{m.common_creating()}
 					{:else}
-						Create Game
+						{m.wizard_create_game()}
 					{/if}
 				</button>
 			{/if}

@@ -3,6 +3,7 @@
     import type { TemplateFile } from '$lib/tauri/commands';
     import { addToast } from '$lib/stores/toast.svelte';
     import MonacoEditor from '$lib/components/editor/MonacoEditor.svelte';
+    import * as m from '$lib/paraglide/messages.js';
 
     interface Props {
         open: boolean;
@@ -50,7 +51,7 @@
         try {
             templateContent = await readTemplate(template.path);
         } catch (e) {
-            addToast(`Failed to read template: ${e}`, 'error');
+            addToast(m.toast_failed_read_template({ error: String(e) }), 'error');
             templateContent = null;
         } finally {
             contentLoading = false;
@@ -68,12 +69,12 @@
         importing = true;
         try {
             const importedPath = await importTemplate(gamePath, selectedTemplate.path);
-            addToast(`Template imported: ${selectedTemplate.name}`, 'success');
+            addToast(m.toast_template_imported({ name: selectedTemplate.name }), 'success');
             onimport();
             onclose();
         } catch (e) {
             const message = e instanceof Error ? e.message : String(e);
-            addToast(`Failed to import template: ${message}`, 'error');
+            addToast(m.toast_failed_import_template({ error: message }), 'error');
         } finally {
             importing = false;
         }
@@ -127,7 +128,7 @@
                         <button
                             class="rounded p-1 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
                             onclick={backToList}
-                            title="Back to list"
+                            title={m.modal_template_import_back_to_list()}
                         >
                             <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
@@ -135,7 +136,7 @@
                         </button>
                     {/if}
                     <h2 class="text-base font-semibold text-zinc-100">
-                        {selectedTemplate ? selectedTemplate.name : 'Import Template'}
+                        {selectedTemplate ? selectedTemplate.name : m.modal_template_import_title()}
                     </h2>
                 </div>
                 <button
@@ -152,7 +153,7 @@
             <div class="flex-1 overflow-auto px-5 py-4">
                 {#if loading}
                     <div class="flex h-full items-center justify-center">
-                        <div class="text-sm text-zinc-400">Loading templates...</div>
+                        <div class="text-sm text-zinc-400">{m.modal_template_import_loading()}</div>
                     </div>
                 {:else if error}
                     <div class="rounded border border-red-800 bg-red-900/20 px-4 py-3 text-sm text-red-400">
@@ -172,10 +173,10 @@
                         </div>
 
                         <div>
-                            <div class="mb-2 text-xs font-medium text-zinc-400">Preview</div>
+                            <div class="mb-2 text-xs font-medium text-zinc-400">{m.modal_template_import_preview()}</div>
                             {#if contentLoading}
                                 <div class="flex items-center justify-center rounded border border-zinc-700 bg-zinc-800/30 py-8">
-                                    <div class="text-xs text-zinc-500">Loading content...</div>
+                                    <div class="text-xs text-zinc-500">{m.modal_template_import_loading_content()}</div>
                                 </div>
                             {:else if templateContent}
                                 <div class="h-[320px] overflow-hidden rounded border border-zinc-700">
@@ -195,7 +196,7 @@
                     <!-- Template List -->
                     <div class="space-y-4">
                         <p class="text-sm text-zinc-400">
-                            Select a template file to import into your game. Common files provide helper functions, while Drawing files contain OLED display utilities.
+                            {m.modal_template_import_description()}
                         </p>
 
                         {#each Object.entries(templatesByCategory) as [category, categoryTemplates]}
@@ -222,7 +223,7 @@
 
                         {#if templates.length === 0}
                             <div class="rounded border border-zinc-700 bg-zinc-800/30 px-4 py-8 text-center">
-                                <p class="text-sm text-zinc-500">No templates found</p>
+                                <p class="text-sm text-zinc-500">{m.modal_template_import_no_templates()}</p>
                             </div>
                         {/if}
                     </div>
@@ -236,21 +237,21 @@
                         class="text-sm text-zinc-500 hover:text-zinc-300"
                         onclick={backToList}
                     >
-                        Back
+                        {m.common_back()}
                     </button>
                     <div class="flex gap-2">
                         <button
                             class="rounded border border-zinc-700 px-4 py-1.5 text-sm font-medium text-zinc-300 hover:bg-zinc-800"
                             onclick={onclose}
                         >
-                            Cancel
+                            {m.common_cancel()}
                         </button>
                         <button
                             class="rounded bg-emerald-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
                             onclick={handleImport}
                             disabled={importing || !gamePath}
                         >
-                            {importing ? 'Importing...' : 'Import Template'}
+                            {importing ? m.common_importing() : m.modal_template_import_button()}
                         </button>
                     </div>
                 </div>
@@ -260,7 +261,7 @@
                         class="rounded bg-zinc-700 px-4 py-1.5 text-sm font-medium text-zinc-200 hover:bg-zinc-600"
                         onclick={onclose}
                     >
-                        Close
+                        {m.common_close()}
                     </button>
                 </div>
             {/if}

@@ -67,6 +67,7 @@
 		clearKeyboardTransfer
 	} from '$lib/stores/keyboard-transfer.svelte';
 	import { getComboTransfer, clearComboTransfer } from '$lib/stores/combo-transfer.svelte';
+	import * as m from '$lib/paraglide/messages.js';
 	import {
 		type KeyMapping,
 		parseKeyboardMappings,
@@ -149,21 +150,21 @@
 	// Command palette state
 	let showCommandPalette = $state(false);
 	let paletteCommands = $derived<Command[]>([
-		{ id: 'save', label: 'Save File', category: 'File', shortcut: getKeyCombo('save'), action: () => saveTab() },
-		{ id: 'build', label: 'Build Game', category: 'Build', shortcut: getKeyCombo('build'), action: () => { activeTab = 'build'; handleBuild(); } },
-		{ id: 'toggleBottom', label: 'Toggle Bottom Panel', category: 'View', shortcut: getKeyCombo('toggleBottomPanel'), action: () => toggleBottomPanel() },
-		{ id: 'search', label: 'Global Search', category: 'Search', shortcut: getKeyCombo('globalSearch'), action: () => { setBottomPanelActiveTab('search'); setBottomPanelOpen(true); } },
-		{ id: 'newFile', label: 'New File', category: 'File', action: () => { showNewFileModal = true; } },
-		{ id: 'closeTab', label: 'Close Active Tab', category: 'File', action: () => { if (editorStore.activeTabPath) closeTab(editorStore.activeTabPath); } },
-		{ id: 'closeAllTabs', label: 'Close All Tabs', category: 'File', action: () => closeAllTabs() },
-		{ id: 'tabOverview', label: 'Go to Overview', category: 'Navigate', action: () => { activeTab = 'overview'; } },
-		{ id: 'tabFiles', label: 'Go to Files', category: 'Navigate', action: () => { activeTab = 'files'; } },
-		{ id: 'tabBuild', label: 'Go to Build', category: 'Navigate', action: () => { activeTab = 'build'; } },
-		{ id: 'tabHistory', label: 'Go to History', category: 'Navigate', action: () => { activeTab = 'history'; } },
-		{ id: 'restartLsp', label: 'Restart Language Server', category: 'LSP', action: () => restartLsp() },
-		{ id: 'stopLsp', label: 'Stop Language Server', category: 'LSP', action: () => stopLsp() },
-		{ id: 'exportZip', label: 'Export Game as Zip', category: 'File', action: handleExportZip },
-		{ id: 'importZip', label: 'Import Game from Zip', category: 'File', action: handleImportZip }
+		{ id: 'save', label: m.cmd_save_file(), category: m.cmd_category_file(), shortcut: getKeyCombo('save'), action: () => saveTab() },
+		{ id: 'build', label: m.cmd_build_game(), category: m.cmd_category_build(), shortcut: getKeyCombo('build'), action: () => { activeTab = 'build'; handleBuild(); } },
+		{ id: 'toggleBottom', label: m.cmd_toggle_bottom(), category: m.cmd_category_view(), shortcut: getKeyCombo('toggleBottomPanel'), action: () => toggleBottomPanel() },
+		{ id: 'search', label: m.cmd_global_search(), category: m.cmd_category_search(), shortcut: getKeyCombo('globalSearch'), action: () => { setBottomPanelActiveTab('search'); setBottomPanelOpen(true); } },
+		{ id: 'newFile', label: m.cmd_new_file(), category: m.cmd_category_file(), action: () => { showNewFileModal = true; } },
+		{ id: 'closeTab', label: m.cmd_close_tab(), category: m.cmd_category_file(), action: () => { if (editorStore.activeTabPath) closeTab(editorStore.activeTabPath); } },
+		{ id: 'closeAllTabs', label: m.cmd_close_all(), category: m.cmd_category_file(), action: () => closeAllTabs() },
+		{ id: 'tabOverview', label: m.cmd_go_overview(), category: m.cmd_category_navigate(), action: () => { activeTab = 'overview'; } },
+		{ id: 'tabFiles', label: m.cmd_go_files(), category: m.cmd_category_navigate(), action: () => { activeTab = 'files'; } },
+		{ id: 'tabBuild', label: m.cmd_go_build(), category: m.cmd_category_navigate(), action: () => { activeTab = 'build'; } },
+		{ id: 'tabHistory', label: m.cmd_go_history(), category: m.cmd_category_navigate(), action: () => { activeTab = 'history'; } },
+		{ id: 'restartLsp', label: m.cmd_restart_lsp(), category: m.cmd_category_lsp(), action: () => restartLsp() },
+		{ id: 'stopLsp', label: m.cmd_stop_lsp(), category: m.cmd_category_lsp(), action: () => stopLsp() },
+		{ id: 'exportZip', label: m.cmd_export_zip(), category: m.cmd_category_file(), action: handleExportZip },
+		{ id: 'importZip', label: m.cmd_import_zip(), category: m.cmd_category_file(), action: handleImportZip }
 	]);
 
 	// Modal state
@@ -263,7 +264,7 @@
 		if (!store.selectedGame) return;
 		try {
 			const meta = await createSnapshot(store.selectedGame.path, 'Manual snapshot');
-			addToast('Snapshot created', 'success');
+			addToast(m.toast_snapshot_created(), 'success');
 			await loadSnapshots();
 		} catch (e) {
 			addToast(`Failed to create snapshot: ${e}`, 'error');
@@ -273,8 +274,8 @@
 	async function handleRollback(snapshotId: string) {
 		if (!store.selectedGame) return;
 		const confirmed = await showConfirm({
-			title: 'Rollback Config',
-			message: 'Restore this snapshot? Your current config will be auto-saved first.',
+			title: m.confirm_rollback_title(),
+			message: m.confirm_rollback_message(),
 			confirmLabel: 'Rollback',
 			variant: 'warning'
 		});
@@ -283,7 +284,7 @@
 			await rollbackSnapshot(store.selectedGame.path, snapshotId);
 			await selectGame(store.selectedGame);
 			await loadSnapshots();
-			addToast('Config restored from snapshot', 'success');
+			addToast(m.toast_config_restored(), 'success');
 		} catch (e) {
 			addToast(`Rollback failed: ${e}`, 'error');
 		}
@@ -292,8 +293,8 @@
 	async function handleDeleteSnapshot(snapshotId: string) {
 		if (!store.selectedGame) return;
 		const confirmed = await showConfirm({
-			title: 'Delete Snapshot',
-			message: 'Delete this snapshot? This cannot be undone.',
+			title: m.confirm_delete_snapshot_title(),
+			message: m.confirm_delete_snapshot_message(),
 			confirmLabel: 'Delete',
 			variant: 'danger'
 		});
@@ -302,7 +303,7 @@
 			await deleteSnapshot(store.selectedGame.path, snapshotId);
 			if (snapshotPreview?.id === snapshotId) snapshotPreview = null;
 			await loadSnapshots();
-			addToast('Snapshot deleted', 'success');
+			addToast(m.toast_snapshot_deleted(), 'success');
 		} catch (e) {
 			addToast(`Failed to delete snapshot: ${e}`, 'error');
 		}
@@ -365,7 +366,7 @@
 						try {
 							const imported = await importFiles(store.selectedGame.path, paths);
 							if (imported.length > 0) {
-								addToast(`Imported ${imported.length} file(s)`, 'success');
+								addToast(m.toast_imported_files({ count: imported.length }), 'success');
 								await refreshFileTree(store.selectedGame.path);
 								// Open the first imported file
 								openTab(imported[0]);
@@ -406,8 +407,8 @@
 							if (tab.dirty) {
 								// Tab has local changes — ask user
 								showConfirm({
-									title: 'File Changed',
-									message: `"${tab.name}" was modified externally. Reload and discard local changes?`,
+									title: m.confirm_file_changed_title(),
+									message: m.confirm_file_changed_message({ name: tab.name }),
 									confirmLabel: 'Reload',
 									variant: 'warning'
 								}).then((confirmed) => {
@@ -804,7 +805,7 @@
 		if (!buildOutputContent) return;
 		try {
 			await navigator.clipboard.writeText(buildOutputContent);
-			addToast('Build output copied to clipboard', 'success');
+			addToast(m.toast_build_output_copied(), 'success');
 		} catch {
 			addToast('Failed to copy to clipboard', 'error');
 		}
@@ -898,7 +899,7 @@
 					class:hover:text-zinc-200={activeTab !== tab}
 					onclick={() => (activeTab = tab as typeof activeTab)}
 				>
-					{{ overview: 'Overview', files: 'Files', flow: 'Flow', build: 'Build', history: 'History', git: 'Git' }[tab]}
+					{{ overview: m.page_tab_overview(), files: m.page_tab_files(), flow: m.page_tab_flow(), build: m.page_tab_build(), history: m.page_tab_history(), git: m.page_tab_git() }[tab]}
 					{#if tab === 'build' && buildResult}
 						<span
 							class="ml-1 inline-block h-2 w-2 rounded-full"

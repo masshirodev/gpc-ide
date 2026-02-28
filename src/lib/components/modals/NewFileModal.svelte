@@ -1,6 +1,7 @@
 <script lang="ts">
     import { createStandaloneFile } from '$lib/tauri/commands';
     import { addToast } from '$lib/stores/toast.svelte';
+    import * as m from '$lib/paraglide/messages.js';
 
     interface Props {
         open: boolean;
@@ -45,7 +46,7 @@
             error = '';
 
             const filePath = await createStandaloneFile(gamePath, filename.trim());
-            addToast(`Created ${filename.trim()}`, 'success');
+            addToast(m.toast_file_created({ name: filename.trim() }), 'success');
             filename = '';
             onsuccess(filePath);
             onclose();
@@ -68,7 +69,7 @@
         <div class="w-full max-w-md rounded-lg border border-zinc-700 bg-zinc-900 shadow-2xl">
             <!-- Header -->
             <div class="flex items-center justify-between border-b border-zinc-700 px-5 py-3">
-                <h2 class="text-base font-semibold text-zinc-100">New File</h2>
+                <h2 class="text-base font-semibold text-zinc-100">{m.modal_new_file_title()}</h2>
                 <button
                     class="rounded p-1 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
                     onclick={handleClose}
@@ -84,19 +85,19 @@
             <div class="space-y-4 px-5 py-4">
                 <div>
                     <label class="mb-1 block text-sm text-zinc-300" for="filename">
-                        Filename
+                        {m.modal_new_file_filename_label()}
                     </label>
                     <input
                         id="filename"
                         type="text"
                         class="w-full rounded border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-200 placeholder-zinc-500 focus:border-emerald-500 focus:outline-none"
-                        placeholder="e.g., custom.gpc"
+                        placeholder={m.modal_new_file_filename_placeholder()}
                         bind:value={filename}
                         disabled={creating}
                         autofocus
                     />
                     <p class="mt-1 text-xs text-zinc-500">
-                        .gpc extension will be added automatically if not provided
+                        {m.modal_new_file_hint()}
                     </p>
                 </div>
 
@@ -114,14 +115,14 @@
                     onclick={handleClose}
                     disabled={creating}
                 >
-                    Cancel
+                    {m.common_cancel()}
                 </button>
                 <button
                     class="rounded bg-emerald-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
                     onclick={handleCreate}
                     disabled={!filename.trim() || creating}
                 >
-                    {creating ? 'Creating...' : 'Create'}
+                    {creating ? m.common_creating() : m.common_create()}
                 </button>
             </div>
         </div>

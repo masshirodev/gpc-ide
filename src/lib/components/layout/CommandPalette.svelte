@@ -10,6 +10,7 @@
 
 <script lang="ts">
 	import { tick } from 'svelte';
+	import * as m from '$lib/paraglide/messages.js';
 
 	interface Props {
 		open: boolean;
@@ -98,7 +99,7 @@
 				<input
 					bind:this={inputEl}
 					class="flex-1 bg-transparent py-3 text-sm text-zinc-200 placeholder-zinc-500 focus:outline-none"
-					placeholder="Type a command..."
+					placeholder={m.layout_cmdpalette_placeholder()}
 					bind:value={query}
 				/>
 			</div>
@@ -124,7 +125,7 @@
 					</div>
 				{/each}
 				{#if filtered().length === 0}
-					<div class="px-3 py-4 text-center text-sm text-zinc-500">No matching commands</div>
+					<div class="px-3 py-4 text-center text-sm text-zinc-500">{m.layout_cmdpalette_no_matches()}</div>
 				{/if}
 			</div>
 		</div>

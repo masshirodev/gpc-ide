@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { GameSummary } from '$lib/types/config';
+	import * as m from '$lib/paraglide/messages.js';
 
 	interface WorkspaceGroup {
 		workspace: string;
@@ -55,7 +56,7 @@
 	<!-- Hero -->
 	<div class="mb-8 text-center">
 		<h1 class="text-3xl font-bold text-zinc-100">GPC IDE</h1>
-		<p class="mt-1 text-sm text-zinc-500">Desktop IDE for Cronus Zen game scripts</p>
+		<p class="mt-1 text-sm text-zinc-500">{m.dashboard_subtitle()}</p>
 
 		<!-- Quick actions -->
 		<div class="mt-5 flex justify-center gap-3">
@@ -71,7 +72,7 @@
 						d="M12 4v16m8-8H4"
 					/>
 				</svg>
-				New Game
+				{m.dashboard_new_game()}
 			</a>
 			<a
 				href="/tools/flow"
@@ -85,13 +86,13 @@
 						d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z"
 					/>
 				</svg>
-				Flow Editor
+				{m.dashboard_flow_editor()}
 			</a>
 		</div>
 	</div>
 
 	{#if loading}
-		<div class="text-center text-zinc-500">Loading games...</div>
+		<div class="text-center text-zinc-500">{m.dashboard_loading()}</div>
 	{:else if error}
 		<div class="rounded-lg border border-red-800 bg-red-900/20 p-4 text-red-400">
 			{error}
@@ -112,8 +113,8 @@
 					d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
 				/>
 			</svg>
-			<h3 class="mt-3 text-sm font-medium text-zinc-300">No games yet</h3>
-			<p class="mt-1 text-xs text-zinc-500">Create your first game to get started.</p>
+			<h3 class="mt-3 text-sm font-medium text-zinc-300">{m.dashboard_no_games_title()}</h3>
+			<p class="mt-1 text-xs text-zinc-500">{m.dashboard_no_games_description()}</p>
 			<a
 				href="/wizard"
 				class="mt-4 inline-flex items-center gap-1 rounded bg-emerald-600 px-3 py-1.5 text-sm text-white hover:bg-emerald-500"
@@ -126,7 +127,7 @@
 						d="M12 4v16m8-8H4"
 					/>
 				</svg>
-				Create Game
+				{m.dashboard_create_game()}
 			</a>
 		</div>
 	{:else}
@@ -136,7 +137,7 @@
 				<h2
 					class="mb-2 text-xs font-semibold tracking-wider text-zinc-500 uppercase"
 				>
-					Recently edited
+					{m.dashboard_recently_edited()}
 				</h2>
 				<div class="grid gap-1.5">
 					{#each recent as game}
@@ -188,7 +189,7 @@
 			<input
 				type="text"
 				class="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-200 placeholder-zinc-600 focus:border-emerald-500 focus:outline-none"
-				placeholder="Search games..."
+				placeholder={m.dashboard_search_placeholder()}
 				bind:value={searchQuery}
 			/>
 		</div>
@@ -257,7 +258,7 @@
 								<button
 									class="ml-1.5 shrink-0 rounded p-1.5 text-zinc-600 opacity-0 group-hover:opacity-100 hover:bg-zinc-700 hover:text-red-400"
 									onclick={(e) => onDeleteGame(e, game)}
-									title="Delete game"
+									title={m.dashboard_delete_game()}
 								>
 									<svg
 										class="h-3.5 w-3.5"
@@ -281,7 +282,7 @@
 
 			{#if filteredGroups.length === 0 && searchQuery.trim()}
 				<div class="py-8 text-center text-sm text-zinc-500">
-					No games matching "{searchQuery}"
+					{m.dashboard_no_matches({ query: searchQuery })}
 				</div>
 			{/if}
 		</div>

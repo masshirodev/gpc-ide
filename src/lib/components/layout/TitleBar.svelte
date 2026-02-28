@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { getCurrentWindow } from '@tauri-apps/api/window';
 	import { onMount } from 'svelte';
+	import * as m from '$lib/paraglide/messages.js';
 
 	let { gameName = '' }: { gameName?: string } = $props();
 
@@ -49,7 +50,7 @@
 		<button
 			class="flex h-full w-12 items-center justify-center text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
 			onclick={() => appWindow.minimize()}
-			title="Minimize"
+			title={m.layout_titlebar_minimize()}
 		>
 			<svg class="h-3 w-3" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5">
 				<line x1="2" y1="6" x2="10" y2="6" />
@@ -60,7 +61,7 @@
 		<button
 			class="flex h-full w-12 items-center justify-center text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
 			onclick={() => appWindow.toggleMaximize()}
-			title={maximized ? 'Restore' : 'Maximize'}
+			title={maximized ? m.layout_titlebar_restore() : m.layout_titlebar_maximize()}
 		>
 			{#if maximized}
 				<!-- Restore icon (overlapping rectangles) -->
@@ -80,7 +81,7 @@
 		<button
 			class="flex h-full w-12 items-center justify-center text-zinc-400 hover:bg-red-600 hover:text-white"
 			onclick={() => appWindow.close()}
-			title="Close"
+			title={m.layout_titlebar_close()}
 		>
 			<svg class="h-3 w-3" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5">
 				<line x1="2" y1="2" x2="10" y2="10" />

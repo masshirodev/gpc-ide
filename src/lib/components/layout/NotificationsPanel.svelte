@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { getNotifications, getUnreadCount, markAllRead, clearNotifications, type Notification } from '$lib/stores/toast.svelte';
+	import * as m from '$lib/paraglide/messages.js';
 
 	interface Props {
 		open: boolean;
@@ -22,10 +23,10 @@
 		const now = new Date();
 		const diffMs = now.getTime() - d.getTime();
 		const diffMin = Math.floor(diffMs / 60000);
-		if (diffMin < 1) return 'just now';
-		if (diffMin < 60) return `${diffMin}m ago`;
+		if (diffMin < 1) return m.layout_notifications_just_now();
+		if (diffMin < 60) return m.layout_notifications_minutes_ago({ count: diffMin });
 		const diffHr = Math.floor(diffMin / 60);
-		if (diffHr < 24) return `${diffHr}h ago`;
+		if (diffHr < 24) return m.layout_notifications_hours_ago({ count: diffHr });
 		return d.toLocaleDateString();
 	}
 
@@ -46,14 +47,14 @@
 	<div class="fixed inset-0 z-40" onclick={handleBackdropClick}>
 		<div class="absolute right-4 bottom-10 w-80 rounded-lg border border-zinc-700 bg-zinc-900 shadow-2xl">
 			<div class="flex items-center justify-between border-b border-zinc-800 px-3 py-2">
-				<span class="text-xs font-semibold text-zinc-300">Notifications</span>
+				<span class="text-xs font-semibold text-zinc-300">{m.layout_notifications_title()}</span>
 				<div class="flex items-center gap-2">
 					{#if notifications.length > 0}
 						<button
 							class="text-[10px] text-zinc-500 hover:text-zinc-300"
 							onclick={clearNotifications}
 						>
-							Clear all
+							{m.layout_notifications_clear_all()}
 						</button>
 					{/if}
 					<button
@@ -69,7 +70,7 @@
 			<div class="max-h-72 overflow-y-auto">
 				{#if notifications.length === 0}
 					<div class="px-3 py-6 text-center text-xs text-zinc-500">
-						No notifications yet
+						{m.layout_notifications_empty()}
 					</div>
 				{:else}
 					{#each notifications as notif}

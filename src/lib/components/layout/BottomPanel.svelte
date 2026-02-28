@@ -19,6 +19,7 @@
 	import SearchPanel from './SearchPanel.svelte';
 	import ReferencesPanel from './ReferencesPanel.svelte';
 	import CommandRunnerPanel from './CommandRunnerPanel.svelte';
+	import * as m from '$lib/paraglide/messages.js';
 
 	let ui = getUiStore();
 	let diagStore = getDiagnosticsStore();
@@ -51,25 +52,22 @@
 		window.addEventListener('pointerup', onUp);
 	}
 
-	const tabs: { id: BottomPanelTab; label: string }[] = [
-		{ id: 'problems', label: 'Problems' },
-		{ id: 'search', label: 'Search' },
-		{ id: 'references', label: 'References' },
-		{ id: 'logs', label: 'Logs' },
-		{ id: 'terminal', label: 'Terminal' }
-	];
+	const tabIds: BottomPanelTab[] = ['problems', 'search', 'references', 'logs', 'terminal'];
 
-	function tabLabel(tab: { id: BottomPanelTab; label: string }): string {
-		if (tab.id === 'problems' && counts.total > 0) {
-			return `${tab.label} (${counts.total})`;
-		}
-		if (tab.id === 'search' && searchStore.totalMatches > 0) {
-			return `${tab.label} (${searchStore.totalMatches})`;
-		}
-		if (tab.id === 'references' && refsCount > 0) {
-			return `${tab.label} (${refsCount})`;
-		}
-		return tab.label;
+	const tabLabelMap: Record<BottomPanelTab, () => string> = {
+		problems: () => m.layout_bottompanel_problems(),
+		search: () => m.layout_bottompanel_search(),
+		references: () => m.layout_bottompanel_references(),
+		logs: () => m.layout_bottompanel_logs(),
+		terminal: () => m.layout_bottompanel_terminal()
+	};
+
+	function tabLabel(id: BottomPanelTab): string {
+		const label = tabLabelMap[id]();
+		if (id === 'problems' && counts.total > 0) return `${label} (${counts.total})`;
+		if (id === 'search' && searchStore.totalMatches > 0) return `${label} (${searchStore.totalMatches})`;
+		if (id === 'references' && refsCount > 0) return `${label} (${refsCount})`;
+		return label;
 	}
 
 	export function focusSearch() {
@@ -93,15 +91,15 @@
 
 		<!-- Tab bar -->
 		<div class="flex items-center border-b border-zinc-700 bg-zinc-900">
-			{#each tabs as tab}
+			{#each tabIds as tabId}
 				<button
 					class="border-b-2 px-3 py-1 text-xs font-medium transition-colors {ui.bottomPanel
-						.activeTab === tab.id
+						.activeTab === tabId
 						? 'border-emerald-400 text-zinc-200'
 						: 'border-transparent text-zinc-500 hover:text-zinc-400'}"
-					onclick={() => setBottomPanelActiveTab(tab.id)}
+					onclick={() => setBottomPanelActiveTab(tabId)}
 				>
-					{tabLabel(tab)}
+					{tabLabel(tabId)}
 				</button>
 			{/each}
 			<div class="flex-1"></div>
@@ -111,33 +109,33 @@
 				<button
 					class="px-2 py-1 text-xs text-zinc-500 hover:text-zinc-300"
 					onclick={clearSearch}
-					title="Clear search"
+					title={m.layout_bottompanel_clear_search()}
 				>
-					Clear
+					{m.common_clear()}
 				</button>
 			{:else if ui.bottomPanel.activeTab === 'references'}
 				<button
 					class="px-2 py-1 text-xs text-zinc-500 hover:text-zinc-300"
 					onclick={clearReferences}
-					title="Clear references"
+					title={m.layout_bottompanel_clear_references()}
 				>
-					Clear
+					{m.common_clear()}
 				</button>
 			{:else if ui.bottomPanel.activeTab === 'logs'}
 				<button
 					class="px-2 py-1 text-xs text-zinc-500 hover:text-zinc-300"
 					onclick={clearLogs}
-					title="Clear logs"
+					title={m.layout_bottompanel_clear_logs()}
 				>
-					Clear
+					{m.common_clear()}
 				</button>
 			{:else if ui.bottomPanel.activeTab === 'terminal'}
 				<button
 					class="px-2 py-1 text-xs text-zinc-500 hover:text-zinc-300"
 					onclick={() => runnerPanel?.clearOutput()}
-					title="Clear terminal"
+					title={m.layout_bottompanel_clear_terminal()}
 				>
-					Clear
+					{m.common_clear()}
 				</button>
 			{/if}
 
@@ -145,7 +143,7 @@
 			<button
 				class="px-2 py-1 text-zinc-500 hover:text-zinc-300"
 				onclick={() => setBottomPanelOpen(false)}
-				title="Close panel (Ctrl+J)"
+				title={m.layout_bottompanel_close()}
 			>
 				<svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
 					<path

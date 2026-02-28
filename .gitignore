@@ -29,6 +29,9 @@ Thumbs.db
 # Lock files (keep package-lock.json, ignore yarn.lock)
 yarn.lock
 
+# Paraglide (generated)
+src/lib/paraglide/
+
 # Claude
 .claude/
 CLAUDE.md
