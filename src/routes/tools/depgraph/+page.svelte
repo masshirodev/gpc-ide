@@ -3,6 +3,7 @@
 	import { getSettings } from '$lib/stores/settings.svelte';
 	import type { ModuleSummary } from '$lib/types/module';
 	import { onMount } from 'svelte';
+	import ToolHeader from '$lib/components/layout/ToolHeader.svelte';
 
 	let settingsStore = getSettings();
 	let settings = $derived($settingsStore);
@@ -108,23 +109,14 @@
 
 	let typeOptions = $derived.by(() => {
 		const types = new Set(modules.map((m) => m.module_type));
+		types.delete('all');
 		return ['all', ...Array.from(types).sort()];
 	});
 </script>
 
 <div class="flex h-full flex-col bg-zinc-950 text-zinc-100">
-	<!-- Header -->
-	<div class="flex items-center justify-between border-b border-zinc-800 px-6 py-4">
-		<div class="flex items-center gap-4">
-			<a href="/" class="flex items-center gap-1.5 text-sm text-zinc-400 hover:text-zinc-200">
-				<svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-					<path fill-rule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clip-rule="evenodd" />
-				</svg>
-				Back
-			</a>
-			<h1 class="text-2xl font-bold">Module Dependency Graph</h1>
-		</div>
-		<div class="flex items-center gap-3">
+	<ToolHeader title="Module Dependency Graph">
+		<div class="ml-auto flex items-center gap-2">
 			<label class="text-xs text-zinc-400" for="filter-type">Filter:</label>
 			<select
 				id="filter-type"
@@ -136,7 +128,7 @@
 				{/each}
 			</select>
 		</div>
-	</div>
+	</ToolHeader>
 
 	{#if loading}
 		<div class="flex flex-1 items-center justify-center text-sm text-zinc-500">

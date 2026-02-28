@@ -85,6 +85,18 @@ export interface SubNodeCodegenContext {
 		left: string;
 		right: string;
 	};
+	/** Name of the const string array for this node (e.g. "FlowText_Home") */
+	stringArrayName: string;
+	/** Shared mutable array — sub-nodes push their text strings here */
+	strings: string[];
+}
+
+/** Register a string in the codegen context, returning its index. Deduplicates. */
+export function addString(ctx: SubNodeCodegenContext, text: string): number {
+	const existing = ctx.strings.indexOf(text);
+	if (existing >= 0) return existing;
+	ctx.strings.push(text);
+	return ctx.strings.length - 1;
 }
 
 export interface SubNodeDef {

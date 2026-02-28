@@ -142,7 +142,7 @@ export function generateCustomTextGpc(
 		if (glyph) {
 			for (const seg of glyph.segments) {
 				lines.push(
-					`    line_oled(${curX + seg.x1}, ${originY + seg.y1}, ${curX + seg.x2}, ${originY + seg.y2}, OLED_WHITE);`
+					`    line_oled(${curX + seg.x1}, ${originY + seg.y1}, ${curX + seg.x2}, ${originY + seg.y2}, 1, OLED_WHITE);`
 				);
 			}
 			curX += glyph.width + font.spacing;
@@ -152,6 +152,55 @@ export function generateCustomTextGpc(
 	}
 
 	return lines.join('\n');
+}
+
+/**
+ * Convert a BDF bitmap font to CustomFont format.
+ * Each horizontal run of pixels becomes a line segment.
+ */
+export function bitmapToCustomFont(
+	name: string,
+	width: number,
+	height: number,
+	spacing: number,
+	data: Map<number, number[]>
+): CustomFont {
+	const glyphs = new Map<string, CustomGlyph>();
+
+	for (const [code, rows] of data) {
+		if (code < 32 || code > 126) continue;
+		const ch = String.fromCharCode(code);
+		const segments: LineSegment[] = [];
+
+		for (let y = 0; y < rows.length; y++) {
+			let runStart = -1;
+			for (let x = 0; x < width; x++) {
+				const bit = rows[y] & (1 << (width - 1 - x));
+				if (bit) {
+					if (runStart < 0) runStart = x;
+				} else if (runStart >= 0) {
+					segments.push({ x1: runStart, y1: y, x2: x - 1, y2: y });
+					runStart = -1;
+				}
+			}
+			if (runStart >= 0) {
+				segments.push({ x1: runStart, y1: y, x2: width - 1, y2: y });
+			}
+		}
+
+		if (segments.length > 0) {
+			glyphs.set(ch, { char: ch, segments, width });
+		}
+	}
+
+	return {
+		id: crypto.randomUUID(),
+		name,
+		height,
+		gridWidth: width,
+		spacing,
+		glyphs,
+	};
 }
 
 export interface SerializedCustomFont {

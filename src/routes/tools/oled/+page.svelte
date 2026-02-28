@@ -9,6 +9,7 @@
 	import FontEditor from './FontEditor.svelte';
 	import SequencerPanel from './SequencerPanel.svelte';
 	import CodeRunnerModal from './CodeRunnerModal.svelte';
+	import SpriteStampPanel from './SpriteStampPanel.svelte';
 	import { addToast } from '$lib/stores/toast.svelte';
 	import { getFlowOledTransfer, setFlowOledTransfer, clearFlowOledTransfer } from '$lib/stores/flow-transfer.svelte';
 	import { goto } from '$app/navigation';
@@ -47,6 +48,8 @@
 	let showFontEditor = $state(false);
 	let showSequencer = $state(false);
 	let showCodeRunner = $state(false);
+	let showStamps = $state(false);
+	let stampData = $state<{ pixels: Uint8Array; width: number; height: number; scale: number } | null>(null);
 	let pixelVersion = $state(0);
 
 	// Per-scene history
@@ -345,7 +348,7 @@
 				class="rounded px-3 py-1 text-xs {showExport
 					? 'bg-emerald-600/20 text-emerald-400'
 					: 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'}"
-				onclick={() => { showExport = !showExport; if (showExport) showSequencer = false; }}
+				onclick={() => { showExport = !showExport; if (showExport) { showSequencer = false; showStamps = false; stampData = null; } }}
 			>
 				Export
 			</button>
@@ -366,7 +369,7 @@
 				class="rounded px-3 py-1 text-xs {showSequencer
 					? 'bg-emerald-600/20 text-emerald-400'
 					: 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'}"
-				onclick={() => { showSequencer = !showSequencer; if (showSequencer) showExport = false; }}
+				onclick={() => { showSequencer = !showSequencer; if (showSequencer) { showExport = false; showStamps = false; stampData = null; } }}
 			>
 				Sequencer
 			</button>
@@ -375,6 +378,18 @@
 				onclick={() => (showCodeRunner = true)}
 			>
 				Code
+			</button>
+			<button
+				class="rounded px-3 py-1 text-xs {showStamps
+					? 'bg-emerald-600/20 text-emerald-400'
+					: 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'}"
+				onclick={() => {
+					showStamps = !showStamps;
+					if (showStamps) { showExport = false; showSequencer = false; }
+					if (!showStamps) { stampData = null; }
+				}}
+			>
+				Stamps
 			</button>
 		</div>
 
@@ -397,7 +412,7 @@
 	<!-- Body -->
 	<div class="flex flex-1 overflow-hidden">
 		<!-- Left sidebar -->
-		<div class="flex w-72 shrink-0 flex-col gap-4 overflow-y-auto border-r border-zinc-800 p-3">
+		<div class="scrollbar-none flex w-72 shrink-0 flex-col gap-4 overflow-y-auto border-r border-zinc-800 p-3">
 			<ToolPanel
 				{tool}
 				{brush}
@@ -437,7 +452,7 @@
 		</div>
 
 		<!-- Main canvas area -->
-		<div class="flex flex-1 overflow-hidden">
+		<div class="relative flex flex-1 overflow-hidden">
 			<div class="flex-1">
 				<OledCanvas
 					pixels={activeScene.pixels}
@@ -446,15 +461,16 @@
 					filled={shapeFilled}
 					version={pixelVersion}
 					{textState}
+					{stampData}
 					onBeforeDraw={handleBeforeDraw}
 					onDraw={handleDraw}
 					onTextOriginSet={handleTextOriginSet}
 				/>
 			</div>
 
-			<!-- Right sidebar panels -->
+			<!-- Right sidebar panels (overlay so they don't push canvas off-screen) -->
 			{#if showExport}
-				<div class="w-80 shrink-0 overflow-y-auto border-l border-zinc-800 p-3">
+				<div class="scrollbar-none absolute top-0 right-0 z-10 h-full w-80 overflow-y-auto border-l border-zinc-800 bg-zinc-950 p-3">
 					<ExportPanel
 						{scenes}
 						{activeSceneId}
@@ -462,11 +478,27 @@
 					/>
 				</div>
 			{:else if showSequencer}
-				<div class="w-80 shrink-0 border-l border-zinc-800">
+				<div class="absolute top-0 right-0 z-10 h-full w-80 border-l border-zinc-800 bg-zinc-950">
 					<SequencerPanel
 						{scenes}
 						animation={animationConfig}
 						onClose={() => (showSequencer = false)}
+					/>
+				</div>
+			{:else if showStamps}
+				<div class="absolute top-0 right-0 z-10 h-full w-72 border-l border-zinc-800 bg-zinc-950">
+					<SpriteStampPanel
+						onStamp={(spritePixels, width, height, scale) => {
+							// Stamp is handled via stampData + canvas click
+						}}
+						onSelectFrame={(spritePixels, width, height, scale) => {
+							if (spritePixels) {
+								stampData = { pixels: spritePixels, width, height, scale };
+							} else {
+								stampData = null;
+							}
+						}}
+						onClose={() => { showStamps = false; stampData = null; }}
 					/>
 				</div>
 			{/if}

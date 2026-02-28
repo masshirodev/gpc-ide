@@ -1,16 +1,21 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
+	import ToolHeader from '$lib/components/layout/ToolHeader.svelte';
 	import {
 		readFileTree,
 		readFile,
+		writeFile,
 		getAppRoot,
 		listGames,
-		buildGame
+		buildGame,
+		loadFlowProject,
+		startFileServer
 	} from '$lib/tauri/commands';
+	import { generateMergedFlowGpc } from '$lib/flow/codegen-merged';
 	import { addToast } from '$lib/stores/toast.svelte';
 	import { getSettings } from '$lib/stores/settings.svelte';
 	import MonacoEditor from '$lib/components/editor/MonacoEditor.svelte';
+	import * as m from '$lib/paraglide/messages.js';
 	import type { FileTreeEntry, BuildResult } from '$lib/tauri/commands';
 	import type { GameSummary } from '$lib/types/config';
 
@@ -33,6 +38,10 @@
 	let loadingContent = $state(false);
 	let copied = $state(false);
 	let searchQuery = $state('');
+	let sendingToZenStudio = $state(false);
+
+	// TODO: Replace with actual Zen Studio URL when known
+	const ZEN_STUDIO_URL = 'http://localhost:3000';
 
 	// Build queue state
 	interface QueueItem {
@@ -87,8 +96,19 @@
 			buildQueue[i].status = 'building';
 			buildQueue = [...buildQueue]; // trigger reactivity
 			try {
-				const ws = getWorkspaceForGame(buildQueue[i].game.path);
-				const result = await buildGame(buildQueue[i].game.path, ws);
+				const gamePath = buildQueue[i].game.path;
+				const ws = getWorkspaceForGame(gamePath);
+
+				// For flow-based games, generate main.gpc before building
+				if (buildQueue[i].game.generation_mode === 'flow') {
+					const flowProject = await loadFlowProject(gamePath);
+					if (flowProject) {
+						const gpcCode = generateMergedFlowGpc(flowProject);
+						await writeFile(gamePath + '/main.gpc', gpcCode);
+					}
+				}
+
+				const result = await buildGame(gamePath, ws);
 				buildQueue[i].status = result.success ? 'success' : 'error';
 				buildQueue[i].result = result;
 			} catch (e) {
@@ -215,35 +235,41 @@
 			addToast(`Failed to delete: ${e}`, 'error');
 		}
 	}
+
+	async function handleSendToZenStudio() {
+		if (!selectedFile) return;
+		sendingToZenStudio = true;
+		try {
+			const serverUrl = await startFileServer(selectedFile.path);
+			const studioUrl = `${ZEN_STUDIO_URL}?url=${encodeURIComponent(serverUrl)}`;
+			const { openUrl } = await import('@tauri-apps/plugin-opener');
+			await openUrl(studioUrl);
+			addToast(m.editor_build_zen_studio_success(), 'success');
+		} catch (e) {
+			addToast(m.editor_build_zen_studio_error({ error: String(e) }), 'error');
+		} finally {
+			sendingToZenStudio = false;
+		}
+	}
 </script>
 
 <div class="flex h-full flex-col bg-zinc-950 text-zinc-200">
-	<!-- Top Bar -->
-	<div class="flex items-center justify-between border-b border-zinc-800 px-4 py-2.5">
-		<div class="flex items-center gap-3">
-			<a href="/" class="flex items-center gap-1.5 text-sm text-zinc-400 hover:text-zinc-200">
-				<svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-					<path fill-rule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clip-rule="evenodd" />
-				</svg>
-				Back
-			</a>
-			<h1 class="text-sm font-semibold text-zinc-100">Built Games</h1>
-			<div class="ml-4 flex rounded border border-zinc-800">
-				<button
-					class="px-3 py-1 text-xs font-medium transition-colors {viewTab === 'files' ? 'bg-zinc-800 text-zinc-200' : 'text-zinc-500 hover:text-zinc-300'}"
-					onclick={() => (viewTab = 'files')}
-				>
-					Files
-				</button>
-				<button
-					class="px-3 py-1 text-xs font-medium transition-colors {viewTab === 'queue' ? 'bg-zinc-800 text-zinc-200' : 'text-zinc-500 hover:text-zinc-300'}"
-					onclick={() => (viewTab = 'queue')}
-				>
-					Build Queue
-				</button>
-			</div>
+	<ToolHeader title="Built Games">
+		<div class="ml-4 flex rounded border border-zinc-800">
+			<button
+				class="px-3 py-1 text-xs font-medium transition-colors {viewTab === 'files' ? 'bg-zinc-800 text-zinc-200' : 'text-zinc-500 hover:text-zinc-300'}"
+				onclick={() => (viewTab = 'files')}
+			>
+				Files
+			</button>
+			<button
+				class="px-3 py-1 text-xs font-medium transition-colors {viewTab === 'queue' ? 'bg-zinc-800 text-zinc-200' : 'text-zinc-500 hover:text-zinc-300'}"
+				onclick={() => (viewTab = 'queue')}
+			>
+				Build Queue
+			</button>
 		</div>
-		<div class="flex items-center gap-2">
+		<div class="ml-auto flex items-center gap-2">
 			{#if viewTab === 'files'}
 				<button
 					class="flex items-center gap-1.5 rounded border border-zinc-700 px-2.5 py-1 text-xs text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
@@ -267,7 +293,7 @@
 				</button>
 			{/if}
 		</div>
-	</div>
+	</ToolHeader>
 
 	<!-- Main Content -->
 	{#if viewTab === 'queue'}
@@ -489,6 +515,27 @@
 								/>
 							</svg>
 							{copied ? 'Copied!' : 'Copy'}
+						</button>
+						<button
+							class="hidden items-center gap-1.5 rounded border border-blue-700/50 px-2.5 py-1 text-xs text-blue-400 transition-colors hover:bg-blue-900/30 hover:text-blue-300 disabled:opacity-50"
+							onclick={handleSendToZenStudio}
+							disabled={sendingToZenStudio}
+							title={m.editor_build_send_zen_studio()}
+						>
+							<svg
+								class="h-3 w-3"
+								fill="none"
+								viewBox="0 0 24 24"
+								stroke="currentColor"
+							>
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									stroke-width="2"
+									d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+								/>
+							</svg>
+							{sendingToZenStudio ? m.editor_build_sending_zen_studio() : m.editor_build_send_zen_studio()}
 						</button>
 					</div>
 				</div>

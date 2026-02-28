@@ -15,6 +15,13 @@
 	import SubNodeParamEditor from './SubNodeParamEditor.svelte';
 	import MiniMonaco from '$lib/components/editor/MiniMonaco.svelte';
 	import ButtonSelect from '$lib/components/inputs/ButtonSelect.svelte';
+	import { getSettings } from '$lib/stores/settings.svelte';
+	import { listSpriteCollections, readSpriteCollection } from '$lib/tauri/commands';
+	import { base64ToSprite, bytesPerRow } from '$lib/utils/sprite-pixels';
+	import { pixelsToBase64 } from '../../tools/oled/pixels';
+	import { OLED_WIDTH } from '../../tools/oled/types';
+	import type { SpriteCollectionSummary, SpriteCollection } from '$lib/types/sprite';
+	import { renderNodePreview, pixelsToDataUrl } from '$lib/flow/oled-preview';
 
 	interface Props {
 		selectedNode: FlowNode | null;
@@ -83,6 +90,86 @@
 	let codeTab = $state<'gpc' | 'enter' | 'exit' | 'combo'>('gpc');
 	let showSubNodePicker = $state(false);
 
+	// Sprite browsing state
+	let settingsStore = getSettings();
+	let settings = $derived($settingsStore);
+	let showSpriteBrowser = $state(false);
+	let spriteCollections = $state<SpriteCollectionSummary[]>([]);
+	let activeSpriteCollection = $state<SpriteCollection | null>(null);
+	let spriteLoading = $state(false);
+
+	async function openSpriteBrowser() {
+		showSpriteBrowser = true;
+		activeSpriteCollection = null;
+		spriteLoading = true;
+		try {
+			const results: SpriteCollectionSummary[] = [];
+			for (const ws of settings.workspaces) {
+				const cols = await listSpriteCollections(ws);
+				results.push(...cols);
+			}
+			spriteCollections = results;
+		} catch {
+			spriteCollections = [];
+		} finally {
+			spriteLoading = false;
+		}
+	}
+
+	async function selectSpriteCollection(summary: SpriteCollectionSummary) {
+		spriteLoading = true;
+		try {
+			for (const ws of settings.workspaces) {
+				try {
+					activeSpriteCollection = await readSpriteCollection(ws, summary.id);
+					break;
+				} catch {
+					continue;
+				}
+			}
+		} catch {
+			activeSpriteCollection = null;
+		} finally {
+			spriteLoading = false;
+		}
+	}
+
+	function applySpriteFrame(framePixels: string, frameWidth: number, frameHeight: number) {
+		if (!selectedNode || !selectedSubNode) return;
+
+		// Convert sprite packed bytes to OLED 128x64 format
+		const spriteBytes = base64ToSprite(framePixels);
+		const bpr = bytesPerRow(frameWidth);
+		const oledBytes = new Uint8Array(1024); // 128x64 / 8
+		const oledBpr = OLED_WIDTH / 8; // 16
+
+		for (let y = 0; y < frameHeight && y < 64; y++) {
+			for (let x = 0; x < frameWidth && x < 128; x++) {
+				const sByteIdx = y * bpr + Math.floor(x / 8);
+				const sBitIdx = 7 - (x % 8);
+				if (spriteBytes[sByteIdx] & (1 << sBitIdx)) {
+					const oByteIdx = y * oledBpr + Math.floor(x / 8);
+					const oBitIdx = 7 - (x % 8);
+					oledBytes[oByteIdx] |= 1 << oBitIdx;
+				}
+			}
+		}
+
+		const oledBase64 = pixelsToBase64(oledBytes);
+
+		onUpdateSubNode(selectedNode.id, selectedSubNode.id, {
+			config: {
+				...selectedSubNode.config,
+				scene: { id: crypto.randomUUID(), name: 'sprite', pixels: oledBase64 },
+				width: Math.min(frameWidth, 128),
+				height: Math.min(frameHeight, 64),
+			},
+		});
+
+		showSpriteBrowser = false;
+		activeSpriteCollection = null;
+	}
+
 	// Local editing state for node
 	let editLabel = $state('');
 	let editGpcCode = $state('');
@@ -137,6 +224,13 @@
 	let editEnableVariable = $state('');
 	let moduleCodeTab = $state<'init' | 'main' | 'functions' | 'combos'>('main');
 	let isModuleNode = $derived(selectedNode?.type === 'module');
+
+	// OLED Preview for nodes with sub-nodes
+	let oledPreview = $derived(
+		selectedNode && selectedNode.subNodes.length > 0 && typeof document !== 'undefined'
+			? pixelsToDataUrl(renderNodePreview(selectedNode))
+			: ''
+	);
 
 	let lastSyncedModuleNodeId = '';
 	let lastSyncedModuleData: import('$lib/types/flow').ModuleNodeData | null = null;
@@ -448,16 +542,70 @@
 				{/if}
 			</div>
 
-			<!-- Pixel Art: Edit button -->
+			<!-- Pixel Art: Edit button + Browse Sprites -->
 			{#if selectedSubNode.type === 'pixel-art'}
-				<div class="mb-3">
+				<div class="mb-3 flex gap-1">
 					<button
-						class="w-full rounded border border-blue-800 bg-blue-950 px-2 py-1.5 text-xs text-blue-300 hover:bg-blue-900"
+						class="flex-1 rounded border border-blue-800 bg-blue-950 px-2 py-1.5 text-xs text-blue-300 hover:bg-blue-900"
 						onclick={() => onEditOled(selectedNode!.id)}
 					>
-						Edit in OLED Pixel Editor
+						Edit in OLED Editor
+					</button>
+					<button
+						class="flex-1 rounded border border-emerald-800 bg-emerald-950 px-2 py-1.5 text-xs text-emerald-300 hover:bg-emerald-900"
+						onclick={openSpriteBrowser}
+					>
+						Browse Sprites
 					</button>
 				</div>
+
+				{#if showSpriteBrowser}
+					<div class="mb-3 rounded border border-zinc-700 bg-zinc-900 p-2">
+						{#if spriteLoading}
+							<p class="text-xs text-zinc-500">Loading...</p>
+						{:else if !activeSpriteCollection}
+							{#if spriteCollections.length === 0}
+								<p class="text-xs text-zinc-500">No sprite collections found</p>
+							{:else}
+								<p class="mb-1 text-[10px] uppercase text-zinc-500">Collections</p>
+								{#each spriteCollections as col}
+									<button
+										class="flex w-full items-center justify-between rounded px-2 py-1 text-left text-xs text-zinc-300 hover:bg-zinc-800"
+										onclick={() => selectSpriteCollection(col)}
+									>
+										<span>{col.name}</span>
+										<span class="text-zinc-600">{col.frame_count}f</span>
+									</button>
+								{/each}
+							{/if}
+							<button
+								class="mt-1 w-full text-right text-[10px] text-zinc-600 hover:text-zinc-400"
+								onclick={() => { showSpriteBrowser = false; }}
+							>
+								Close
+							</button>
+						{:else}
+							<button
+								class="mb-1 flex items-center gap-1 text-[10px] text-zinc-500 hover:text-zinc-300"
+								onclick={() => { activeSpriteCollection = null; }}
+							>
+								<svg class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clip-rule="evenodd" /></svg>
+								{activeSpriteCollection.name}
+							</button>
+							<div class="flex flex-wrap gap-1">
+								{#each activeSpriteCollection.frames as frame}
+									<button
+										class="rounded border border-zinc-700 p-0.5 hover:border-emerald-600"
+										onclick={() => applySpriteFrame(frame.pixels, frame.width, frame.height)}
+										title="{frame.width}x{frame.height}"
+									>
+										<div class="h-8 w-8 bg-zinc-950" style="image-rendering: pixelated"></div>
+									</button>
+								{/each}
+							</div>
+						{/if}
+					</div>
+				{/if}
 			{/if}
 
 			<!-- Position mode -->
@@ -849,6 +997,19 @@
 			<h3 class="text-xs font-medium uppercase tracking-wider text-zinc-500">Node Properties</h3>
 		</div>
 		<div class="flex-1 overflow-y-auto px-3 py-2">
+			<!-- OLED Preview -->
+			{#if oledPreview}
+				<div class="mb-3 rounded border border-zinc-800 bg-zinc-950 p-2">
+					<div class="mb-1 text-[10px] font-medium text-zinc-500 uppercase">OLED Preview</div>
+					<img
+						src={oledPreview}
+						alt="OLED preview"
+						class="w-full"
+						style="image-rendering: pixelated;"
+					/>
+				</div>
+			{/if}
+
 			<!-- Label -->
 			<div class="mb-3">
 				<label class="mb-1 block text-xs text-zinc-400" for="node-label">Label</label>

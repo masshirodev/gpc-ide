@@ -1,4 +1,5 @@
 import type { SubNodeDef } from '$lib/types/flow';
+import { addString } from '$lib/types/flow';
 import { widgetDrawRect } from '$lib/oled-widgets/types';
 import { drawBitmapText, measureText } from '$lib/oled-widgets/font';
 
@@ -98,6 +99,8 @@ export const valueItemDef: SubNodeDef = {
 		const font = 'OLED_FONT_SMALL';
 		const label = (config as Record<string, unknown>).label as string || 'Value';
 		const boundVar = ctx.boundVariable || '_value_var';
+		const labelIdx = addString(ctx, label);
+		const labelRef = `${ctx.stringArrayName}[${labelIdx}]`;
 		const lines: string[] = [];
 
 		lines.push(`    // Value: ${label} (index ${ctx.cursorIndex})`);
@@ -109,17 +112,19 @@ export const valueItemDef: SubNodeDef = {
 		// Cursor rendering
 		if (style === 'invert') {
 			lines.push(`    if(${ctx.cursorVar} == ${ctx.cursorIndex}) {`);
-			lines.push(`        rect_oled(${ctx.x}, ${ctx.y}, 127, ${ctx.y + 7}, OLED_WHITE);`);
-			lines.push(`        print_string(${ctx.x + 2}, ${ctx.y}, ${font}, OLED_BLACK, "${label}");`);
-			lines.push(`        PrintNumber(${valX}, ${ctx.y}, ${font}, OLED_BLACK, ${boundVar});`);
+			lines.push(`        rect_oled(${ctx.x}, ${ctx.y}, ${128 - ctx.x}, 8, 1, OLED_WHITE);`);
+			lines.push(`        print(${ctx.x + 2}, ${ctx.y}, ${font}, OLED_BLACK, ${labelRef});`);
+			lines.push(`        PrintNumber(${boundVar}, find_digits(${boundVar}), ${valX}, ${ctx.y}, ${font});`);
 			lines.push(`    } else {`);
-			lines.push(`        print_string(${ctx.x + 2}, ${ctx.y}, ${font}, OLED_WHITE, "${label}");`);
-			lines.push(`        PrintNumber(${valX}, ${ctx.y}, ${font}, OLED_WHITE, ${boundVar});`);
+			lines.push(`        print(${ctx.x + 2}, ${ctx.y}, ${font}, OLED_WHITE, ${labelRef});`);
+			lines.push(`        PrintNumber(${boundVar}, find_digits(${boundVar}), ${valX}, ${ctx.y}, ${font});`);
 			lines.push(`    }`);
 		} else {
-			lines.push(`    if(${ctx.cursorVar} == ${ctx.cursorIndex}) print_string(${ctx.x}, ${ctx.y}, ${font}, OLED_WHITE, "${prefix}");`);
-			lines.push(`    print_string(${labelX}, ${ctx.y}, ${font}, OLED_WHITE, "${label}");`);
-			lines.push(`    PrintNumber(${valX}, ${ctx.y}, ${font}, OLED_WHITE, ${boundVar});`);
+			const prefixIdx = addString(ctx, prefix);
+			const prefixRef = `${ctx.stringArrayName}[${prefixIdx}]`;
+			lines.push(`    if(${ctx.cursorVar} == ${ctx.cursorIndex}) print(${ctx.x}, ${ctx.y}, ${font}, OLED_WHITE, ${prefixRef});`);
+			lines.push(`    print(${labelX}, ${ctx.y}, ${font}, OLED_WHITE, ${labelRef});`);
+			lines.push(`    PrintNumber(${boundVar}, find_digits(${boundVar}), ${valX}, ${ctx.y}, ${font});`);
 		}
 
 		// Value adjustment logic (D-pad left/right when this item is selected)

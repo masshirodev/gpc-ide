@@ -545,8 +545,8 @@ const digitalClock: ScriptTemplate = {
 
 		lines.push('function DrawClock() {');
 		lines.push(`    // Hours`);
-		lines.push(`    PrintNumber(${x}, ${y}, OLED_FONT_MEDIUM, OLED_WHITE, clock_hours / 10);`);
-		lines.push(`    PrintNumber(${x + 12}, ${y}, OLED_FONT_MEDIUM, OLED_WHITE, clock_hours % 10);`);
+		lines.push(`    PrintNumber(clock_hours / 10, 1, ${x}, ${y}, OLED_FONT_MEDIUM);`);
+		lines.push(`    PrintNumber(clock_hours % 10, 1, ${x + 12}, ${y}, OLED_FONT_MEDIUM);`);
 		lines.push('');
 
 		if (blinkColon) {
@@ -563,21 +563,21 @@ const digitalClock: ScriptTemplate = {
 
 		lines.push('');
 		lines.push(`    // Minutes`);
-		lines.push(`    PrintNumber(${x + 30}, ${y}, OLED_FONT_MEDIUM, OLED_WHITE, clock_minutes / 10);`);
-		lines.push(`    PrintNumber(${x + 42}, ${y}, OLED_FONT_MEDIUM, OLED_WHITE, clock_minutes % 10);`);
+		lines.push(`    PrintNumber(clock_minutes / 10, 1, ${x + 30}, ${y}, OLED_FONT_MEDIUM);`);
+		lines.push(`    PrintNumber(clock_minutes % 10, 1, ${x + 42}, ${y}, OLED_FONT_MEDIUM);`);
 		lines.push('');
 		lines.push(`    // Seconds (smaller)`);
-		lines.push(`    PrintNumber(${x + 58}, ${y + 4}, OLED_FONT_SMALL, OLED_WHITE, clock_seconds / 10);`);
-		lines.push(`    PrintNumber(${x + 64}, ${y + 4}, OLED_FONT_SMALL, OLED_WHITE, clock_seconds % 10);`);
+		lines.push(`    PrintNumber(clock_seconds / 10, 1, ${x + 58}, ${y + 4}, OLED_FONT_SMALL);`);
+		lines.push(`    PrintNumber(clock_seconds % 10, 1, ${x + 64}, ${y + 4}, OLED_FONT_SMALL);`);
 
 		if (showDate) {
 			lines.push('');
 			lines.push(`    // Date`);
-			lines.push(`    PrintNumber(${x + 10}, ${y + 18}, OLED_FONT_SMALL, OLED_WHITE, clock_day / 10);`);
-			lines.push(`    PrintNumber(${x + 16}, ${y + 18}, OLED_FONT_SMALL, OLED_WHITE, clock_day % 10);`);
+			lines.push(`    PrintNumber(clock_day / 10, 1, ${x + 10}, ${y + 18}, OLED_FONT_SMALL);`);
+			lines.push(`    PrintNumber(clock_day % 10, 1, ${x + 16}, ${y + 18}, OLED_FONT_SMALL);`);
 			lines.push(`    pixel_oled(${x + 23}, ${y + 22}, 1); // separator dot`);
-			lines.push(`    PrintNumber(${x + 28}, ${y + 18}, OLED_FONT_SMALL, OLED_WHITE, clock_month / 10);`);
-			lines.push(`    PrintNumber(${x + 34}, ${y + 18}, OLED_FONT_SMALL, OLED_WHITE, clock_month % 10);`);
+			lines.push(`    PrintNumber(clock_month / 10, 1, ${x + 28}, ${y + 18}, OLED_FONT_SMALL);`);
+			lines.push(`    PrintNumber(clock_month % 10, 1, ${x + 34}, ${y + 18}, OLED_FONT_SMALL);`);
 		}
 
 		lines.push('}');

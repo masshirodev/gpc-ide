@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { exportComboGPC, exportModuleTOML } from './export';
+	import { exportComboGPC, exportModuleTOML, exportComboData } from './export';
 	import type { ComboProject, ModuleExportConfig } from './types';
 	import { addToast } from '$lib/stores/toast.svelte';
 	import MiniMonaco from '$lib/components/editor/MiniMonaco.svelte';
@@ -21,7 +21,7 @@
 
 	let { project }: Props = $props();
 
-	let tab = $state<'gpc' | 'toml'>('gpc');
+	let tab = $state<'gpc' | 'toml' | 'data'>('gpc');
 	let exportConsole = $state<ConsoleType>('ps5');
 
 	$effect(() => {
@@ -45,6 +45,7 @@
 
 	let gpcOutput = $derived(exportComboGPC(project, exportConsole));
 	let tomlOutput = $derived(exportModuleTOML(project, moduleConfig));
+	let dataOutput = $derived(exportComboData(project, exportConsole));
 
 	let settingsStore = getSettings();
 	let settings = $derived($settingsStore);
@@ -139,6 +140,14 @@
 			onclick={() => (tab = 'gpc')}
 		>
 			GPC Code
+		</button>
+		<button
+			class="flex-1 rounded px-3 py-1 text-xs {tab === 'data'
+				? 'bg-emerald-600/20 text-emerald-400'
+				: 'text-zinc-500 hover:text-zinc-300'}"
+			onclick={() => (tab = 'data')}
+		>
+			data()
 		</button>
 		<button
 			class="flex-1 rounded px-3 py-1 text-xs {tab === 'toml'
@@ -239,17 +248,17 @@
 			<span class="text-xs text-zinc-500">Output</span>
 			<button
 				class="text-xs text-zinc-500 hover:text-emerald-400"
-				onclick={() => copyToClipboard(tab === 'gpc' ? gpcOutput : tomlOutput)}
+				onclick={() => copyToClipboard(tab === 'gpc' ? gpcOutput : tab === 'data' ? dataOutput : tomlOutput)}
 			>
 				Copy
 			</button>
 		</div>
 		<div class="flex-1 overflow-hidden rounded border border-zinc-700">
 			<MiniMonaco
-				value={tab === 'gpc' ? gpcOutput : tomlOutput}
-				language={tab === 'gpc' ? 'gpc' : 'toml'}
+				value={tab === 'gpc' ? gpcOutput : tab === 'data' ? dataOutput : tomlOutput}
+				language={tab === 'toml' ? 'toml' : 'gpc'}
 				readonly={true}
-				label={tab === 'gpc' ? 'GPC Output' : 'Module TOML'}
+				label={tab === 'gpc' ? 'GPC Output' : tab === 'data' ? 'Data Array' : 'Module TOML'}
 			/>
 		</div>
 	</div>

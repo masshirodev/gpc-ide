@@ -45,6 +45,11 @@ export function generateMergedFlowGpc(project: FlowProject): string {
 	lines.push(`// ====================================================`);
 	lines.push('');
 
+	// Imports for common helpers (placed once at the top)
+	lines.push(`import common/helper;`);
+	lines.push(`import common/oled;`);
+	lines.push('');
+
 	// Profile variables (when multiple profiles are configured)
 	if (profileCount > 1) {
 		lines.push(`// ===== PROFILE SYSTEM =====`);
@@ -87,8 +92,10 @@ export function generateMergedFlowGpc(project: FlowProject): string {
 	const mainStartIdx = menuLines.findIndex((l) => l.trim().startsWith('main {'));
 	const initStartIdx = menuLines.findIndex((l) => l.trim().startsWith('init {'));
 
-	// Everything before init is declarations/functions
-	const preInit = menuLines.slice(0, initStartIdx >= 0 ? initStartIdx : mainStartIdx >= 0 ? mainStartIdx : menuLines.length);
+	// Everything before init is declarations/functions (strip imports — already at top)
+	const preInit = menuLines
+		.slice(0, initStartIdx >= 0 ? initStartIdx : mainStartIdx >= 0 ? mainStartIdx : menuLines.length)
+		.filter((l) => !l.trim().startsWith('import '));
 	lines.push(`// ===== MENU FLOW =====`);
 	lines.push(...preInit);
 

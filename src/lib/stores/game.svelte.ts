@@ -30,6 +30,13 @@ export async function loadGames(workspacePaths?: string[]) {
 	store.error = null;
 	try {
 		store.games = await listGames(workspacePaths);
+		// Keep selectedGame in sync with refreshed game list
+		if (store.selectedGame) {
+			const updated = store.games.find((g) => g.path === store.selectedGame!.path);
+			if (updated) {
+				store.selectedGame = updated;
+			}
+		}
 	} catch (e) {
 		store.error = e instanceof Error ? e.message : String(e);
 	} finally {
@@ -40,16 +47,21 @@ export async function loadGames(workspacePaths?: string[]) {
 export async function selectGame(game: GameSummary) {
 	store.error = null;
 	store.selectedGame = game;
-	store.selectedMeta = null;
-	store.selectedConfig = null;
+	// Keep previous meta/config visible until the new one loads to avoid dashboard flash
 	try {
 		if (game.generation_mode === 'flow') {
-			store.selectedMeta = await loadGameMeta(game.path);
+			const meta = await loadGameMeta(game.path);
+			store.selectedMeta = meta;
+			store.selectedConfig = null;
 		} else {
 			// Legacy config-based game (read-only support)
-			store.selectedConfig = await getGameConfig(game.path);
+			const config = await getGameConfig(game.path);
+			store.selectedConfig = config;
+			store.selectedMeta = null;
 		}
 	} catch (e) {
+		store.selectedMeta = null;
+		store.selectedConfig = null;
 		store.error = e instanceof Error ? e.message : String(e);
 	}
 }

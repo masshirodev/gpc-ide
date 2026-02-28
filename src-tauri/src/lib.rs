@@ -10,6 +10,7 @@ pub fn run() {
         .manage(commands::watcher::WatcherState::default())
         .manage(commands::watcher::WorkspaceWatcherState::default())
         .manage(commands::runner::RunnerState::default())
+        .manage(commands::server::FileServerState::default())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
@@ -96,6 +97,12 @@ pub fn run() {
             commands::git::git_status_detailed,
             commands::runner::run_command,
             commands::runner::kill_command,
+            commands::sprites::list_sprite_collections,
+            commands::sprites::read_sprite_collection,
+            commands::sprites::save_sprite_collection,
+            commands::sprites::delete_sprite_collection,
+            commands::server::start_file_server,
+            commands::server::stop_file_server,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

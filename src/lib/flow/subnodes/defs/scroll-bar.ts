@@ -75,13 +75,13 @@ export const scrollBarDef: SubNodeDef = {
 		const height = 48; // default track height
 
 		if (trackVisible) {
-			lines.push(`    rect_oled(${ctx.x}, ${ctx.y}, ${ctx.x + thickness - 1}, ${ctx.y + height - 1}, OLED_WHITE);`);
+			lines.push(`    rect_oled(${ctx.x}, ${ctx.y}, ${thickness}, ${height}, 0, OLED_WHITE);`);
 		}
 
 		lines.push(`    _oled_thumb_h = ${height} * ${visibleVar} / ${totalVar};`);
 		lines.push(`    if(_oled_thumb_h < 4) _oled_thumb_h = 4;`);
 		lines.push(`    _oled_thumb_y = ${ctx.y} + ${scrollVar} * (${height} - _oled_thumb_h) / (${totalVar} - ${visibleVar});`);
-		lines.push(`    rect_oled(${ctx.x}, _oled_thumb_y, ${ctx.x + thickness - 1}, _oled_thumb_y + _oled_thumb_h - 1, OLED_WHITE);`);
+		lines.push(`    rect_oled(${ctx.x}, _oled_thumb_y, ${thickness}, _oled_thumb_h, 1, OLED_WHITE);`);
 
 		return lines.join('\n');
 	},

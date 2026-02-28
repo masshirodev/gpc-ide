@@ -58,7 +58,7 @@ export const separatorDef: SubNodeDef = {
 		const lines: string[] = [];
 		lines.push(`    // Separator`);
 		for (let t = 0; t < thickness; t++) {
-			lines.push(`    line_oled(${ctx.x}, ${lineY + t}, 127, ${lineY + t}, OLED_WHITE);`);
+			lines.push(`    line_oled(${ctx.x}, ${lineY + t}, 127, ${lineY + t}, 1, OLED_WHITE);`);
 		}
 		return lines.join('\n');
 	},

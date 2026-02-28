@@ -1,5 +1,6 @@
 export interface KeyMapping {
 	source: string;
+	sourceCombo?: string; // Held button for combos: get_val(sourceCombo) && event_press(source)
 	target: string;
 	value: number;
 	type: 'keyboard' | 'controller';
@@ -49,7 +50,23 @@ export function parseKeyboardMappings(content: string): KeyMapping[] {
 			continue;
 		}
 
-		// Pattern 2: if (get_val(BUTTON_X)) { set_val(PS5_Y, value); }
+		// Pattern 2: Button combo: if (get_val(BUTTON_A) && event_press(BUTTON_B)) { set_val(PS5_Y, value); }
+		const comboMatch = uncommented.match(
+			/if\s*\(\s*get_val\((\w+)\)\s*&&\s*event_press\((\w+)\)\s*\)\s*\{\s*set_val\((\w+),\s*(-?\d+)\)\s*;\s*\}/
+		);
+		if (comboMatch) {
+			mappings.push({
+				source: comboMatch[2],       // trigger button (event_press)
+				sourceCombo: comboMatch[1],   // held button (get_val)
+				target: comboMatch[3],
+				value: parseInt(comboMatch[4], 10),
+				type: 'controller',
+				enabled: !isCommented
+			});
+			continue;
+		}
+
+		// Pattern 3: if (get_val(BUTTON_X)) { set_val(PS5_Y, value); }
 		const mouseMatch = uncommented.match(
 			/if\s*\(\s*get_val\((\w+)\)\s*\)\s*\{\s*set_val\((\w+),\s*(-?\d+)\)\s*;\s*\}/
 		);
@@ -125,10 +142,13 @@ export function serializeKeyboardMappings(
 		}
 	}
 
-	if (ctrlMappings.length > 0) {
+	const singleCtrl = ctrlMappings.filter((m) => !m.sourceCombo);
+	const comboCtrl = ctrlMappings.filter((m) => m.sourceCombo);
+
+	if (singleCtrl.length > 0) {
 		if (lines.length > 0) lines.push('');
 		lines.push('    // Controller mappings');
-		for (const m of ctrlMappings) {
+		for (const m of singleCtrl) {
 			let code: string;
 			if (m.value === 0) {
 				// Map syntax: set_val(target, get_val(source));
@@ -136,6 +156,15 @@ export function serializeKeyboardMappings(
 			} else {
 				code = `    if (get_val(${m.source})) { set_val(${m.target}, ${m.value}); }`;
 			}
+			lines.push(m.enabled ? code : `    // ${code.trim()}`);
+		}
+	}
+
+	if (comboCtrl.length > 0) {
+		if (lines.length > 0) lines.push('');
+		lines.push('    // Button combo mappings');
+		for (const m of comboCtrl) {
+			const code = `    if (get_val(${m.sourceCombo}) && event_press(${m.source})) { set_val(${m.target}, ${m.value}); }`;
 			lines.push(m.enabled ? code : `    // ${code.trim()}`);
 		}
 	}

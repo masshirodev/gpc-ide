@@ -1,4 +1,5 @@
 import type { SubNodeDef } from '$lib/types/flow';
+import { addString } from '$lib/types/flow';
 import { drawBitmapText, measureText } from '$lib/oled-widgets/font';
 
 export const textLineDef: SubNodeDef = {
@@ -50,11 +51,12 @@ export const textLineDef: SubNodeDef = {
 		const label = (config as Record<string, unknown>).label as string || 'Text';
 		const align = (config.align as string) || 'left';
 		const font = (config.font as string) === 'small' ? 'OLED_FONT_SMALL' : 'OLED_FONT_SMALL';
+		const idx = addString(ctx, label);
 
 		let x = ctx.x;
 		if (align === 'center') x = Math.floor(64 - (label.length * 3));
 		else if (align === 'right') x = 128 - label.length * 6;
 
-		return `    print_string(${x}, ${ctx.y}, ${font}, OLED_WHITE, "${label}");`;
+		return `    print(${x}, ${ctx.y}, ${font}, OLED_WHITE, ${ctx.stringArrayName}[${idx}]);`;
 	},
 };

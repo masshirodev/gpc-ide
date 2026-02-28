@@ -101,6 +101,11 @@ pub fn list_games(workspace_paths: Option<Vec<String>>) -> Result<Vec<GameSummar
             .min_depth(1)
             .max_depth(3)
             .into_iter()
+            .filter_entry(|e| {
+                let name = e.file_name().to_string_lossy();
+                // Skip _templates, build output, and hidden directories
+                !name.starts_with('_') && name != "build" && !name.starts_with('.')
+            })
             .filter_map(|e| e.ok())
         {
             let filename = entry.file_name().to_string_lossy().to_string();
@@ -247,7 +252,7 @@ pub fn load_game_meta(game_path: String) -> Result<Option<GameMeta>, String> {
     Ok(Some(meta))
 }
 
-/// Delete an entire game directory
+/// Delete an entire game directory (preserving _templates if present)
 #[tauri::command]
 pub fn delete_game(game_path: String) -> Result<(), String> {
     let path = std::path::Path::new(&game_path);
@@ -258,6 +263,30 @@ pub fn delete_game(game_path: String) -> Result<(), String> {
     if !path.join("game.json").exists() && !path.join("config.toml").exists() {
         return Err("Not a valid game directory".to_string());
     }
+
+    let templates_dir = path.join("_templates");
+    if templates_dir.exists() && templates_dir.is_dir() {
+        // _templates exists inside this game dir — relocate to parent before deleting
+        if let Some(parent) = path.parent() {
+            let safe_dest = parent.join("_templates");
+            if !safe_dest.exists() {
+                // Move _templates up to the parent workspace
+                std::fs::rename(&templates_dir, &safe_dest)
+                    .map_err(|e| format!("Failed to preserve templates: {}", e))?;
+            } else {
+                // Parent already has _templates — merge by copying entries
+                if let Ok(entries) = std::fs::read_dir(&templates_dir) {
+                    for entry in entries.flatten() {
+                        let dest = safe_dest.join(entry.file_name());
+                        if !dest.exists() {
+                            let _ = std::fs::rename(entry.path(), dest);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     std::fs::remove_dir_all(path)
         .map_err(|e| format!("Failed to delete game directory: {}", e))?;
     Ok(())

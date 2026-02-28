@@ -768,7 +768,7 @@ fn build_game_impl(
     }
     if let Some(ref includes) = plugin_hooks.includes {
         for inc_path in includes {
-            plugin_prefix.push_str(&format!("#include \"{}\"\n", inc_path));
+            plugin_prefix.push_str(&format!("import {};\n", inc_path));
         }
     }
     if let Some(ref pre) = plugin_hooks.pre_build {

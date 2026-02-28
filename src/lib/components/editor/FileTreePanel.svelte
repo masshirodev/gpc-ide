@@ -89,7 +89,7 @@
 		</div>
 	</div>
 	<!-- File Tree Content -->
-	<div class="flex-1 overflow-y-auto p-1.5">
+	<div class="scrollbar-none flex-1 overflow-y-auto p-1.5">
 		{#each fileTree as entry}
 			{#if entry.is_dir}
 				<div class="mb-0.5">

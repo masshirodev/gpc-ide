@@ -147,6 +147,11 @@ export function generateGameplayGpcStandalone(graph: FlowGraph): string {
 	lines.push(`// ====================================================`);
 	lines.push('');
 
+	// Imports for common helpers
+	lines.push(`import common/helper;`);
+	lines.push(`import common/oled;`);
+	lines.push('');
+
 	if (result.defines.length > 0) {
 		lines.push(`// ===== DEFINES =====`);
 		lines.push(...result.defines);

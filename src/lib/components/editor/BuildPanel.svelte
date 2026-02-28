@@ -12,6 +12,8 @@
 		onBuild: () => void;
 		onBuildErrorClick: (error: string) => void;
 		onCopyBuildOutput: () => void;
+		onSendToZenStudio: () => void;
+		sendingToZenStudio?: boolean;
 	}
 
 	let {
@@ -21,7 +23,9 @@
 		building,
 		onBuild,
 		onBuildErrorClick,
-		onCopyBuildOutput
+		onCopyBuildOutput,
+		onSendToZenStudio,
+		sendingToZenStudio = false
 	}: Props = $props();
 </script>
 
@@ -114,6 +118,22 @@
 								/>
 							</svg>
 							{m.common_copy()}
+						</button>
+						<button
+							class="hidden items-center gap-1 rounded border border-blue-700/50 px-2 py-0.5 text-xs text-blue-400 transition-colors hover:bg-blue-900/30 hover:text-blue-300 disabled:opacity-50"
+							onclick={onSendToZenStudio}
+							disabled={sendingToZenStudio}
+							title={m.editor_build_send_zen_studio()}
+						>
+							<svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									stroke-width="2"
+									d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+								/>
+							</svg>
+							{sendingToZenStudio ? m.editor_build_sending_zen_studio() : m.editor_build_send_zen_studio()}
 						</button>
 					</div>
 				</div>

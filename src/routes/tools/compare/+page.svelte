@@ -1,10 +1,10 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
 	import { getGameStore, loadGames } from '$lib/stores/game.svelte';
 	import { getSettings } from '$lib/stores/settings.svelte';
 	import { readFile, readFileTree } from '$lib/tauri/commands';
 	import type { FileTreeEntry } from '$lib/tauri/commands';
 	import DiffViewer from '$lib/components/editor/DiffViewer.svelte';
+	import ToolHeader from '$lib/components/layout/ToolHeader.svelte';
 	import { onMount } from 'svelte';
 
 	let store = getGameStore();
@@ -113,18 +113,7 @@
 
 <div class="flex h-full flex-col bg-zinc-950 text-zinc-200">
 	<!-- Header -->
-	<div class="flex items-center gap-3 border-b border-zinc-800 px-4 py-3">
-		<button
-			class="rounded p-1 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300"
-			onclick={() => goto('/')}
-			title="Back"
-		>
-			<svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-				<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
-			</svg>
-		</button>
-		<h1 class="text-lg font-bold">Game Comparison</h1>
-	</div>
+	<ToolHeader title="Game Comparison" />
 
 	<!-- Selectors -->
 	<div class="flex flex-wrap items-end gap-3 border-b border-zinc-800 p-4">

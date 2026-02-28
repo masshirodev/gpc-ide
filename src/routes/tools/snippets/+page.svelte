@@ -3,6 +3,7 @@
 	import type { Snippet } from '$lib/stores/settings.svelte';
 	import { addToast } from '$lib/stores/toast.svelte';
 	import MonacoEditor from '$lib/components/editor/MonacoEditor.svelte';
+	import ToolHeader from '$lib/components/layout/ToolHeader.svelte';
 
 	let settingsStore = getSettings();
 	let settings = $derived($settingsStore);
@@ -126,21 +127,11 @@
 </script>
 
 <div class="flex h-full flex-col bg-zinc-950 text-zinc-100">
-	<!-- Header -->
-	<div class="flex items-center justify-between border-b border-zinc-800 px-6 py-4">
-		<div class="flex items-center gap-4">
-			<a href="/" class="flex items-center gap-1.5 text-sm text-zinc-400 hover:text-zinc-200">
-				<svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-					<path fill-rule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clip-rule="evenodd" />
-				</svg>
-				Back
-			</a>
-			<h1 class="text-2xl font-bold">Snippet Library</h1>
-			<span class="rounded bg-zinc-800 px-2 py-0.5 text-xs text-zinc-400">
-				{allSnippets.length} snippet{allSnippets.length !== 1 ? 's' : ''}
-			</span>
-		</div>
-		<div class="flex gap-2">
+	<ToolHeader title="Snippet Library">
+		<span class="rounded bg-zinc-800 px-2 py-0.5 text-xs text-zinc-400">
+			{allSnippets.length} snippet{allSnippets.length !== 1 ? 's' : ''}
+		</span>
+		<div class="ml-auto flex gap-2">
 			<button
 				class="rounded border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-800"
 				onclick={handleImport}
@@ -161,7 +152,7 @@
 				+ New Snippet
 			</button>
 		</div>
-	</div>
+	</ToolHeader>
 
 	<div class="flex min-h-0 flex-1">
 		<!-- Snippet list -->

@@ -1,4 +1,5 @@
 import type { SubNodeDef } from '$lib/types/flow';
+import { addString } from '$lib/types/flow';
 import { widgetDrawRect } from '$lib/oled-widgets/types';
 import { drawBitmapText, measureText } from '$lib/oled-widgets/font';
 
@@ -94,6 +95,12 @@ export const toggleItemDef: SubNodeDef = {
 		const font = 'OLED_FONT_SMALL';
 		const label = (config as Record<string, unknown>).label as string || 'Toggle';
 		const boundVar = ctx.boundVariable || '_toggle_var';
+		const labelIdx = addString(ctx, label);
+		const onIdx = addString(ctx, onText);
+		const offIdx = addString(ctx, offText);
+		const labelRef = `${ctx.stringArrayName}[${labelIdx}]`;
+		const onRef = `${ctx.stringArrayName}[${onIdx}]`;
+		const offRef = `${ctx.stringArrayName}[${offIdx}]`;
 		const lines: string[] = [];
 
 		lines.push(`    // Toggle: ${label} (index ${ctx.cursorIndex})`);
@@ -104,21 +111,23 @@ export const toggleItemDef: SubNodeDef = {
 
 		if (style === 'invert') {
 			lines.push(`    if(${ctx.cursorVar} == ${ctx.cursorIndex}) {`);
-			lines.push(`        rect_oled(${ctx.x}, ${ctx.y}, 127, ${ctx.y + 7}, OLED_WHITE);`);
-			lines.push(`        print_string(${ctx.x + 2}, ${ctx.y}, ${font}, OLED_BLACK, "${label}");`);
-			lines.push(`        if(${boundVar}) print_string(${valX}, ${ctx.y}, ${font}, OLED_BLACK, "${onText}");`);
-			lines.push(`        else print_string(${valX}, ${ctx.y}, ${font}, OLED_BLACK, "${offText}");`);
+			lines.push(`        rect_oled(${ctx.x}, ${ctx.y}, ${128 - ctx.x}, 8, 1, OLED_WHITE);`);
+			lines.push(`        print(${ctx.x + 2}, ${ctx.y}, ${font}, OLED_BLACK, ${labelRef});`);
+			lines.push(`        if(${boundVar}) print(${valX}, ${ctx.y}, ${font}, OLED_BLACK, ${onRef});`);
+			lines.push(`        else print(${valX}, ${ctx.y}, ${font}, OLED_BLACK, ${offRef});`);
 			lines.push(`    } else {`);
-			lines.push(`        print_string(${ctx.x + 2}, ${ctx.y}, ${font}, OLED_WHITE, "${label}");`);
-			lines.push(`        if(${boundVar}) print_string(${valX}, ${ctx.y}, ${font}, OLED_WHITE, "${onText}");`);
-			lines.push(`        else print_string(${valX}, ${ctx.y}, ${font}, OLED_WHITE, "${offText}");`);
+			lines.push(`        print(${ctx.x + 2}, ${ctx.y}, ${font}, OLED_WHITE, ${labelRef});`);
+			lines.push(`        if(${boundVar}) print(${valX}, ${ctx.y}, ${font}, OLED_WHITE, ${onRef});`);
+			lines.push(`        else print(${valX}, ${ctx.y}, ${font}, OLED_WHITE, ${offRef});`);
 			lines.push(`    }`);
 		} else {
 			// prefix style
-			lines.push(`    if(${ctx.cursorVar} == ${ctx.cursorIndex}) print_string(${ctx.x}, ${ctx.y}, ${font}, OLED_WHITE, "${prefix}");`);
-			lines.push(`    print_string(${labelX}, ${ctx.y}, ${font}, OLED_WHITE, "${label}");`);
-			lines.push(`    if(${boundVar}) print_string(${valX}, ${ctx.y}, ${font}, OLED_WHITE, "${onText}");`);
-			lines.push(`    else print_string(${valX}, ${ctx.y}, ${font}, OLED_WHITE, "${offText}");`);
+			const prefixIdx = addString(ctx, prefix);
+			const prefixRef = `${ctx.stringArrayName}[${prefixIdx}]`;
+			lines.push(`    if(${ctx.cursorVar} == ${ctx.cursorIndex}) print(${ctx.x}, ${ctx.y}, ${font}, OLED_WHITE, ${prefixRef});`);
+			lines.push(`    print(${labelX}, ${ctx.y}, ${font}, OLED_WHITE, ${labelRef});`);
+			lines.push(`    if(${boundVar}) print(${valX}, ${ctx.y}, ${font}, OLED_WHITE, ${onRef});`);
+			lines.push(`    else print(${valX}, ${ctx.y}, ${font}, OLED_WHITE, ${offRef});`);
 		}
 
 		return lines.join('\n');

@@ -117,20 +117,23 @@
     <TitleBar gameName={gameStore.selectedGame?.name ?? ''} />
     <div class="relative flex min-h-0 flex-1 overflow-hidden">
         {#if ui.sidebarCollapsed}
-            <div class="flex h-full w-10 shrink-0 flex-col border-r border-zinc-700 bg-zinc-900">
-                <button
-                    class="flex h-10 items-center justify-center text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
-                    onclick={toggleSidebar}
-                    title={m.layout_sidebar_expand()}
-                >
+            <!-- svelte-ignore a11y_no_static_element_interactions -->
+            <div
+                class="flex h-full w-10 shrink-0 cursor-pointer flex-col border-r border-zinc-700 bg-zinc-900"
+                onclick={(e) => {
+                    if (!(e.target as HTMLElement).closest('[data-settings-btn]')) toggleSidebar();
+                }}
+            >
+                <div class="flex h-10 items-center justify-center text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200">
                     <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                         <path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clip-rule="evenodd" />
                     </svg>
-                </button>
+                </div>
                 <div class="flex-1"></div>
                 <button
                     class="flex h-10 items-center justify-center border-t border-zinc-700 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
-                    onclick={() => settingsOpen = true}
+                    data-settings-btn
+                    onclick={(e) => { e.stopPropagation(); settingsOpen = true; }}
                     title={m.settings_title()}
                 >
                     <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">

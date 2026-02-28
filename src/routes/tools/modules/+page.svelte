@@ -1,11 +1,11 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
 	import { listModules, getModule, saveUserModule, deleteUserModule } from '$lib/tauri/commands';
 	import { addToast } from '$lib/stores/toast.svelte';
 	import { getSettings, getAllGameTypes } from '$lib/stores/settings.svelte';
 	import MonacoEditor from '$lib/components/editor/MonacoEditor.svelte';
 	import ConfirmDialog from '$lib/components/modals/ConfirmDialog.svelte';
+	import ToolHeader from '$lib/components/layout/ToolHeader.svelte';
 	import type { ModuleSummary, ModuleDefinition } from '$lib/types/module';
 
 	let settingsStore = getSettings();
@@ -358,25 +358,18 @@
 
 <div class="flex h-full flex-col bg-zinc-950 text-zinc-200">
 	<!-- Top Bar -->
-	<div class="flex items-center justify-between border-b border-zinc-800 px-4 py-2.5">
-		<div class="flex items-center gap-3">
-			<a href="/" class="flex items-center gap-1.5 text-sm text-zinc-400 hover:text-zinc-200">
-				<svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-					<path fill-rule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clip-rule="evenodd" />
-				</svg>
-				Back
-			</a>
-			<h1 class="text-sm font-semibold text-zinc-100">Module Manager</h1>
-		</div>
+	<ToolHeader title="Module Manager">
 		{#if mode === 'browse'}
-			<button
-				class="rounded bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-500"
-				onclick={enterCreateMode}
-			>
-				+ New Module
-			</button>
+			<div class="ml-auto flex items-center gap-2">
+				<button
+					class="rounded bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-500"
+					onclick={enterCreateMode}
+				>
+					+ New Module
+				</button>
+			</div>
 		{/if}
-	</div>
+	</ToolHeader>
 
 	<!-- Main Content -->
 	<div class="flex flex-1 overflow-hidden">

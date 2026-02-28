@@ -5,12 +5,16 @@
 		createGlyph,
 		renderGlyphToPixels,
 		generateCustomTextGpc,
+		serializeFont,
+		deserializeFont,
 		type CustomFont,
 		type CustomGlyph,
 		type LineSegment,
+		type SerializedCustomFont,
 	} from './fonts-custom';
 	import { createEmptyPixels } from './pixels';
 	import { addToast } from '$lib/stores/toast.svelte';
+	import { getFontTransfer, clearFontTransfer } from '$lib/stores/font-transfer.svelte';
 
 	interface Props {
 		open: boolean;
@@ -20,6 +24,70 @@
 	let { open, onClose }: Props = $props();
 
 	let font = $state<CustomFont>(createEmptyFont('My Font'));
+	let showSavedFonts = $state(false);
+	let showSaveMenu = $state(false);
+
+	// Check for font transfer data when opened
+	$effect(() => {
+		if (open) {
+			const transferred = getFontTransfer();
+			if (transferred) {
+				font = transferred;
+				clearFontTransfer();
+				addToast(`Font "${transferred.name}" loaded from import`, 'success');
+			}
+		}
+	});
+
+	// Save/Load helpers
+	const STORAGE_KEY = 'gpc-ide-custom-fonts';
+
+	function getSavedFonts(): SerializedCustomFont[] {
+		try {
+			const raw = localStorage.getItem(STORAGE_KEY);
+			return raw ? JSON.parse(raw) : [];
+		} catch {
+			return [];
+		}
+	}
+
+	let savedFontsList = $state<SerializedCustomFont[]>(getSavedFonts());
+
+	function refreshSavedFonts() {
+		savedFontsList = getSavedFonts();
+	}
+
+	function handleSaveFont() {
+		const saved = getSavedFonts();
+		const existing = saved.findIndex((f) => f.id === font.id);
+		const serialized = serializeFont(font);
+		if (existing >= 0) {
+			saved[existing] = serialized;
+		} else {
+			saved.push(serialized);
+		}
+		localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
+		refreshSavedFonts();
+		addToast(`Font "${font.name}" saved`, 'success');
+	}
+
+	function handleSaveAsNew() {
+		font = { ...font, id: crypto.randomUUID() };
+		handleSaveFont();
+	}
+
+	function handleLoadFont(data: SerializedCustomFont) {
+		font = deserializeFont(data);
+		showSavedFonts = false;
+		updatePreview();
+	}
+
+	function handleDeleteSavedFont(id: string) {
+		const saved = getSavedFonts().filter((f) => f.id !== id);
+		localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
+		refreshSavedFonts();
+		addToast('Font deleted', 'success');
+	}
 	let editChar = $state('A');
 	let currentGlyph = $derived(font.glyphs.get(editChar) || null);
 
@@ -150,7 +218,8 @@
 		class="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
 		onmousedown={(e) => { if (e.target === e.currentTarget) onClose(); }}
 	>
-		<div class="w-[700px] rounded-lg border border-zinc-700 bg-zinc-900 shadow-xl">
+		<!-- svelte-ignore a11y_no_static_element_interactions -->
+		<div class="w-[700px] rounded-lg border border-zinc-700 bg-zinc-900 shadow-xl" onclick={() => { showSaveMenu = false; showSavedFonts = false; }}>
 			<div class="flex items-center justify-between border-b border-zinc-800 px-4 py-3">
 				<h2 class="text-sm font-semibold text-zinc-200">Custom Font Editor</h2>
 				<button class="text-zinc-400 hover:text-zinc-200" onclick={onClose}>
@@ -353,7 +422,66 @@
 				</div>
 			</div>
 
-			<div class="flex justify-end gap-2 border-t border-zinc-800 px-4 py-3">
+			<div class="flex items-center justify-between border-t border-zinc-800 px-4 py-3">
+				<div class="flex gap-2">
+					<div class="relative flex">
+						<button
+							class="rounded-l bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-500"
+							onclick={handleSaveFont}
+						>
+							Save
+						</button>
+						<button
+							class="rounded-r border-l border-emerald-700 bg-emerald-600 px-1.5 py-1.5 text-white hover:bg-emerald-500"
+							onclick={(e) => { e.stopPropagation(); showSaveMenu = !showSaveMenu; showSavedFonts = false; }}
+						>
+							<svg class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
+								<path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
+							</svg>
+						</button>
+						{#if showSaveMenu}
+							<div class="absolute bottom-full left-0 mb-1 w-36 rounded border border-zinc-700 bg-zinc-800 py-1 shadow-lg">
+								<button
+									class="w-full px-3 py-1.5 text-left text-xs text-zinc-200 hover:bg-zinc-700"
+									onclick={() => { handleSaveAsNew(); showSaveMenu = false; }}
+								>
+									Save as New
+								</button>
+							</div>
+						{/if}
+					</div>
+					<div class="relative">
+						<button
+							class="rounded border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-800"
+							onclick={(e) => { e.stopPropagation(); showSavedFonts = !showSavedFonts; showSaveMenu = false; if (showSavedFonts) refreshSavedFonts(); }}
+						>
+							Load Font
+						</button>
+						{#if showSavedFonts}
+							<div class="absolute bottom-full left-0 mb-1 w-56 rounded border border-zinc-700 bg-zinc-800 py-1 shadow-lg">
+								{#each savedFontsList as saved}
+									<div class="group flex items-center justify-between px-3 py-1.5 hover:bg-zinc-700">
+										<button
+											class="flex-1 text-left text-xs text-zinc-200"
+											onclick={() => handleLoadFont(saved)}
+										>
+											{saved.name}
+											<span class="text-zinc-500">({saved.glyphs.length} glyphs)</span>
+										</button>
+										<button
+											class="ml-2 text-xs text-zinc-500 opacity-0 group-hover:opacity-100 hover:text-red-400"
+											onclick={(e) => { e.stopPropagation(); handleDeleteSavedFont(saved.id); }}
+										>
+											&times;
+										</button>
+									</div>
+								{:else}
+									<div class="px-3 py-2 text-xs text-zinc-500">No saved fonts</div>
+								{/each}
+							</div>
+						{/if}
+					</div>
+				</div>
 				<button
 					class="rounded px-4 py-1.5 text-sm text-zinc-400 hover:text-zinc-200"
 					onclick={onClose}

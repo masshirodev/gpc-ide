@@ -4,6 +4,14 @@
 	import { getPixel, setPixel, clonePixels } from './pixels';
 	import { applyBrush, drawBresenhamLine, drawRect, drawEllipse, floodFill, drawText } from './drawing';
 	import { getFont } from './fonts';
+	import { getPixel as getSpritePixel, bytesPerRow } from '$lib/utils/sprite-pixels';
+
+	interface StampData {
+		pixels: Uint8Array;
+		width: number;
+		height: number;
+		scale: number;
+	}
 
 	interface Props {
 		pixels: Uint8Array;
@@ -12,12 +20,13 @@
 		filled: boolean;
 		version: number;
 		textState: TextState;
+		stampData?: StampData | null;
 		onBeforeDraw: () => void;
 		onDraw: (pixels: Uint8Array) => void;
 		onTextOriginSet: (x: number, y: number) => void;
 	}
 
-	let { pixels, tool, brush, filled, version, textState, onBeforeDraw, onDraw, onTextOriginSet }: Props = $props();
+	let { pixels, tool, brush, filled, version, textState, stampData = null, onBeforeDraw, onDraw, onTextOriginSet }: Props = $props();
 
 	let canvas: HTMLCanvasElement;
 	let container: HTMLDivElement;
@@ -136,8 +145,13 @@
 			ctx.stroke();
 		}
 
+		// Draw stamp preview on hover
+		if (stampData && hoverX >= 0 && hoverY >= 0) {
+			drawStampPreview(hoverX, hoverY);
+		}
+
 		// Draw brush preview on hover
-		if (hoverX >= 0 && hoverY >= 0 && !isDrawing && tool !== 'text') {
+		if (!stampData && hoverX >= 0 && hoverY >= 0 && !isDrawing && tool !== 'text') {
 			drawBrushPreview(hoverX, hoverY);
 		}
 
@@ -174,6 +188,72 @@
 		}
 	}
 
+	function drawStampPreview(px: number, py: number) {
+		if (!ctx || !stampData) return;
+		const { pixels: spritePixels, width: sw, height: sh, scale } = stampData;
+		const scaledW = sw * scale;
+		const scaledH = sh * scale;
+
+		ctx.fillStyle = 'rgba(16, 185, 129, 0.4)';
+		for (let sy = 0; sy < sh; sy++) {
+			for (let sx = 0; sx < sw; sx++) {
+				if (getSpritePixel(spritePixels, sx, sy, sw, sh)) {
+					for (let dy = 0; dy < scale; dy++) {
+						for (let dx = 0; dx < scale; dx++) {
+							const ox = px + sx * scale + dx;
+							const oy = py + sy * scale + dy;
+							if (ox >= 0 && ox < OLED_WIDTH && oy >= 0 && oy < OLED_HEIGHT) {
+								ctx.fillRect(
+									offsetX + ox * cellSize,
+									offsetY + oy * cellSize,
+									cellSize,
+									cellSize
+								);
+							}
+						}
+					}
+				}
+			}
+		}
+
+		// Draw bounding box
+		ctx.strokeStyle = 'rgba(16, 185, 129, 0.5)';
+		ctx.lineWidth = 1;
+		ctx.setLineDash([3, 3]);
+		ctx.strokeRect(
+			offsetX + px * cellSize,
+			offsetY + py * cellSize,
+			scaledW * cellSize,
+			scaledH * cellSize
+		);
+		ctx.setLineDash([]);
+	}
+
+	function stampOntoCanvas(px: number, py: number) {
+		if (!stampData) return;
+		const { pixels: spritePixels, width: sw, height: sh, scale } = stampData;
+		const updated = clonePixels(pixels);
+
+		for (let sy = 0; sy < sh; sy++) {
+			for (let sx = 0; sx < sw; sx++) {
+				if (getSpritePixel(spritePixels, sx, sy, sw, sh)) {
+					for (let dy = 0; dy < scale; dy++) {
+						for (let dx = 0; dx < scale; dx++) {
+							const ox = px + sx * scale + dx;
+							const oy = py + sy * scale + dy;
+							if (ox >= 0 && ox < OLED_WIDTH && oy >= 0 && oy < OLED_HEIGHT) {
+								setPixel(updated, ox, oy, true);
+							}
+						}
+					}
+				}
+			}
+		}
+
+		onBeforeDraw();
+		onDraw(updated);
+	}
+
 	function canvasToPixel(e: MouseEvent): [number, number] {
 		const rect = canvas.getBoundingClientRect();
 		const mx = e.clientX - rect.left - offsetX;
@@ -195,6 +275,11 @@
 		if (e.button !== 0 && e.button !== 2) return;
 		const [px, py] = canvasToPixel(e);
 		if (!isInBounds(px, py)) return;
+
+		if (stampData && e.button === 0) {
+			stampOntoCanvas(px, py);
+			return;
+		}
 
 		if (tool === 'text') {
 			onTextOriginSet(px, py);
@@ -314,6 +399,7 @@
 		void pixels;
 		void previewPixels;
 		void textState;
+		void stampData;
 		draw();
 	});
 </script>
@@ -325,7 +411,7 @@
 	<canvas
 		bind:this={canvas}
 		class="block"
-		style:cursor={tool === 'fill' || tool === 'text' ? 'crosshair' : 'default'}
+		style:cursor={stampData ? 'crosshair' : tool === 'fill' || tool === 'text' ? 'crosshair' : 'default'}
 		onmousedown={handleMouseDown}
 		onmousemove={handleMouseMove}
 		onmouseup={handleMouseUp}

@@ -89,8 +89,8 @@ export const indicatorDef: SubNodeDef = {
 				const bh = Math.round(((b + 1) / segs) * maxH);
 				const bx = ctx.x + b * (barW + gap);
 				const by = ctx.y + maxH - bh;
-				lines.push(`    if(_oled_filled > ${b}) rect_oled(${bx}, ${by}, ${bx + barW - 1}, ${ctx.y + maxH - 1}, OLED_WHITE);`);
-				lines.push(`    else { line_oled(${bx}, ${by}, ${bx + barW - 1}, ${by}, OLED_WHITE); line_oled(${bx}, ${by}, ${bx}, ${ctx.y + maxH - 1}, OLED_WHITE); line_oled(${bx + barW - 1}, ${by}, ${bx + barW - 1}, ${ctx.y + maxH - 1}, OLED_WHITE); line_oled(${bx}, ${ctx.y + maxH - 1}, ${bx + barW - 1}, ${ctx.y + maxH - 1}, OLED_WHITE); }`);
+				lines.push(`    if(_oled_filled > ${b}) rect_oled(${bx}, ${by}, ${barW}, ${bh}, 1, OLED_WHITE);`);
+				lines.push(`    else { line_oled(${bx}, ${by}, ${bx + barW - 1}, ${by}, 1, OLED_WHITE); line_oled(${bx}, ${by}, ${bx}, ${ctx.y + maxH - 1}, 1, OLED_WHITE); line_oled(${bx + barW - 1}, ${by}, ${bx + barW - 1}, ${ctx.y + maxH - 1}, 1, OLED_WHITE); line_oled(${bx}, ${ctx.y + maxH - 1}, ${bx + barW - 1}, ${ctx.y + maxH - 1}, 1, OLED_WHITE); }`);
 			}
 		} else {
 			// led-strip
@@ -100,7 +100,7 @@ export const indicatorDef: SubNodeDef = {
 			lines.push(`    for(_oled_i = 0; _oled_i < ${segs}; _oled_i++) {`);
 			lines.push(`        _oled_cx = ${ctx.x + r} + _oled_i * ${spacing};`);
 			lines.push(`        if(_oled_i < _oled_filled) {`);
-			lines.push(`            rect_oled(_oled_cx - ${r}, ${ctx.y}, _oled_cx + ${r}, ${ctx.y + r * 2}, OLED_WHITE);`);
+			lines.push(`            rect_oled(_oled_cx - ${r}, ${ctx.y}, ${r * 2 + 1}, ${r * 2 + 1}, 1, OLED_WHITE);`);
 			lines.push(`        } else {`);
 			lines.push(`            pixel_oled(_oled_cx, ${ctx.y}, 1);`);
 			lines.push(`            pixel_oled(_oled_cx, ${ctx.y + r * 2}, 1);`);

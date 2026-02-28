@@ -14,3 +14,5 @@ pub mod search;
 pub mod workspace;
 pub mod git;
 pub mod runner;
+pub mod server;
+pub mod sprites;

@@ -1,4 +1,5 @@
 import type { SubNodeDef } from '$lib/types/flow';
+import { addString } from '$lib/types/flow';
 import { widgetDrawRect } from '$lib/oled-widgets/types';
 import { drawBitmapText } from '$lib/oled-widgets/font';
 
@@ -80,11 +81,12 @@ export const menuItemDef: SubNodeDef = {
 		const spacing = (config.prefixSpacing as number) ?? 1;
 		const font = (config.font as string) === 'small' ? 'OLED_FONT_SMALL' : 'OLED_FONT_SMALL';
 		const label = (config as Record<string, unknown>).label as string || 'Item';
+		const labelIdx = addString(ctx, label);
+		const labelRef = `${ctx.stringArrayName}[${labelIdx}]`;
 		const lines: string[] = [];
 
 		if (ctx.cursorIndex < 0) {
-			// Non-interactive fallback (shouldn't happen for menu-item)
-			lines.push(`    print_string(${ctx.x + 2}, ${ctx.y}, ${font}, OLED_WHITE, "${label}");`);
+			lines.push(`    print(${ctx.x + 2}, ${ctx.y}, ${font}, OLED_WHITE, ${labelRef});`);
 			return lines.join('\n');
 		}
 
@@ -92,24 +94,26 @@ export const menuItemDef: SubNodeDef = {
 
 		if (style === 'invert') {
 			lines.push(`    if(${ctx.cursorVar} == ${ctx.cursorIndex}) {`);
-			lines.push(`        rect_oled(${ctx.x}, ${ctx.y}, ${ctx.x + 127}, ${ctx.y + 7}, OLED_WHITE);`);
-			lines.push(`        print_string(${ctx.x + 2}, ${ctx.y}, ${font}, OLED_BLACK, "${label}");`);
+			lines.push(`        rect_oled(${ctx.x}, ${ctx.y}, ${128 - ctx.x}, 8, 1, OLED_WHITE);`);
+			lines.push(`        print(${ctx.x + 2}, ${ctx.y}, ${font}, OLED_BLACK, ${labelRef});`);
 			lines.push(`    } else {`);
-			lines.push(`        print_string(${ctx.x + 2}, ${ctx.y}, ${font}, OLED_WHITE, "${label}");`);
+			lines.push(`        print(${ctx.x + 2}, ${ctx.y}, ${font}, OLED_WHITE, ${labelRef});`);
 			lines.push(`    }`);
 		} else if (style === 'bracket') {
+			const bracketIdx = addString(ctx, `[${label}]`);
 			lines.push(`    if(${ctx.cursorVar} == ${ctx.cursorIndex}) {`);
-			lines.push(`        print_string(${ctx.x}, ${ctx.y}, ${font}, OLED_WHITE, "[${label}]");`);
+			lines.push(`        print(${ctx.x}, ${ctx.y}, ${font}, OLED_WHITE, ${ctx.stringArrayName}[${bracketIdx}]);`);
 			lines.push(`    } else {`);
-			lines.push(`        print_string(${ctx.x + 6}, ${ctx.y}, ${font}, OLED_WHITE, "${label}");`);
+			lines.push(`        print(${ctx.x + 6}, ${ctx.y}, ${font}, OLED_WHITE, ${labelRef});`);
 			lines.push(`    }`);
 		} else {
 			// prefix
+			const prefixIdx = addString(ctx, prefix);
 			const offset = (prefix.length + spacing) * 6;
 			lines.push(`    if(${ctx.cursorVar} == ${ctx.cursorIndex}) {`);
-			lines.push(`        print_string(${ctx.x}, ${ctx.y}, ${font}, OLED_WHITE, "${prefix}");`);
+			lines.push(`        print(${ctx.x}, ${ctx.y}, ${font}, OLED_WHITE, ${ctx.stringArrayName}[${prefixIdx}]);`);
 			lines.push(`    }`);
-			lines.push(`    print_string(${ctx.x + offset}, ${ctx.y}, ${font}, OLED_WHITE, "${label}");`);
+			lines.push(`    print(${ctx.x + offset}, ${ctx.y}, ${font}, OLED_WHITE, ${labelRef});`);
 		}
 
 		return lines.join('\n');

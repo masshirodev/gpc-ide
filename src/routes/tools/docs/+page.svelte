@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { marked, type TokenizerAndRendererExtension } from 'marked';
+	import ToolHeader from '$lib/components/layout/ToolHeader.svelte';
 
 	const badgeColors: Record<string, { bg: string; border: string; text: string }> = {
 		lsp: { bg: '#1e3a5f', border: '#3b82f6', text: '#93c5fd' },
@@ -124,16 +125,8 @@
 	}
 </script>
 
-<div class="flex h-screen flex-col bg-zinc-950">
-	<div class="flex items-center gap-3 border-b border-zinc-800 px-5 py-3">
-		<a href="/" class="flex items-center gap-1.5 text-sm text-zinc-400 hover:text-zinc-200">
-			<svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-				<path fill-rule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clip-rule="evenodd" />
-			</svg>
-			Back
-		</a>
-		<h1 class="text-lg font-semibold text-zinc-100">Documentation</h1>
-	</div>
+<div class="flex h-full flex-col bg-zinc-950">
+	<ToolHeader title="Documentation" />
 
 	<div class="flex flex-1 overflow-hidden">
 		<div class="flex w-64 flex-col border-r border-zinc-800 bg-zinc-900">

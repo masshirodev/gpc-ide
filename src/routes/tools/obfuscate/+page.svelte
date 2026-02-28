@@ -3,10 +3,12 @@
 	import type { ObfuscateResult } from '$lib/tauri/commands';
 	import { addToast } from '$lib/stores/toast.svelte';
 	import MonacoEditor from '$lib/components/editor/MonacoEditor.svelte';
+	import ToolHeader from '$lib/components/layout/ToolHeader.svelte';
 
 	let source = $state('');
 	let result = $state<ObfuscateResult | null>(null);
 	let level = $state(2);
+	let sliderFill = $derived(((level - 1) / 4) * 100);
 	let loading = $state(false);
 	let loadedFileName = $state('');
 
@@ -94,20 +96,7 @@
 
 <div class="flex h-full flex-col bg-zinc-950 text-zinc-100">
 	<!-- Header -->
-	<div class="flex items-center justify-between border-b border-zinc-800 px-4 py-3">
-		<div class="flex items-center gap-3">
-			<a href="/" class="flex items-center gap-1.5 text-sm text-zinc-400 hover:text-zinc-200">
-				<svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-					<path fill-rule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clip-rule="evenodd" />
-				</svg>
-				Back
-			</a>
-			<div>
-				<h1 class="text-lg font-semibold">Code Obfuscator</h1>
-				<p class="text-xs text-zinc-500">Protect your GPC scripts with layered obfuscation</p>
-			</div>
-		</div>
-	</div>
+	<ToolHeader title="Code Obfuscator" subtitle="Protect your GPC scripts with layered obfuscation" />
 
 	<!-- Controls -->
 	<div class="flex flex-wrap items-center gap-4 border-b border-zinc-800 px-4 py-3">
@@ -138,7 +127,8 @@
 				min="1"
 				max="5"
 				bind:value={level}
-				class="h-2 w-32 cursor-pointer appearance-none rounded-lg bg-zinc-700 accent-emerald-500"
+				class="level-slider h-2 w-32 cursor-pointer appearance-none rounded-lg"
+				style="background: linear-gradient(to right, #10b981 0%, #10b981 {sliderFill}%, #3f3f46 {sliderFill}%, #3f3f46 100%)"
 			/>
 			<div class="min-w-[140px]">
 				<span class="text-sm font-medium text-emerald-400">{level}</span>
@@ -337,3 +327,15 @@
 		</div>
 	{/if}
 </div>
+
+<style>
+	.level-slider::-webkit-slider-thumb {
+		-webkit-appearance: none;
+		width: 16px;
+		height: 16px;
+		border-radius: 50%;
+		background: #10b981;
+		border: 2px solid #064e3b;
+		cursor: pointer;
+	}
+</style>

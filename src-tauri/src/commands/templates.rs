@@ -207,10 +207,18 @@ pub fn save_project_template(
     let mut file_count = 0usize;
     copy_dir_for_template(game_dir, &tpl_dir, &mut file_count)?;
 
-    // Read game meta to get type info
-    let meta_path = game_dir.join(".gpc-meta.json");
-    let (game_type, console_type) = if meta_path.exists() {
-        let meta_str = std::fs::read_to_string(&meta_path).unwrap_or_default();
+    // Read game meta to get type info (try game.json first, then .gpc-meta.json, then config.toml)
+    let game_json_path = game_dir.join("game.json");
+    let legacy_meta_path = game_dir.join(".gpc-meta.json");
+    let (game_type, console_type) = if game_json_path.exists() {
+        let meta_str = std::fs::read_to_string(&game_json_path).unwrap_or_default();
+        let meta: serde_json::Value = serde_json::from_str(&meta_str).unwrap_or_default();
+        (
+            meta.get("game_type").and_then(|v| v.as_str()).unwrap_or("custom").to_string(),
+            meta.get("console_type").and_then(|v| v.as_str()).unwrap_or("ps5").to_string(),
+        )
+    } else if legacy_meta_path.exists() {
+        let meta_str = std::fs::read_to_string(&legacy_meta_path).unwrap_or_default();
         let meta: serde_json::Value = serde_json::from_str(&meta_str).unwrap_or_default();
         (
             meta.get("game_type").and_then(|v| v.as_str()).unwrap_or("custom").to_string(),
@@ -383,6 +391,19 @@ pub fn create_game_from_template(
             // Simple replacement of the name field
             let updated = update_toml_name(&content, &game_name);
             let _ = std::fs::write(&config_path, updated);
+        }
+    }
+
+    // Update game.json if present (flow-based games)
+    let game_json_path = game_dir.join("game.json");
+    if game_json_path.exists() {
+        if let Ok(content) = std::fs::read_to_string(&game_json_path) {
+            if let Ok(mut meta) = serde_json::from_str::<serde_json::Value>(&content) {
+                meta["name"] = serde_json::Value::String(game_name.clone());
+                if let Ok(updated) = serde_json::to_string_pretty(&meta) {
+                    let _ = std::fs::write(&game_json_path, updated);
+                }
+            }
         }
     }
 

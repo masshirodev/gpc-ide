@@ -60,12 +60,13 @@ export const barDef: SubNodeDef = {
 		lines.push(`    // Bar (${style}) for ${boundVar}`);
 
 		if (style === 'recessed') {
-			lines.push(`    rect_oled(${ctx.x}, ${ctx.y}, ${ctx.x + w - 1}, ${ctx.y + h - 1}, OLED_WHITE);`);
+			// Outline: rect_oled(x, y, w, h, fill, color)
+			lines.push(`    rect_oled(${ctx.x}, ${ctx.y}, ${w}, ${h}, 0, OLED_WHITE);`);
 			lines.push(`    if(${boundVar} > 0) {`);
-			lines.push(`        rect_oled(${ctx.x + 2}, ${ctx.y + 2}, ${ctx.x + 2} + (${boundVar} * ${w - 4} / 100), ${ctx.y + h - 3}, OLED_WHITE);`);
+			lines.push(`        rect_oled(${ctx.x + 2}, ${ctx.y + 2}, ${boundVar} * ${w - 4} / 100, ${h - 4}, 1, OLED_WHITE);`);
 			lines.push(`    }`);
 		} else if (style === 'gradient') {
-			lines.push(`    rect_oled(${ctx.x}, ${ctx.y}, ${ctx.x + w - 1}, ${ctx.y + h - 1}, OLED_WHITE);`);
+			lines.push(`    rect_oled(${ctx.x}, ${ctx.y}, ${w}, ${h}, 0, OLED_WHITE);`);
 			lines.push(`    _oled_fw = ${boundVar} * ${w - 2} / 100;`);
 			lines.push(`    for(_oled_py = ${ctx.y + 1}; _oled_py < ${ctx.y + h - 1}; _oled_py++) {`);
 			lines.push(`        for(_oled_px = ${ctx.x + 1}; _oled_px < ${ctx.x + 1} + _oled_fw; _oled_px++) {`);
@@ -75,10 +76,10 @@ export const barDef: SubNodeDef = {
 		} else if (style === 'chunky') {
 			const segs = (config.segments as number) || 10;
 			const segW = Math.floor((w - 2) / segs);
-			lines.push(`    rect_oled(${ctx.x}, ${ctx.y}, ${ctx.x + w - 1}, ${ctx.y + h - 1}, OLED_WHITE);`);
+			lines.push(`    rect_oled(${ctx.x}, ${ctx.y}, ${w}, ${h}, 0, OLED_WHITE);`);
 			lines.push(`    _oled_segs = ${boundVar} * ${segs} / 100;`);
 			lines.push(`    for(_oled_i = 0; _oled_i < _oled_segs; _oled_i++) {`);
-			lines.push(`        rect_oled(${ctx.x + 2} + _oled_i * ${segW}, ${ctx.y + 2}, ${ctx.x + 2} + _oled_i * ${segW} + ${segW - 2}, ${ctx.y + h - 3}, OLED_WHITE);`);
+			lines.push(`        rect_oled(${ctx.x + 2} + _oled_i * ${segW}, ${ctx.y + 2}, ${segW - 2}, ${h - 4}, 1, OLED_WHITE);`);
 			lines.push(`    }`);
 		} else if (style === 'notched') {
 			const steps = (config.segments as number) || 5;
@@ -87,12 +88,12 @@ export const barDef: SubNodeDef = {
 			lines.push(`    for(_oled_i = 0; _oled_i < ${steps}; _oled_i++) {`);
 			lines.push(`        _oled_sx = ${ctx.x} + _oled_i * ${stepW};`);
 			lines.push(`        if(_oled_i < _oled_filled) {`);
-			lines.push(`            rect_oled(_oled_sx, ${ctx.y}, _oled_sx + ${stepW - 2}, ${ctx.y + h - 1}, OLED_WHITE);`);
+			lines.push(`            rect_oled(_oled_sx, ${ctx.y}, ${stepW - 1}, ${h}, 1, OLED_WHITE);`);
 			lines.push(`        } else {`);
-			lines.push(`            line_oled(_oled_sx, ${ctx.y}, _oled_sx + ${stepW - 2}, ${ctx.y}, OLED_WHITE);`);
-			lines.push(`            line_oled(_oled_sx, ${ctx.y + h - 1}, _oled_sx + ${stepW - 2}, ${ctx.y + h - 1}, OLED_WHITE);`);
-			lines.push(`            line_oled(_oled_sx, ${ctx.y}, _oled_sx, ${ctx.y + h - 1}, OLED_WHITE);`);
-			lines.push(`            line_oled(_oled_sx + ${stepW - 2}, ${ctx.y}, _oled_sx + ${stepW - 2}, ${ctx.y + h - 1}, OLED_WHITE);`);
+			lines.push(`            line_oled(_oled_sx, ${ctx.y}, _oled_sx + ${stepW - 2}, ${ctx.y}, 1, OLED_WHITE);`);
+			lines.push(`            line_oled(_oled_sx, ${ctx.y + h - 1}, _oled_sx + ${stepW - 2}, ${ctx.y + h - 1}, 1, OLED_WHITE);`);
+			lines.push(`            line_oled(_oled_sx, ${ctx.y}, _oled_sx, ${ctx.y + h - 1}, 1, OLED_WHITE);`);
+			lines.push(`            line_oled(_oled_sx + ${stepW - 2}, ${ctx.y}, _oled_sx + ${stepW - 2}, ${ctx.y + h - 1}, 1, OLED_WHITE);`);
 			lines.push(`        }`);
 			lines.push(`    }`);
 		} else if (style === 'equalizer') {
@@ -102,7 +103,7 @@ export const barDef: SubNodeDef = {
 			lines.push(`    for(_oled_i = 0; _oled_i < ${bars}; _oled_i++) {`);
 			lines.push(`        _oled_bx = ${ctx.x} + _oled_i * ${barW + gap};`);
 			lines.push(`        _oled_bh = ${boundVar} * ${h} / 100;`);
-			lines.push(`        if(_oled_bh > 0) rect_oled(_oled_bx, ${ctx.y + h} - _oled_bh, _oled_bx + ${barW - 1}, ${ctx.y + h - 1}, OLED_WHITE);`);
+			lines.push(`        if(_oled_bh > 0) rect_oled(_oled_bx, ${ctx.y + h} - _oled_bh, ${barW}, _oled_bh, 1, OLED_WHITE);`);
 			lines.push(`    }`);
 		}
 

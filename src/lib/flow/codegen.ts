@@ -36,6 +36,11 @@ export function generateFlowGpc(graph: FlowGraph, profileCount: number = 0): str
 	lines.push(`// ====================================================`);
 	lines.push(``);
 
+	// Imports for common helpers
+	lines.push(`import common/helper;`);
+	lines.push(`import common/oled;`);
+	lines.push(``);
+
 	// State defines
 	lines.push(`// ===== STATE DEFINITIONS =====`);
 	for (const node of sorted) {
@@ -124,6 +129,67 @@ export function generateFlowGpc(graph: FlowGraph, profileCount: number = 0): str
 		lines.push(``);
 	}
 
+	// Pre-generate sub-node code to collect strings for const string[] declarations
+	const nodeSubNodeCode = new Map<string, string[]>();
+	const nodeStrings = new Map<string, string[]>();
+
+	for (const node of sorted) {
+		if (node.subNodes.length === 0) continue;
+		const safeName = sanitizeName(node.label);
+		const sortedSubs = getSortedSubNodes(node);
+		const strings: string[] = [];
+		const stringArrayName = `FlowText_${safeName}`;
+		const codeLines: string[] = [];
+		let cursorIndex = 0;
+
+		for (const sub of sortedSubs) {
+			const def = getSubNodeDef(sub.type);
+			if (!def) continue;
+
+			const pixelY = computeSubNodePixelY(node, sub);
+			const pixelX = sub.position === 'absolute' ? (sub.x ?? 0) : node.stackOffsetX;
+
+			const ctx: SubNodeCodegenContext = {
+				varPrefix: `Flow_${safeName}`,
+				cursorVar: `Flow_${safeName}_cursor`,
+				cursorIndex: sub.interactive ? cursorIndex : -1,
+				x: pixelX,
+				y: pixelY,
+				boundVariable: sub.boundVariable ? profileVar(sub.boundVariable) : undefined,
+				buttons: bm,
+				stringArrayName,
+				strings,
+			};
+
+			const configWithLabel = { ...sub.config, label: sub.label };
+			const code = def.generateGpc(configWithLabel, ctx);
+			if (code.trim()) {
+				codeLines.push(code);
+			}
+
+			if (sub.interactive) cursorIndex++;
+		}
+
+		nodeSubNodeCode.set(node.id, codeLines);
+		nodeStrings.set(node.id, strings);
+	}
+
+	// Emit const string[] declarations for each node that has text
+	let hasStringDecls = false;
+	for (const node of sorted) {
+		const strings = nodeStrings.get(node.id);
+		if (strings && strings.length > 0) {
+			if (!hasStringDecls) {
+				lines.push(`// ===== STRING TABLES =====`);
+				hasStringDecls = true;
+			}
+			const safeName = sanitizeName(node.label);
+			const escaped = strings.map((s) => `"${s.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`);
+			lines.push(`const string FlowText_${safeName}[] = { ${escaped.join(', ')} };`);
+		}
+	}
+	if (hasStringDecls) lines.push(``);
+
 	// OLED draw functions (legacy: nodes with oledScene but no sub-nodes)
 	for (const node of sorted) {
 		if (node.oledScene && node.subNodes.length === 0) {
@@ -184,34 +250,12 @@ export function generateFlowGpc(graph: FlowGraph, profileCount: number = 0): str
 			lines.push(``);
 			lines.push(`    // Sub-node rendering`);
 
-			// Generate render calls for each sub-node
-			const sortedSubs = getSortedSubNodes(node);
-			let cursorIndex = 0;
-			for (const sub of sortedSubs) {
-				const def = getSubNodeDef(sub.type);
-				if (!def) continue;
-
-				const pixelY = computeSubNodePixelY(node, sub);
-				const pixelX = sub.position === 'absolute' ? (sub.x ?? 0) : node.stackOffsetX;
-
-				const ctx: SubNodeCodegenContext = {
-					varPrefix: `Flow_${safeName}`,
-					cursorVar: `Flow_${safeName}_cursor`,
-					cursorIndex: sub.interactive ? cursorIndex : -1,
-					x: pixelX,
-					y: pixelY,
-					boundVariable: sub.boundVariable ? profileVar(sub.boundVariable) : undefined,
-					buttons: bm,
-				};
-
-				// Merge label into config for codegen
-				const configWithLabel = { ...sub.config, label: sub.label };
-				const code = def.generateGpc(configWithLabel, ctx);
-				if (code.trim()) {
+			// Use pre-generated sub-node code (collected during string pass)
+			const subCode = nodeSubNodeCode.get(node.id);
+			if (subCode) {
+				for (const code of subCode) {
 					lines.push(code);
 				}
-
-				if (sub.interactive) cursorIndex++;
 			}
 		} else {
 			// === Legacy: raw code + OLED scene ===

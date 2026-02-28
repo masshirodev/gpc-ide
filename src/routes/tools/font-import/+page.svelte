@@ -1,10 +1,13 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
 	import { open as openDialog } from '@tauri-apps/plugin-dialog';
 	import { readFile } from '$lib/tauri/commands';
 	import { parseBdf, bdfToBitmapFont, generateGpcFontCode } from '$lib/utils/bdf-parser';
 	import type { BdfFont } from '$lib/utils/bdf-parser';
+	import { goto } from '$app/navigation';
 	import { addToast } from '$lib/stores/toast.svelte';
+	import ToolHeader from '$lib/components/layout/ToolHeader.svelte';
+	import { setFontTransfer } from '$lib/stores/font-transfer.svelte';
+	import { bitmapToCustomFont } from '../oled/fonts-custom';
 
 	let bdfFont = $state<BdfFont | null>(null);
 	let bitmapFont = $state<{ width: number; height: number; spacing: number; data: Map<number, number[]> } | null>(null);
@@ -76,6 +79,14 @@
 		} catch {
 			addToast('Failed to copy', 'error');
 		}
+	}
+
+	function sendToFontEditor() {
+		if (!bitmapFont) return;
+		const customFont = bitmapToCustomFont(fontName, bitmapFont.width, bitmapFont.height, bitmapFont.spacing, bitmapFont.data);
+		setFontTransfer(customFont);
+		goto('/tools/oled');
+		addToast('Font sent to OLED Creator — open the Font Editor', 'success');
 	}
 
 	function renderPreview(
@@ -161,19 +172,7 @@
 
 <div class="flex h-full flex-col bg-zinc-950 text-zinc-200">
 	<!-- Header -->
-	<div class="flex items-center gap-3 border-b border-zinc-800 px-4 py-3">
-		<button
-			class="rounded p-1 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300"
-			onclick={() => goto('/')}
-			title="Back"
-		>
-			<svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-				<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
-			</svg>
-		</button>
-		<h1 class="text-lg font-bold">OLED Font Import</h1>
-		<span class="text-xs text-zinc-500">Import BDF bitmap fonts as GPC arrays</span>
-	</div>
+	<ToolHeader title="OLED Font Import" subtitle="Import BDF bitmap fonts as GPC arrays" />
 
 	<!-- Controls -->
 	<div class="flex flex-wrap items-center gap-3 border-b border-zinc-800 p-4">
@@ -209,6 +208,13 @@
 					bind:value={previewText}
 				/>
 			</div>
+			<div class="mx-2 h-5 w-px bg-zinc-700"></div>
+			<button
+				class="rounded bg-amber-600 px-4 py-1.5 text-xs font-medium text-white hover:bg-amber-500"
+				onclick={sendToFontEditor}
+			>
+				Send to Font Editor
+			</button>
 		{/if}
 	</div>
 

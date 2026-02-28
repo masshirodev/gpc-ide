@@ -105,7 +105,7 @@
 		</button>
 	</div>
 
-	<div class="max-h-64 space-y-1 overflow-y-auto">
+	<div class="scrollbar-none max-h-64 space-y-1 overflow-y-auto">
 		{#each scenes as scene, i}
 			<!-- svelte-ignore a11y_no_static_element_interactions -->
 			<div

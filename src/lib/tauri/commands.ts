@@ -522,6 +522,36 @@ export async function killCommand(): Promise<void> {
 	return invoke<void>('kill_command');
 }
 
+// === Sprite Collection Commands ===
+
+import type { SpriteCollection, SpriteCollectionSummary } from '$lib/types/sprite';
+
+export async function listSpriteCollections(workspace: string): Promise<SpriteCollectionSummary[]> {
+	return invoke<SpriteCollectionSummary[]>('list_sprite_collections', { workspace });
+}
+
+export async function readSpriteCollection(workspace: string, id: string): Promise<SpriteCollection> {
+	return invoke<SpriteCollection>('read_sprite_collection', { workspace, id });
+}
+
+export async function saveSpriteCollection(workspace: string, collection: SpriteCollection): Promise<void> {
+	return invoke<void>('save_sprite_collection', { workspace, collection });
+}
+
+export async function deleteSpriteCollection(workspace: string, id: string): Promise<void> {
+	return invoke<void>('delete_sprite_collection', { workspace, id });
+}
+
+// === File Server Commands ===
+
+export async function startFileServer(filePath: string): Promise<string> {
+	return invoke<string>('start_file_server', { filePath });
+}
+
+export async function stopFileServer(): Promise<void> {
+	return invoke<void>('stop_file_server', {});
+}
+
 // === Opener Commands ===
 
 export async function openInDefaultApp(path: string): Promise<void> {

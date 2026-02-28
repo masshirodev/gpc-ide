@@ -30,10 +30,12 @@
 		buildGame,
 		readFileTree,
 		readFile,
+		writeFile,
 		watchDirectory,
 		deleteFile,
 		deleteGame,
 		openInDefaultApp,
+		startFileServer,
 		createSnapshot,
 		listSnapshots,
 		getSnapshot,
@@ -45,7 +47,8 @@
 		gitDiffFile,
 		gitIsRepo,
 		exportGameZip,
-		importGameZip
+		importGameZip,
+		loadFlowProject
 	} from '$lib/tauri/commands';
 	import { onFileChange } from '$lib/tauri/events';
 	import type { BuildResult, FileTreeEntry, SnapshotMeta } from '$lib/tauri/commands';
@@ -79,6 +82,7 @@
 		updateWeaponValues
 	} from '$lib/utils/recoil-parser';
 	import { parseBuildErrorLink } from '$lib/utils/editor-helpers';
+	import { generateMergedFlowGpc } from '$lib/flow/codegen-merged';
 	import { parseDiffToLineChanges } from '$lib/utils/diff-parser';
 	import type { GitLineChange } from '$lib/components/editor/MonacoEditor.svelte';
 
@@ -146,6 +150,10 @@
 	let buildResult = $state<BuildResult | null>(null);
 	let buildOutputContent = $state<string | null>(null);
 	let buildOutputLoading = $state(false);
+	let sendingToZenStudio = $state(false);
+
+	// TODO: Replace with actual Zen Studio URL when known
+	const ZEN_STUDIO_URL = 'http://localhost:3000';
 
 	// Command palette state
 	let showCommandPalette = $state(false);
@@ -576,8 +584,19 @@
 		if (!store.selectedGame) return;
 		building = true;
 		try {
-			const workspacePath = getWorkspaceForGame(store.selectedGame.path);
-			buildResult = await buildGame(store.selectedGame.path, workspacePath);
+			const gamePath = store.selectedGame.path;
+			const workspacePath = getWorkspaceForGame(gamePath);
+
+			// For flow-based games, generate main.gpc from the flow project before building
+			if (store.selectedGame.generation_mode === 'flow') {
+				const flowProject = await loadFlowProject(gamePath);
+				if (flowProject) {
+					const gpcCode = generateMergedFlowGpc(flowProject);
+					await writeFile(gamePath + '/main.gpc', gpcCode);
+				}
+			}
+
+			buildResult = await buildGame(gamePath, workspacePath);
 			if (buildResult.success && buildResult.output_path) {
 				const fileName = buildResult.output_path.split('/').pop() || 'output';
 				addToast(`Build succeeded: ${fileName}`, 'success');
@@ -811,6 +830,22 @@
 		}
 	}
 
+	async function handleSendToZenStudio() {
+		if (!buildResult?.output_path) return;
+		sendingToZenStudio = true;
+		try {
+			const serverUrl = await startFileServer(buildResult.output_path);
+			const studioUrl = `${ZEN_STUDIO_URL}?url=${encodeURIComponent(serverUrl)}`;
+			const { openUrl } = await import('@tauri-apps/plugin-opener');
+			await openUrl(studioUrl);
+			addToast(m.editor_build_zen_studio_success(), 'success');
+		} catch (e) {
+			addToast(m.editor_build_zen_studio_error({ error: String(e) }), 'error');
+		} finally {
+			sendingToZenStudio = false;
+		}
+	}
+
 	function handleKeydown(e: KeyboardEvent) {
 		if (matchesCombo(e, getKeyCombo('save'))) {
 			e.preventDefault();
@@ -960,9 +995,11 @@
 				{buildOutputContent}
 				{buildOutputLoading}
 				{building}
+				{sendingToZenStudio}
 				onBuild={handleBuild}
 				onBuildErrorClick={handleBuildErrorClick}
 				onCopyBuildOutput={handleCopyBuildOutput}
+				onSendToZenStudio={handleSendToZenStudio}
 			/>
 			<div class="mt-4">
 				<TaskRunnerPanel gamePath={store.selectedGame?.path ?? ''} />

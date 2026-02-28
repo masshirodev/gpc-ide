@@ -120,7 +120,7 @@
 			tools: [
 				{
 					href: '/tools/templates',
-					label: 'Templates',
+					label: 'Code Generators',
 					icon: 'M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zm0 6a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zm10 0a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z'
 				},
 				{
@@ -177,7 +177,7 @@
 			tools: [
 				{
 					href: '/tools/simulator',
-					label: 'Simulator',
+					label: 'Combo Simulator',
 					icon: 'M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z'
 				},
 				{
@@ -256,7 +256,7 @@
 		{/if}
 	</div>
 
-	<nav class="flex-1 overflow-y-auto px-2 py-2">
+	<nav class="scrollbar-none flex-1 overflow-y-auto px-2 py-2">
 		<button
 			class="mb-1 flex w-full items-center gap-2 rounded px-3 py-2 text-left text-sm text-zinc-300 hover:bg-zinc-800"
 			onclick={() => {

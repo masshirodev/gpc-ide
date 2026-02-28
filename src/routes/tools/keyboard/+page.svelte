@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import ToolHeader from '$lib/components/layout/ToolHeader.svelte';
 	import {
 		getKeyboardTransfer,
 		setKeyboardTransfer,
@@ -135,6 +136,22 @@
 
 	let showCode = $state(false);
 	let showClearConfirm = $state(false);
+	let comboPickerIdx = $state<number | null>(null);
+
+	function handleSetCombo(idx: number, comboBtn: string) {
+		mappings = mappings.map((m, i) =>
+			i === idx ? { ...m, sourceCombo: comboBtn, type: 'controller' as const } : m
+		);
+		comboPickerIdx = null;
+	}
+
+	function handleRemoveCombo(idx: number) {
+		mappings = mappings.map((m, i) => {
+			if (i !== idx) return m;
+			const { sourceCombo: _, ...rest } = m;
+			return rest;
+		});
+	}
 
 	function handleClearAll() {
 		mappings = [];
@@ -159,45 +176,39 @@
 
 <div class="flex h-full flex-col bg-zinc-950">
 	<!-- Header -->
-	<div class="flex items-center gap-3 border-b border-zinc-800 px-5 py-3">
-		<a href="/" class="flex items-center gap-1.5 text-sm text-zinc-400 hover:text-zinc-200">
-			<svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-				<path fill-rule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clip-rule="evenodd" />
-			</svg>
-			Back
-		</a>
-		<h1 class="text-lg font-semibold text-zinc-100">Keyboard / Controller Mapper</h1>
+	<ToolHeader title="Keyboard / Controller Mapper">
 		<span class="text-sm text-zinc-500">({mappings.length} mappings)</span>
-		<div class="flex-1"></div>
-		{#if mappings.length > 0}
-			<button
-				class="rounded border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800"
-				onclick={() => (showCode = !showCode)}
-			>
-				{showCode ? 'Hide Code' : 'Show Code'}
-			</button>
-			<button
-				class="rounded border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800"
-				onclick={handleCopyCode}
-			>
-				Copy Code
-			</button>
-			<button
-				class="rounded border border-red-900 px-3 py-1.5 text-sm text-red-400 hover:bg-red-900/30"
-				onclick={() => (showClearConfirm = true)}
-			>
-				Clear All
-			</button>
-		{/if}
-		{#if returnTo}
-			<button
-				class="rounded bg-emerald-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-emerald-500"
-				onclick={handleReturnToEditor}
-			>
-				Return to Editor
-			</button>
-		{/if}
-	</div>
+		<div class="ml-auto flex items-center gap-2">
+			{#if mappings.length > 0}
+				<button
+					class="rounded border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800"
+					onclick={() => (showCode = !showCode)}
+				>
+					{showCode ? 'Hide Code' : 'Show Code'}
+				</button>
+				<button
+					class="rounded border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800"
+					onclick={handleCopyCode}
+				>
+					Copy Code
+				</button>
+				<button
+					class="rounded border border-red-900 px-3 py-1.5 text-sm text-red-400 hover:bg-red-900/30"
+					onclick={() => (showClearConfirm = true)}
+				>
+					Clear All
+				</button>
+			{/if}
+			{#if returnTo}
+				<button
+					class="rounded bg-emerald-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-emerald-500"
+					onclick={handleReturnToEditor}
+				>
+					Return to Editor
+				</button>
+			{/if}
+		</div>
+	</ToolHeader>
 
 	{#if showCode}
 		<div class="h-48 border-b border-zinc-800">
@@ -315,7 +326,7 @@
 						<span>{getButtonLabel(btnName)}</span>
 						{#if btnMappings.length > 0}
 							<span class="text-[9px] opacity-75">
-								{btnMappings.map((m) => getButtonLabel(m.source)).join(', ')}
+								{btnMappings.map((m) => m.sourceCombo ? `${getButtonLabel(m.sourceCombo)}+${getButtonLabel(m.source)}` : getButtonLabel(m.source)).join(', ')}
 							</span>
 						{/if}
 					</button>
@@ -341,6 +352,12 @@
 								class:opacity-40={!mapping.enabled}
 							>
 								<div class="flex items-center gap-1.5 text-xs">
+									{#if mapping.sourceCombo}
+										<span class="rounded bg-purple-900/50 px-1 py-0.5 text-purple-400">
+											{getButtonLabel(mapping.sourceCombo)}
+										</span>
+										<span class="text-zinc-600">+</span>
+									{/if}
 									<span
 										class="rounded px-1 py-0.5 {mapping.type === 'keyboard'
 											? 'bg-blue-900/50 text-blue-400'
@@ -351,6 +368,25 @@
 									<span class="text-zinc-600">&rarr;</span>
 									<span class="text-zinc-300">{getButtonLabel(mapping.target)}</span>
 									<div class="ml-auto flex gap-1 opacity-0 group-hover:opacity-100">
+										{#if mapping.type === 'controller'}
+											{#if mapping.sourceCombo}
+												<button
+													class="text-purple-400 hover:text-purple-300"
+													onclick={() => handleRemoveCombo(idx)}
+													title="Remove combo"
+												>
+													−
+												</button>
+											{:else}
+												<button
+													class="text-zinc-500 hover:text-purple-400"
+													onclick={() => (comboPickerIdx = comboPickerIdx === idx ? null : idx)}
+													title="Add combo button"
+												>
+													+
+												</button>
+											{/if}
+										{/if}
 										<button
 											class="text-zinc-500 hover:text-zinc-300"
 											onclick={() => handleToggle(idx)}
@@ -367,6 +403,21 @@
 										</button>
 									</div>
 								</div>
+								{#if comboPickerIdx === idx}
+									<div class="mt-1 rounded border border-purple-800/50 bg-purple-900/10 p-1.5">
+										<div class="mb-1 text-[10px] text-purple-400">Select held button:</div>
+										<div class="flex flex-wrap gap-0.5">
+											{#each getControllerButtons(inputConsole).filter((b) => b.id !== mapping.source).slice(0, 20) as btn}
+												<button
+													class="rounded border border-zinc-700 bg-zinc-800 px-1 py-0.5 text-[9px] text-zinc-300 hover:border-purple-500 hover:text-purple-300"
+													onclick={() => handleSetCombo(idx, btn.id)}
+												>
+													{btn.label}
+												</button>
+											{/each}
+										</div>
+									</div>
+								{/if}
 								{#if mapping.value !== 0}
 									<div class="mt-1 flex items-center gap-2">
 										<span class="text-[10px] text-zinc-600">Value:</span>
