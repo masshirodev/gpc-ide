@@ -20,7 +20,7 @@
 	let settings = $derived($settingsStore);
 	let userChunks = $state<FlowChunk[]>([]);
 	let search = $state('');
-	let expandedCategories = $state<Set<string>>(new Set(['intro', 'menu', 'home', 'screensaver', 'modules']));
+	let expandedCategories = $state<Set<string>>(new Set(['intro', 'menu', 'home', 'screensaver', 'utility', 'code', 'modules']));
 
 	onMount(async () => {
 		try {
@@ -81,6 +81,7 @@
 		menu: 'Menu Pages',
 		home: 'Home / Status',
 		screensaver: 'Screensaver',
+		code: 'Code Snippets',
 		utility: 'Utility',
 		uncategorized: 'Other',
 	};

@@ -1,12 +1,38 @@
-# Configuration {ide} {required}
+# Configuration {ide}
 
-Each game's behavior is defined by its `config.toml` file. This file controls everything from button mappings to OLED menu layout to module parameters.
+GPC IDE supports two configuration approaches depending on your game's generation mode.
 
-## Config Structure
+## Flow-Based Games
 
-A `config.toml` file contains these sections:
+Flow-based games store their configuration in two files:
 
-### Top-Level Properties
+### game.json
+
+Contains game metadata:
+
+```json
+{
+  "name": "My Game",
+  "filename": "my_game",
+  "version": 1,
+  "generation_mode": "flow",
+  "tags": ["fps", "competitive"]
+}
+```
+
+### flows.json
+
+Contains the complete flow graph data — nodes, edges, variables, sub-nodes, and profiles. This file is managed by the Flow Editor and should not be edited manually.
+
+The flow graph defines the OLED menu system and game logic visually. Code is generated from this data by the build pipeline.
+
+## Config-Based Games (Legacy)
+
+Config-based games use a `config.toml` file that controls everything from button mappings to OLED menu layout to module parameters.
+
+### Config Structure
+
+#### Top-Level Properties
 
 ```toml
 filename = "my_game"
@@ -30,7 +56,7 @@ weapons = ["AR", "SMG", "Sniper", "Shotgun"]
 | `profile_count` | Number of weapon/loadout profiles (0 for none) |
 | `weapons`       | List of weapon/profile names                   |
 
-### State Screen
+#### State Screen
 
 Controls the OLED title screen:
 
@@ -40,7 +66,7 @@ title = "MY GAME"
 profile_labels = ["AR", "SMG", "SNP", "SG"]
 ```
 
-### Buttons
+#### Buttons
 
 Maps controller buttons for menu navigation and core functions:
 
@@ -58,7 +84,7 @@ fire = "PS5_R2"
 ads = "PS5_L2"
 ```
 
-### Keyboard Mappings
+#### Keyboard Mappings
 
 Map keyboard keys to controller inputs:
 
@@ -70,7 +96,7 @@ Map keyboard keys to controller inputs:
 "K_S" = "PS5_LY+"
 ```
 
-### Custom Includes
+#### Custom Includes
 
 Include additional GPC files in specific sections of the generated code:
 
@@ -81,7 +107,7 @@ menu = ["custom_menu.gpc"]
 persistence = ["extra_persistence.gpc"]
 ```
 
-### Menu Items
+#### Menu Items
 
 Define OLED menu entries. Each item appears as a page in the on-device menu:
 
@@ -102,7 +128,7 @@ status_var = "AntiRecoilStatus"
 - `selector` — Choose from a list of options
 - `dependent_selector` — Selector whose options depend on another value
 
-### Extra Variables & Defines
+#### Extra Variables & Defines
 
 Add custom variables or preprocessor defines:
 
@@ -114,7 +140,7 @@ my_var = "int"
 MY_CONSTANT = "42"
 ```
 
-### Module Parameters
+#### Module Parameters
 
 Override default module option values:
 
@@ -124,7 +150,7 @@ Recoil_Vertical = "20"
 Recoil_Horizontal = "5"
 ```
 
-## Config Editor (GUI)
+### Config Editor (GUI)
 
 The GUI config editor provides a visual interface for editing `config.toml` without manual TOML editing:
 

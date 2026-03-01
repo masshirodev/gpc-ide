@@ -1,10 +1,10 @@
 # Game Creation {ide}
 
-Games are created using the **Game Wizard**, accessible via the **New Game** button at the bottom of the sidebar.
+Games are created using the **Game Wizard**, accessible via the **New Game** button at the bottom of the sidebar. You can also create games from templates using **New from Template**.
 
 ## Wizard Steps
 
-The wizard guides you through four steps:
+The wizard guides you through configuring a new game:
 
 ### 1. Game Info
 
@@ -23,7 +23,7 @@ Browse and select modules to include in your game. Modules are pre-built feature
 
 - Modules marked with conflicts will warn you if incompatible modules are selected together
 - Some modules require the **Weapondata** module (for per-weapon settings)
-- You can add or remove modules later from the config editor
+- You can add or remove modules later
 
 ### 3. Configure
 
@@ -35,12 +35,29 @@ Set initial parameters for the selected modules:
 
 ### 4. Review & Create
 
-Review your configuration and create the game. The wizard generates:
+Review your configuration and create the game. The wizard generates the project files based on your chosen generation mode.
 
-- A `config.toml` file with your settings
-- Module GPC files for each selected module
-- A main GPC file that ties everything together
-- Supporting files for menus, persistence, and data
+## Generation Modes
+
+### Flow-Based (Default)
+
+The modern approach. Games use:
+
+- `game.json` — Game metadata (name, filename, version, generation mode, tags)
+- `flows.json` — Flow graph data (nodes, edges, variables, sub-nodes)
+- Additional user-created `.gpc` files
+
+Design your OLED menus and game logic in the **Flow Editor**. Code is generated from the visual state machine.
+
+### Config-Based (Legacy)
+
+The traditional approach. Games use:
+
+- `config.toml` — Full game configuration (buttons, modules, menu items, variables)
+- Generated `.gpc` files (main, menu, persistence, data, per-module)
+- User-created `.gpc` files
+
+Configure via the GUI config editor or raw TOML editing.
 
 ## Game Types
 
@@ -54,20 +71,24 @@ GPC IDE has three built-in game types:
 
 You can create custom game types in **Settings > Game Types**. Custom types have their own module pools — you can create modules that target your custom type specifically.
 
-## Game Folder Structure
+## Project Templates
 
-After creation, each game folder contains:
+Save any game as a template to reuse its configuration:
 
-```
-my-game/
-  config.toml          # Main configuration
-  main.gpc             # Entry point (generated)
-  menu.gpc             # OLED menu system (generated)
-  persistence.gpc      # Save/load system (generated)
-  data.gpc             # Data definitions (generated)
-  antirecoil.gpc       # Module files (generated)
-  rapidfire.gpc        # ...
-  custom_code.gpc      # User-created files (editable)
-```
+- **Save as Template**: From the game context menu, save the current game as a reusable template
+- **New from Template**: Create a new game pre-configured with a template's settings
+- **Import Template**: Load templates shared by other users
 
-Generated files are protected and cannot be deleted through the IDE. They are regenerated on each build.
+## Game Import/Export
+
+- **Export as ZIP**: Package a complete game project for sharing
+- **Import ZIP**: Load a shared game project into your workspace
+
+## Sidebar Features
+
+Games appear in the sidebar grouped by type. Additional features:
+
+- **Pin games**: Star frequently used games for quick access at the top
+- **Recent files**: Quick access to recently opened files
+- **Tags**: Filter games by custom tags
+- **Delete**: Remove games from the context menu

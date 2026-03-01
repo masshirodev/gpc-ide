@@ -45,3 +45,11 @@ You can create **custom game types** for organizing modules for specific genres 
 - Custom types appear in the game creation wizard and module manager
 
 To add a custom type, enter the type name and click **Add**. Custom types can be removed at any time.
+
+## Keybindings
+
+Customize keyboard shortcuts for common actions. The keybinding editor lets you:
+
+- View all available actions and their current shortcuts
+- Override default shortcuts with custom key combinations
+- Reset individual bindings to their defaults

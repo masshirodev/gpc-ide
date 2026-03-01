@@ -11,7 +11,18 @@ Each module is defined in a TOML file and contains:
 - **Options**: User-configurable parameters shown in the OLED menu
 - **Extra variables**: Additional runtime variables the module needs
 
-When you add a module to a game, the build pipeline generates:
+### In Flow-Based Games
+
+Modules are added as **module nodes** in the Flow Editor. Each module node:
+
+- Embeds the module's trigger and combo code
+- Renders the module's OLED menu options as sub-nodes
+- Integrates with the flow's code generation pipeline
+- Supports configurable trigger conditions
+
+### In Config-Based Games
+
+When you add a module to a config-based game, the build pipeline generates:
 
 1. A dedicated `.gpc` file with the module's code
 2. OLED menu entries for the module's options
@@ -87,7 +98,7 @@ conflicts = ["antirecoil_decay", "antirecoil_timeline"]
 
 ## Built-in Modules
 
-GPC IDE ships with a library of built-in modules for common game features:
+GPC IDE ships with 37 built-in modules for common game features:
 
 | Module                 | Type | Description                               |
 | ---------------------- | ---- | ----------------------------------------- |

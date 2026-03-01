@@ -1,10 +1,26 @@
 # Building {ide}
 
-Building a game compiles your `config.toml` and modules into final `.gpc` output files that can be loaded onto a Cronus Zen device.
+Building a game compiles your flow graphs or config files into final `.gpc` output files that can be loaded onto a Cronus Zen device.
 
 ## Build Process
 
-The build pipeline performs these steps:
+The build pipeline varies depending on the game's generation mode.
+
+### Flow-Based Games
+
+1. **Parse flow graph** — Reads the `flows.json` data (nodes, edges, sub-nodes, variables)
+2. **Generate GPC code** — Converts the visual state machine into GPC:
+   - State defines and variable declarations
+   - OLED draw functions (pixel data from sub-nodes and scenes)
+   - Per-state logic with enter/exit guards
+   - Transition conditions matching your edges
+   - Combo definitions from each node
+   - Optional SPVAR persistence for marked variables
+   - Init block and main loop with state dispatch
+3. **Integrate modules** — Merges code from any module nodes
+4. **Compile output** — Produces a single `.gpc` file
+
+### Config-Based Games
 
 1. **Parse config.toml** — Reads your game configuration
 2. **Resolve modules** — Loads all referenced module definitions
@@ -23,16 +39,17 @@ There are several ways to trigger a build:
 - **Keyboard shortcut**: `Ctrl+B` to build, `Ctrl+Shift+B` to build and copy
 - **Build button**: Click the build icon in the toolbar
 - **Bottom panel**: Use the build controls in the output panel
+- **Build queue**: Batch-build from the Built Games tool
 
 ## Build Output
 
-Built files are saved to the `dist/` directory within your workspace. The output panel shows:
+Built files are saved to the `dist/` directory within your workspace. The bottom panel shows:
 
 - Build progress and status
 - Any errors or warnings
 - The generated GPC code (viewable and copyable)
 
-## Generated Files
+## Generated Files (Config-Based)
 
 The build generates several interconnected GPC files:
 
@@ -72,3 +89,13 @@ Use the **Built Games** tool (sidebar > Tools > Built Games) to:
 - View the generated code
 - Copy output to clipboard
 - Delete old builds
+- Batch-build multiple games with the build queue
+
+## Plugin Integration
+
+If workspace plugins are enabled, they inject code at configured hook points during the build:
+
+- **Pre-build hooks** — code injected before the main generation
+- **Post-build hooks** — code injected after the main generation
+- **Custom includes** — additional `.gpc` files added to the build
+- **Extra variables and defines** — extend the generated declarations

@@ -53,12 +53,10 @@
 
 	const toolLabels: Record<string, () => string> = {
 		'/tools/oled': () => m.layout_sidebar_tool_oled_creator(),
-		'/tools/oled-widgets': () => m.layout_sidebar_tool_oled_widgets(),
 		'/tools/font-import': () => m.layout_sidebar_tool_font_import(),
 		'/tools/sprite-import': () => m.layout_sidebar_tool_sprite_import(),
 		'/tools/recoil': () => m.layout_sidebar_tool_spray_pattern(),
 		'/tools/combo': () => m.layout_sidebar_tool_combo_maker(),
-		'/tools/templates': () => m.layout_sidebar_tool_templates(),
 		'/tools/snippets': () => m.layout_sidebar_tool_snippets(),
 		'/tools/string-to-array': () => m.layout_sidebar_tool_string_to_array(),
 		'/tools/obfuscate': () => m.layout_sidebar_tool_obfuscator(),
@@ -80,11 +78,6 @@
 					href: '/tools/oled',
 					label: 'OLED Creator',
 					icon: 'M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z'
-				},
-				{
-					href: '/tools/oled-widgets',
-					label: 'OLED Widgets',
-					icon: 'M2 4a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1H3a1 1 0 01-1-1V4zm6 0a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1H9a1 1 0 01-1-1V4zm7-1a1 1 0 00-1 1v12a1 1 0 001 1h2a1 1 0 001-1V4a1 1 0 00-1-1h-2z'
 				},
 				{
 					href: '/tools/font-import',
@@ -118,11 +111,6 @@
 		{
 			name: 'Code',
 			tools: [
-				{
-					href: '/tools/templates',
-					label: 'Code Generators',
-					icon: 'M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zm0 6a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zm10 0a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z'
-				},
 				{
 					href: '/tools/snippets',
 					label: 'Snippets',
