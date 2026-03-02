@@ -1,6 +1,6 @@
 # Editor {ide}
 
-The editor is the central workspace of GPC IDE, built on Monaco Editor (the same editor powering VS Code) with full GPC language support.
+The editor is the central workspace of Zen Forge, built on Monaco Editor (the same editor powering VS Code) with full GPC language support.
 
 ## File Tree
 

@@ -55,7 +55,7 @@
 <div class="mx-auto max-w-3xl p-6">
 	<!-- Hero -->
 	<div class="mb-8 text-center">
-		<h1 class="text-3xl font-bold text-zinc-100">GPC IDE</h1>
+		<h1 class="text-3xl font-bold text-zinc-100">Zen Forge</h1>
 		<p class="mt-1 text-sm text-zinc-500">{m.dashboard_subtitle()}</p>
 
 		<!-- Quick actions -->

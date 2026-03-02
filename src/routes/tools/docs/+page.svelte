@@ -112,9 +112,12 @@
 			.filter((cat) => cat.entries.length > 0);
 	});
 
+	let contentEl: HTMLDivElement | undefined = $state();
+
 	function selectDoc(cat: string, slug: string) {
 		activeCat = cat;
 		activeSlug = slug;
+		contentEl?.scrollTo(0, 0);
 	}
 
 	function toggleCategory(key: string) {
@@ -179,7 +182,7 @@
 			</nav>
 		</div>
 
-		<div class="scrollbar-none flex-1 overflow-y-auto">
+		<div class="scrollbar-none flex-1 overflow-y-auto" bind:this={contentEl}>
 			{#if activeDoc}
 				<article class="docs-prose mx-auto max-w-3xl px-8 py-8">
 					{@html renderedHtml}

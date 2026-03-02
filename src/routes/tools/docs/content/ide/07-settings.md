@@ -36,7 +36,7 @@ Games from all workspaces appear in the sidebar, and builds output to each works
 
 ## Game Types
 
-GPC IDE has three built-in game types: `fps`, `tps`, and `fgs`.
+Zen Forge has three built-in game types: `fps`, `tps`, and `fgs`.
 
 You can create **custom game types** for organizing modules for specific genres or use cases:
 

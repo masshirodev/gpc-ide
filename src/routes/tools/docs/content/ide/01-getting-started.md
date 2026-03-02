@@ -1,14 +1,14 @@
 # Getting Started {ide}
 
-GPC IDE is a desktop application for creating, editing, and building Cronus Zen game scripts. It provides a complete workflow from game creation through to compiled `.gpc` output files, with a visual Flow Editor as the primary design tool.
+Zen Forge is a desktop application for creating, editing, and building Cronus Zen game scripts. It provides a complete workflow from game creation through to compiled `.gpc` output files, with a visual Flow Editor as the primary design tool.
 
 ## First Launch
 
-When you first open GPC IDE, you'll see the **Dashboard** — a home screen with your games listed in the sidebar and an empty editor area. Before you can start working, you'll want to set up at least one workspace.
+When you first open Zen Forge, you'll see the **Dashboard** — a home screen with your games listed in the sidebar and an empty editor area. Before you can start working, you'll want to set up at least one workspace.
 
 ## Workspaces
 
-A workspace is a directory on your computer where GPC IDE stores your game projects. Each game is a subfolder within a workspace.
+A workspace is a directory on your computer where Zen Forge stores your game projects. Each game is a subfolder within a workspace.
 
 To add a workspace:
 
@@ -31,7 +31,7 @@ The IDE has several main areas:
 
 ## Game Modes
 
-GPC IDE supports two generation modes:
+Zen Forge supports two generation modes:
 
 - **Flow-based** (modern): Design OLED menus and game logic visually in the Flow Editor. Games use `game.json` + `flows.json` files.
 - **Config-based** (legacy): Configure games via `config.toml` with the GUI config editor or raw TOML. Suitable for simpler setups.

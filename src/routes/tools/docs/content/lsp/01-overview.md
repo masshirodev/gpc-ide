@@ -1,14 +1,14 @@
 # LSP Overview {lsp}
 
-GPC IDE includes a Language Server Protocol (LSP) integration that provides real-time code intelligence for the GPC language.
+Zen Forge includes a Language Server Protocol (LSP) integration that provides real-time code intelligence for the GPC language.
 
 ## What is the LSP?
 
-The Language Server Protocol is a standard that allows editors to communicate with a language server for features like autocompletion, error checking, and navigation. GPC IDE bridges the LSP server with the Monaco editor to bring IDE-level features to GPC scripting.
+The Language Server Protocol is a standard that allows editors to communicate with a language server for features like autocompletion, error checking, and navigation. Zen Forge bridges the LSP server with the Monaco editor to bring IDE-level features to GPC scripting.
 
 ## How It Works
 
-1. When GPC IDE starts, it launches the GPC language server as a background process
+1. When Zen Forge starts, it launches the GPC language server as a background process
 2. The editor communicates with the server via the LSP protocol
 3. As you type, the server analyzes your code and provides real-time feedback
 4. The server understands `import` directives and analyzes your entire project
@@ -23,7 +23,7 @@ The status bar at the bottom of the IDE shows the LSP connection status:
 
 ## Custom LSP Server
 
-By default, GPC IDE uses the bundled language server. If you have a custom build or a different version:
+By default, Zen Forge uses the bundled language server. If you have a custom build or a different version:
 
 1. Go to **Settings**
 2. Under **LSP**, enter the command to run your custom server in **Custom LSP Command**

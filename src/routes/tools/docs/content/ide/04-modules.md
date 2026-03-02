@@ -98,7 +98,7 @@ conflicts = ["antirecoil_decay", "antirecoil_timeline"]
 
 ## Built-in Modules
 
-GPC IDE ships with 37 built-in modules for common game features:
+Zen Forge ships with 37 built-in modules for common game features:
 
 | Module                 | Type | Description                               |
 | ---------------------- | ---- | ----------------------------------------- |

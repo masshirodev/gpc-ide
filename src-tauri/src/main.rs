@@ -2,5 +2,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    gpc_ide_lib::run();
+    zen_forge_lib::run();
 }

@@ -13,7 +13,7 @@
 
     function handleLanguageChange(newLocale: string) {
         updateSettings({ language: newLocale });
-        localStorage.setItem('gpc-ide-locale', newLocale);
+        localStorage.setItem('zen-forge-locale', newLocale);
         setLocale(newLocale as any);
     }
 

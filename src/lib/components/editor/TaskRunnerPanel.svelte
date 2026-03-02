@@ -16,7 +16,7 @@
 	let { gamePath }: Props = $props();
 
 	// Persist tasks per game in localStorage
-	let storageKey = $derived(`gpc-ide-tasks:${gamePath}`);
+	let storageKey = $derived(`zen-forge-tasks:${gamePath}`);
 
 	let tasks = $state<TaskDef[]>([]);
 	let newLabel = $state('');

@@ -1,12 +1,12 @@
-# GPC IDE
+# Zen Forge
 
 ### A Desktop IDE for Cronus Zen Game Scripts
 
 ---
 
-## What is GPC IDE?
+## What is Zen Forge?
 
-GPC IDE is a full-featured desktop development environment purpose-built for creating, editing, and building GPC game scripts for the Cronus Zen device.
+Zen Forge is a full-featured desktop development environment purpose-built for creating, editing, and building GPC game scripts for the Cronus Zen device.
 
 It replaces the workflow of manually writing configs, managing module files, and running command-line build tools with a visual, integrated experience — centered around a **Flow Editor** that lets you design OLED menus and game logic as visual state machines.
 
@@ -79,7 +79,7 @@ Multi-profile support with named profiles, variable overrides per profile, and a
 
 ## The Editor
 
-GPC IDE features a Monaco-based code editor with full language support:
+Zen Forge features a Monaco-based code editor with full language support:
 
 - **GPC syntax highlighting** with custom language grammar
 - **Language Server Protocol (LSP)** integration via `ersa-lsp-core`
@@ -154,7 +154,7 @@ Build multiple games in sequence from the Built Games tool:
 
 ## Tools
 
-GPC IDE ships with 17 specialized tools accessible from the sidebar:
+Zen Forge ships with 17 specialized tools accessible from the sidebar:
 
 ### OLED Tools
 
@@ -236,7 +236,7 @@ Toast messages and notification inbox for tracking build results, errors, and sy
 
 ## Plugin System
 
-Extend GPC IDE with workspace-level plugins:
+Extend Zen Forge with workspace-level plugins:
 
 ```toml
 # plugins/my-plugin/plugin.toml

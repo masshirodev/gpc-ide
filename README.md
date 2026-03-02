@@ -1,10 +1,12 @@
-# GPC IDE
+# Zen Forge
 
-![GPC IDE Screenshot](https://github.com/masshirodev/gpc-ide/blob/main/screenshots/flow.png?raw=true)
+![Zen Forge Screenshot](https://github.com/masshirodev/zenforge/blob/main/screenshots/flow.png?raw=true)
 
 Desktop IDE for creating, editing, and building Cronus Zen GPC game scripts with a visual flow editor, OLED menu designer, and 17 specialized tools.
 
 Built with Tauri v2 (Rust backend) + SvelteKit (Svelte 5) + TailwindCSS + Monaco Editor.
+
+> **Disclaimer:** Zen Forge is an independent, community-made project. It is not affiliated with, endorsed by, or sponsored by Collective Minds / Cronus. All product names, trademarks, and registered trademarks are property of their respective owners.
 
 ## Features
 
@@ -77,7 +79,7 @@ Rust-native generation pipeline:
 
 ## Installation
 
-Head over to [Releases](https://github.com/masshirodev/gpc-ide/releases) to grab the latest pre-built binaries. We provide both installers and portable archives for Windows and Linux.
+Head over to [Releases](https://github.com/masshirodev/zenforge/releases) to grab the latest pre-built binaries. We provide both installers and portable archives for Windows and Linux.
 
 ## Development
 

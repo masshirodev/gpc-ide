@@ -316,7 +316,7 @@ export function cancelAutoSave(path: string) {
 
 // --- Session persistence ---
 
-const SESSION_KEY = 'gpc-ide-session';
+const SESSION_KEY = 'zen-forge-session';
 
 interface SessionData {
     tabPaths: string[];

@@ -1,4 +1,4 @@
-const BOTTOM_PANEL_STORAGE_KEY = 'gpc-ide-bottom-panel';
+const BOTTOM_PANEL_STORAGE_KEY = 'zen-forge-bottom-panel';
 const BOTTOM_PANEL_MIN_HEIGHT = 100;
 const BOTTOM_PANEL_MAX_HEIGHT = 500;
 const BOTTOM_PANEL_DEFAULT_HEIGHT = 200;

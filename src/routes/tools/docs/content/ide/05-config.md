@@ -1,6 +1,6 @@
 # Configuration {ide}
 
-GPC IDE supports two configuration approaches depending on your game's generation mode.
+Zen Forge supports two configuration approaches depending on your game's generation mode.
 
 ## Flow-Based Games
 

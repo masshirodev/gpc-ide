@@ -19,7 +19,7 @@ interface KeyBindingState {
 	overrides: Record<string, string>;
 }
 
-const STORAGE_KEY = 'gpc-ide-keybindings';
+const STORAGE_KEY = 'zen-forge-keybindings';
 
 /** Registry of all known actions */
 export const actions: KeyBinding[] = [

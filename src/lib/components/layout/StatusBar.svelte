@@ -81,6 +81,6 @@
 				{/if}
 			</button>
 		{/if}
-		<span>GPC IDE {appVersion ? `v${appVersion}` : ''}</span>
+		<span>Zen Forge {appVersion ? `v${appVersion}` : ''}</span>
 	</div>
 </footer>

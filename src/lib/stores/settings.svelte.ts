@@ -54,7 +54,7 @@ const DEFAULTS: AppSettings = {
     recentFiles: [],
 };
 
-const STORAGE_KEY = 'gpc-ide-settings';
+const STORAGE_KEY = 'zen-forge-settings';
 
 function loadSettings(): AppSettings {
     try {

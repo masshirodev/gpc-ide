@@ -40,7 +40,7 @@
 	});
 
 	// Save/Load helpers
-	const STORAGE_KEY = 'gpc-ide-custom-fonts';
+	const STORAGE_KEY = 'zen-forge-custom-fonts';
 
 	function getSavedFonts(): SerializedCustomFont[] {
 		try {

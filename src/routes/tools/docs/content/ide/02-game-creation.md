@@ -61,7 +61,7 @@ Configure via the GUI config editor or raw TOML editing.
 
 ## Game Types
 
-GPC IDE has three built-in game types:
+Zen Forge has three built-in game types:
 
 | Type  | Description                                     |
 | ----- | ----------------------------------------------- |
