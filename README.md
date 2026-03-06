@@ -122,7 +122,6 @@ src-tauri/            # Rust/Tauri backend
     lsp/              # Language server management
 modules/              # 37 built-in module definitions (TOML)
 common/               # Shared GPC helper files
-drawings/             # OLED drawing primitives
 lsp-server/           # GPC language server
 ```
 

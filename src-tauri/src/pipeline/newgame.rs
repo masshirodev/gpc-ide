@@ -87,21 +87,6 @@ pub fn create_game(
         }
     }
 
-    // Copy required drawing template files
-    let drawings_dest_dir = game_dir.join("drawings");
-    std::fs::create_dir_all(&drawings_dest_dir)
-        .map_err(|e| format!("Failed to create drawings directory: {}", e))?;
-    let drawing_files = get_required_drawing_files();
-    for drawing_file in drawing_files {
-        let source = app_root.join("drawings").join(&drawing_file);
-        let dest = drawings_dest_dir.join(&drawing_file);
-        if source.exists() {
-            match std::fs::copy(&source, &dest) {
-                Ok(_) => files_created.push(format!("drawings/{}", drawing_file)),
-                Err(e) => log::warn!("Failed to copy drawings/{}: {}", drawing_file, e),
-            }
-        }
-    }
 
     Ok(CreateGameResult {
         game_path: game_dir.to_string_lossy().to_string(),
@@ -129,15 +114,6 @@ fn get_required_common_files(game_type: &str) -> Vec<String> {
         files.push("fgc.gpc".to_string());
     }
     files
-}
-
-fn get_required_drawing_files() -> Vec<String> {
-    vec![
-        "scroll_outer.gpc".to_string(),
-        "scroll_current.gpc".to_string(),
-        "selector.gpc".to_string(),
-        "toggle.gpc".to_string(),
-    ]
 }
 
 fn game_basename(name: &str) -> String {

@@ -21,12 +21,6 @@ pub fn list_templates() -> Result<Vec<TemplateFile>, String> {
         templates.extend(scan_template_dir(&common_dir, "Common")?);
     }
 
-    // Drawing templates
-    let drawing_dir = root.join("drawings");
-    if drawing_dir.exists() {
-        templates.extend(scan_template_dir(&drawing_dir, "Drawing")?);
-    }
-
     templates.sort_by(|a, b| {
         a.category
             .cmp(&b.category)

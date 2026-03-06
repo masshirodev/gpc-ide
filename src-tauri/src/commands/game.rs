@@ -35,7 +35,7 @@ fn game_dir_modified_ms(game_dir: &Path) -> u64 {
     latest
 }
 
-/// Resolve the app root directory (where bundled resources like modules/, common/, drawings/ live).
+/// Resolve the app root directory (where bundled resources like modules/, common/ live).
 /// In dev mode, the exe is in src-tauri/target/debug/, so we walk up to find modules/.
 /// In production, we do the same from the exe location.
 pub fn app_root() -> PathBuf {
