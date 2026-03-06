@@ -17,7 +17,7 @@ interface ConsoleButton {
 export const CONSOLE_BUTTONS: Record<ConsoleType, ConsoleButton[]> = {
 	ps5: [
 		{ name: 'PS5_PS', value: 0 },
-		{ name: 'PS5_CREATE', value: 1 },
+		{ name: 'PS5_SHARE', value: 1 },
 		{ name: 'PS5_OPTIONS', value: 2 },
 		{ name: 'PS5_R1', value: 3 },
 		{ name: 'PS5_R2', value: 4 },

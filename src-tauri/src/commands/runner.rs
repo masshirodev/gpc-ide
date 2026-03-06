@@ -27,8 +27,11 @@ fn kill_pid(pid: u32) {
     }
     #[cfg(windows)]
     {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
         let _ = std::process::Command::new("taskkill")
             .args(["/PID", &pid.to_string(), "/F", "/T"])
+            .creation_flags(CREATE_NO_WINDOW)
             .status();
     }
 }
@@ -52,12 +55,18 @@ pub async fn run_command(
         ("sh", vec!["-c", &command])
     };
 
-    let mut child = tokio::process::Command::new(shell)
-        .args(&args)
+    let mut cmd = tokio::process::Command::new(shell);
+    cmd.args(&args)
         .current_dir(&cwd)
         .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .spawn()
+        .stderr(std::process::Stdio::piped());
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+    let mut child = cmd.spawn()
         .map_err(|e| e.to_string())?;
 
     let pid = child.id().unwrap_or(0);

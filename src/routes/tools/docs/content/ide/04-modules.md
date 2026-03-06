@@ -41,7 +41,7 @@ type = "fps"
 description = "What this module does."
 state_display = "MM"        # 2-char label on OLED
 status_var = "MyModStatus"  # Toggle variable name
-has_quick_toggle = true
+quick_toggle = ["PS5_L2", "PS5_UP"]  # Button combo to toggle on/off
 conflicts = ["other_module"]
 
 # Trigger code — runs in main { } every cycle

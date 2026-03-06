@@ -3,7 +3,7 @@ export interface ModuleSummary {
 	display_name: string;
 	module_type: string;
 	description: string | null;
-	has_quick_toggle: boolean;
+	quick_toggle: string[];
 	param_count: number;
 	option_count: number;
 	conflicts: string[];
@@ -18,7 +18,7 @@ export interface ModuleDefinition {
 	description?: string;
 	state_display?: string;
 	status_var?: string;
-	has_quick_toggle?: boolean;
+	quick_toggle?: string[];
 	trigger?: string;
 	combo?: string;
 	options: ModuleOption[];

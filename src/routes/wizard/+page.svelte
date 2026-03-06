@@ -3,7 +3,7 @@
 	import { createGame, saveFlowProject } from '$lib/tauri/commands';
 	import type { CreateGameParams } from '$lib/tauri/commands';
 	import { loadGames } from '$lib/stores/game.svelte';
-	import { getSettings, getAllGameTypes } from '$lib/stores/settings.svelte';
+	import { getSettings, getAllGameTypes, GAME_TYPE_LABELS } from '$lib/stores/settings.svelte';
 	import { CONSOLE_TYPES, CONSOLE_LABELS, type ConsoleType } from '$lib/utils/console-buttons';
 	import * as m from '$lib/paraglide/messages.js';
 
@@ -182,7 +182,7 @@
 							class="w-full rounded-md border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
 						>
 							{#each gameTypeOptions as type}
-								<option value={type}>{type.toUpperCase()}</option>
+								<option value={type}>{GAME_TYPE_LABELS[type] ?? type.toUpperCase()}</option>
 							{/each}
 						</select>
 					</div>

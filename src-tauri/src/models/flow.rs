@@ -111,6 +111,9 @@ pub struct ModuleNodeData {
     pub params: Option<HashMap<String, String>>,
     #[serde(default)]
     pub conflicts: Vec<String>,
+    /// Quick toggle: 1-2 controller buttons or a single keyboard key
+    #[serde(default)]
+    pub quick_toggle: Option<Vec<String>>,
     #[serde(default)]
     pub needs_weapondata: bool,
     #[serde(default)]

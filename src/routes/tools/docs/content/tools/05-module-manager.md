@@ -38,7 +38,7 @@ View module details or edit module definitions:
    - **Description**: Brief explanation of what the module does
    - **State Display**: Short label shown on the OLED (e.g., "RF")
    - **Status Variable**: GPC variable name for tracking on/off state
-   - **Quick Toggle**: Whether the module can be toggled with a button hold
+   - **Quick Toggle**: Assign 1-2 controller buttons to toggle this module on/off (e.g. L2+Up)
 4. Add **Menu Options** — toggles or value sliders that appear in the OLED menu
 5. Write **Trigger Code** — GPC code that runs in the main loop
 6. Write **Combo Code** — the GPC combo definition

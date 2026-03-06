@@ -144,6 +144,8 @@ export interface ModuleNodeData {
 	extraVars: Record<string, string>;
 	/** Button/key params from module definition — key: param key, value: selected button constant */
 	params?: Record<string, string>;
+	/** Quick toggle: 1-2 controller buttons (e.g. ["PS5_L2","PS5_UP"]) or a single keyboard key (e.g. ["KEY_F1"]) */
+	quickToggle?: string[];
 	conflicts: string[];
 	needsWeapondata: boolean;
 	/** Weapon names for weapondata modules — generates Weapons[] array and WEAPON_COUNT */

@@ -7,6 +7,7 @@
 	import ConfirmDialog from '$lib/components/modals/ConfirmDialog.svelte';
 	import ToolHeader from '$lib/components/layout/ToolHeader.svelte';
 	import type { ModuleSummary, ModuleDefinition } from '$lib/types/module';
+	import ButtonSelect from '$lib/components/inputs/ButtonSelect.svelte';
 
 	let settingsStore = getSettings();
 	let settings = $derived($settingsStore);
@@ -32,7 +33,7 @@
 	let moduleType = $state('fps');
 	let gameTypeOptions = $derived([...getAllGameTypes(settings), 'all']);
 	let description = $state('');
-	let hasQuickToggle = $state(false);
+	let quickToggle = $state<string[]>([]);
 	let stateDisplay = $state('');
 	let statusVar = $state('');
 	let options = $state<
@@ -118,7 +119,7 @@
 		displayName = '';
 		moduleType = 'fps';
 		description = '';
-		hasQuickToggle = false;
+		quickToggle = [];
 		stateDisplay = '';
 		statusVar = '';
 		options = [];
@@ -156,7 +157,7 @@
 		displayName = mod.display_name;
 		moduleType = mod.type;
 		description = mod.description ?? '';
-		hasQuickToggle = mod.has_quick_toggle ?? false;
+		quickToggle = [...(mod.quick_toggle ?? [])];
 		stateDisplay = mod.state_display ?? '';
 		statusVar = mod.status_var ?? '';
 		options = (mod.options ?? []).map((o) => ({
@@ -248,7 +249,8 @@
 		if (description) out += `description = "${description}"\n`;
 		if (stateDisplay) out += `state_display = "${stateDisplay}"\n`;
 		if (statusVar) out += `status_var = "${statusVar}"\n`;
-		if (hasQuickToggle) out += `has_quick_toggle = true\n`;
+		if (quickToggle.length > 0)
+			out += `quick_toggle = [${quickToggle.map((b) => `"${b}"`).join(', ')}]\n`;
 		if (needsWeapondata) out += `needs_weapondata = true\n`;
 		if (needsRecoiltable) out += `needs_recoiltable = true\n`;
 		if (requiresKeyboardFile) out += `requires_keyboard_file = true\n`;
@@ -572,7 +574,7 @@
 					</div>
 
 					<!-- Status display / Quick Toggle -->
-					<div class="grid grid-cols-3 gap-4">
+					<div class="grid grid-cols-2 gap-4">
 						<div>
 							<label class="mb-1 block text-sm text-zinc-300" for="mod-sd"
 								>State Display</label
@@ -600,18 +602,41 @@
 								disabled={saving}
 							/>
 						</div>
-						<div>
-							<label class="mb-1 block text-sm text-zinc-300">Quick Toggle</label>
-							<div
-								class="flex items-center gap-2 rounded border border-zinc-700 bg-zinc-800 px-3 py-2"
-							>
-								<input
-									type="checkbox"
-									bind:checked={hasQuickToggle}
-									class="rounded border-zinc-600 bg-zinc-800 text-emerald-600 focus:ring-emerald-500"
+					</div>
+
+					<!-- Quick Toggle buttons -->
+					<div>
+						<div class="mb-1 flex items-center justify-between">
+							<label class="text-sm text-zinc-300">Quick Toggle</label>
+							{#if quickToggle.length > 0}
+								<button
+									type="button"
+									class="text-xs text-zinc-500 hover:text-zinc-300"
+									onclick={() => { quickToggle = []; }}
 									disabled={saving}
+								>
+									Clear
+								</button>
+							{/if}
+						</div>
+						<p class="mb-2 text-xs text-zinc-500">
+							Assign 1-2 buttons to toggle this module on/off (e.g. L2+Up)
+						</p>
+						<div class="flex items-center gap-2">
+							<div class="flex-1">
+								<ButtonSelect
+									value={quickToggle[0] ?? ''}
+									onchange={(v) => { quickToggle = v ? [v, ...quickToggle.slice(1)] : quickToggle.slice(1); }}
+									placeholder="Button 1 (hold)..."
 								/>
-								<span class="text-sm text-zinc-300">Enable</span>
+							</div>
+							<span class="text-xs text-zinc-500">+</span>
+							<div class="flex-1">
+								<ButtonSelect
+									value={quickToggle[1] ?? ''}
+									onchange={(v) => { quickToggle = quickToggle[0] ? [quickToggle[0], ...(v ? [v] : [])] : (v ? [v] : []); }}
+									placeholder="Button 2 (press)..."
+								/>
 							</div>
 						</div>
 					</div>
@@ -1176,10 +1201,12 @@
 								</p>
 							</div>
 						{/if}
-						{#if selectedModule.has_quick_toggle}
+						{#if selectedModule.quick_toggle && selectedModule.quick_toggle.length > 0}
 							<div>
 								<span class="text-xs text-zinc-500">Quick Toggle</span>
-								<p class="text-sm text-emerald-400">Enabled</p>
+								<p class="font-mono text-sm text-emerald-400">
+									{selectedModule.quick_toggle.join(' + ')}
+								</p>
 							</div>
 						{/if}
 						{#if selectedModule.menu_priority !== undefined}

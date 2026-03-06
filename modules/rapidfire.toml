@@ -5,7 +5,6 @@ type = "fps"
 description = "Rapid fire by toggling the fire button on/off while ADS.\nConfigurable speed controls the press/release cycle timing."
 state_display = "RF"
 status_var = "RapidFireStatus"
-has_quick_toggle = true
 trigger = "if (RapidFireStatus && get_val(PS5_R2) && get_val(PS5_L2)) {\n    combo_run(RapidFire);\n} else {\n    combo_stop(RapidFire);\n}"
 combo = "combo RapidFire {\n    RapidFireActualSpeed = RapidFireSpeed * 20;\n    wait(jitter(RapidFireActualSpeed));\n    set_val(PS5_R2, 100);\n    wait(jitter(RapidFireActualSpeed));\n    set_val(PS5_R2, 0);\n    wait(jitter(RapidFireActualSpeed));\n}"
 options = [

@@ -5,7 +5,6 @@ type = "fps"
 description = "Circular aim assist using POLAR_GHOST for perfectly synced stick movement.\nThe cleanest circular method — adds smooth orbital motion without interfering with manual aim."
 state_display = "AP"
 status_var = "AimPolarStatus"
-has_quick_toggle = true
 conflicts = [
     "aimassist_square",
     "aimassist_jitter",

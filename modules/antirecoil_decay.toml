@@ -5,7 +5,6 @@ type = "fps"
 description = "Per-weapon anti-recoil with gradual decay on sustained fire.\nAfter a configurable delay, recoil compensation gradually reduces to a floor value.\nUses per-weapon V/H values from weapon data."
 state_display = "AR"
 status_var = "AntiRecoilStatus"
-has_quick_toggle = true
 needs_weapondata = true
 conflicts = [
     "antirecoil",

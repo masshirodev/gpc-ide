@@ -5,7 +5,6 @@ type = "fps"
 description = "Smooth 360-degree circular right-stick movement while ADS.\nUses a 72-point lookup table for precise circular motion to keep aim assist engaged."
 state_display = "AC"
 status_var = "AimCircularStatus"
-has_quick_toggle = true
 conflicts = [
     "aimassist_square",
     "aimassist_jitter",

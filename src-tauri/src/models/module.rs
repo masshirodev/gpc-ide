@@ -15,7 +15,7 @@ pub struct ModuleDefinition {
     #[serde(default)]
     pub status_var: Option<String>,
     #[serde(default)]
-    pub has_quick_toggle: Option<bool>,
+    pub quick_toggle: Option<Vec<String>>,
     #[serde(default)]
     pub trigger: Option<String>,
     #[serde(default)]
@@ -86,7 +86,7 @@ pub struct ModuleSummary {
     pub display_name: String,
     pub module_type: String,
     pub description: Option<String>,
-    pub has_quick_toggle: bool,
+    pub quick_toggle: Vec<String>,
     pub param_count: usize,
     pub option_count: usize,
     pub conflicts: Vec<String>,
@@ -101,7 +101,7 @@ impl ModuleDefinition {
             display_name: self.display_name.clone(),
             module_type: self.r#type.clone(),
             description: self.description.clone(),
-            has_quick_toggle: self.has_quick_toggle.unwrap_or(false),
+            quick_toggle: self.quick_toggle.clone().unwrap_or_default(),
             param_count: self.params.len(),
             option_count: self.options.len(),
             conflicts: self.conflicts.clone(),

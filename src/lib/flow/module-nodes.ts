@@ -65,6 +65,10 @@ export function createModuleNode(
 		options,
 		extraVars: { ...moduleDef.extra_vars },
 		params: Object.keys(params).length > 0 ? params : undefined,
+		quickToggle:
+			moduleDef.quick_toggle && moduleDef.quick_toggle.length > 0
+				? [...moduleDef.quick_toggle]
+				: undefined,
 		conflicts: moduleDef.conflicts ?? [],
 		needsWeapondata: moduleDef.needs_weapondata ?? false,
 	};

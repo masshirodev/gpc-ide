@@ -15,6 +15,7 @@
 	import SubNodeParamEditor from './SubNodeParamEditor.svelte';
 	import MiniMonaco from '$lib/components/editor/MiniMonaco.svelte';
 	import ButtonSelect from '$lib/components/inputs/ButtonSelect.svelte';
+	import KeySelect from '$lib/components/inputs/KeySelect.svelte';
 	import VariableSelect from '$lib/components/inputs/VariableSelect.svelte';
 	import { getSettings } from '$lib/stores/settings.svelte';
 	import { listSpriteCollections, readSpriteCollection } from '$lib/tauri/commands';
@@ -350,6 +351,13 @@
 		params[key] = value;
 		md.params = params;
 		onUpdateNode(selectedNode.id, { moduleData: md });
+	}
+
+	function updateQuickToggle(nodeId: string, currentModuleData: NonNullable<FlowNode['moduleData']>, newVal: string[] | undefined) {
+		if (!currentModuleData) return;
+		const md = { ...currentModuleData };
+		md.quickToggle = newVal && newVal.length > 0 ? newVal : undefined;
+		onUpdateNode(nodeId, { moduleData: md });
 	}
 
 	// Local editing state for sub-node
@@ -909,6 +917,73 @@
 						{/each}
 					</div>
 				</div>
+			{/if}
+
+			<!-- Quick Toggle (only for modules with a Status toggle, not data modules) -->
+			{#if selectedNode.moduleData?.enableVariable && selectedNode.moduleData.options.some(o => o.type === 'toggle' && o.name === 'Status')}
+			{#key selectedNode.id}
+				{@const nodeId = selectedNode.id}
+				{@const md = selectedNode.moduleData}
+				{@const qt = md.quickToggle ?? []}
+				{@const isKeyboard = qt.length === 1 && qt[0].startsWith('KEY_')}
+				<div class="mb-3">
+					<div class="mb-1 flex items-center justify-between">
+						<label class="text-xs text-zinc-400">Quick Toggle</label>
+						{#if qt.length > 0}
+							<button
+								type="button"
+								class="text-[10px] text-zinc-500 hover:text-zinc-300"
+								onclick={() => updateQuickToggle(nodeId, md, undefined)}
+							>
+								Clear
+							</button>
+						{/if}
+					</div>
+					<div class="mb-1.5 flex gap-1">
+						<button
+							type="button"
+							class="rounded px-2 py-0.5 text-[10px] {!isKeyboard ? 'bg-emerald-900/40 text-emerald-300' : 'bg-zinc-800 text-zinc-400 hover:text-zinc-300'}"
+							onclick={() => { if (isKeyboard) updateQuickToggle(nodeId, md, undefined); }}
+						>
+							Controller
+						</button>
+						<button
+							type="button"
+							class="rounded px-2 py-0.5 text-[10px] {isKeyboard ? 'bg-emerald-900/40 text-emerald-300' : 'bg-zinc-800 text-zinc-400 hover:text-zinc-300'}"
+							onclick={() => { if (!isKeyboard) updateQuickToggle(nodeId, md, ['KEY_']); }}
+						>
+							Keyboard
+						</button>
+					</div>
+					{#if isKeyboard}
+						<KeySelect
+							value={qt[0] === 'KEY_' ? '' : qt[0]}
+							onchange={(v) => updateQuickToggle(nodeId, md, v ? [v] : undefined)}
+							placeholder="Select key..."
+						/>
+						<p class="mt-0.5 text-[10px] text-zinc-600">Uses GetKeyboardKey()</p>
+					{:else}
+						<div class="flex items-center gap-1.5">
+							<div class="flex-1">
+								<ButtonSelect
+									value={qt[0] ?? ''}
+									onchange={(v) => updateQuickToggle(nodeId, md, v ? [v, ...(qt[1] ? [qt[1]] : [])] : qt[1] ? [qt[1]] : undefined)}
+									placeholder="Hold..."
+								/>
+							</div>
+							<span class="text-[10px] text-zinc-500">+</span>
+							<div class="flex-1">
+								<ButtonSelect
+									value={qt[1] ?? ''}
+									onchange={(v) => updateQuickToggle(nodeId, md, qt[0] ? [qt[0], ...(v ? [v] : [])] : v ? [v] : undefined)}
+									placeholder="Press..."
+								/>
+							</div>
+						</div>
+						<p class="mt-0.5 text-[10px] text-zinc-600">Uses get_val() + event_press()</p>
+					{/if}
+				</div>
+			{/key}
 			{/if}
 
 			<!-- Weapon Names (weapondata module only) -->

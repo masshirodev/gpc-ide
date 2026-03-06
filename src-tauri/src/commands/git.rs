@@ -1,6 +1,18 @@
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use std::path::Path;
 use std::process::Command;
+
+/// Create a `git` command that does not spawn a visible console window on Windows.
+fn git_cmd() -> Command {
+    let mut cmd = Command::new("git");
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+    cmd
+}
 
 #[derive(Debug, Clone, Serialize)]
 pub struct GitFileStatus {
@@ -13,7 +25,7 @@ pub struct GitFileStatus {
 /// Check if a directory is inside a git repository
 #[tauri::command]
 pub fn git_is_repo(game_path: String) -> bool {
-    let output = Command::new("git")
+    let output = git_cmd()
         .args(["rev-parse", "--is-inside-work-tree"])
         .current_dir(&game_path)
         .output();
@@ -28,7 +40,7 @@ pub fn git_status(game_path: String) -> Result<Vec<GitFileStatus>, String> {
         return Err(format!("Not a directory: {}", game_path));
     }
 
-    let output = Command::new("git")
+    let output = git_cmd()
         .args(["status", "--porcelain", "-uall", "."])
         .current_dir(game_dir)
         .output()
@@ -87,7 +99,7 @@ pub fn git_status(game_path: String) -> Result<Vec<GitFileStatus>, String> {
 /// Get the diff for a specific file
 #[tauri::command]
 pub fn git_diff_file(game_path: String, file_path: String) -> Result<String, String> {
-    let output = Command::new("git")
+    let output = git_cmd()
         .args(["diff", "--", &file_path])
         .current_dir(&game_path)
         .output()
@@ -102,7 +114,7 @@ pub fn git_stage(game_path: String, file_paths: Vec<String>) -> Result<(), Strin
     let mut args = vec!["add".to_string(), "--".to_string()];
     args.extend(file_paths);
 
-    let output = Command::new("git")
+    let output = git_cmd()
         .args(&args)
         .current_dir(&game_path)
         .output()
@@ -120,7 +132,7 @@ pub fn git_unstage(game_path: String, file_paths: Vec<String>) -> Result<(), Str
     let mut args = vec!["reset".to_string(), "HEAD".to_string(), "--".to_string()];
     args.extend(file_paths);
 
-    let output = Command::new("git")
+    let output = git_cmd()
         .args(&args)
         .current_dir(&game_path)
         .output()
@@ -139,7 +151,7 @@ pub fn git_commit(game_path: String, message: String) -> Result<String, String> 
         return Err("Commit message cannot be empty".to_string());
     }
 
-    let output = Command::new("git")
+    let output = git_cmd()
         .args(["commit", "-m", &message])
         .current_dir(&game_path)
         .output()
@@ -167,7 +179,7 @@ pub fn git_status_detailed(game_path: String) -> Result<Vec<GitDetailedStatus>, 
         return Err(format!("Not a directory: {}", game_path));
     }
 
-    let output = Command::new("git")
+    let output = git_cmd()
         .args(["status", "--porcelain", "-uall", "."])
         .current_dir(game_dir)
         .output()
@@ -209,7 +221,7 @@ pub fn git_status_detailed(game_path: String) -> Result<Vec<GitDetailedStatus>, 
 /// Initialize a git repository in the given directory
 #[tauri::command]
 pub fn git_init(game_path: String) -> Result<String, String> {
-    let output = Command::new("git")
+    let output = git_cmd()
         .args(["init"])
         .current_dir(&game_path)
         .output()
@@ -231,7 +243,7 @@ pub struct GitRemote {
 /// List configured remotes
 #[tauri::command]
 pub fn git_remote_list(game_path: String) -> Result<Vec<GitRemote>, String> {
-    let output = Command::new("git")
+    let output = git_cmd()
         .args(["remote", "-v"])
         .current_dir(&game_path)
         .output()
@@ -264,7 +276,7 @@ pub fn git_remote_list(game_path: String) -> Result<Vec<GitRemote>, String> {
 /// Add a remote
 #[tauri::command]
 pub fn git_remote_add(game_path: String, name: String, url: String) -> Result<(), String> {
-    let output = Command::new("git")
+    let output = git_cmd()
         .args(["remote", "add", &name, &url])
         .current_dir(&game_path)
         .output()
@@ -279,7 +291,7 @@ pub fn git_remote_add(game_path: String, name: String, url: String) -> Result<()
 /// Remove a remote
 #[tauri::command]
 pub fn git_remote_remove(game_path: String, name: String) -> Result<(), String> {
-    let output = Command::new("git")
+    let output = git_cmd()
         .args(["remote", "remove", &name])
         .current_dir(&game_path)
         .output()
@@ -294,7 +306,7 @@ pub fn git_remote_remove(game_path: String, name: String) -> Result<(), String> 
 /// Get current branch name
 #[tauri::command]
 pub fn git_current_branch(game_path: String) -> Result<String, String> {
-    let output = Command::new("git")
+    let output = git_cmd()
         .args(["rev-parse", "--abbrev-ref", "HEAD"])
         .current_dir(&game_path)
         .output()
@@ -316,7 +328,7 @@ pub fn git_push(game_path: String, remote: String, branch: String, set_upstream:
     args.push(remote);
     args.push(branch);
 
-    let output = Command::new("git")
+    let output = git_cmd()
         .args(&args)
         .current_dir(&game_path)
         .output()
@@ -333,7 +345,7 @@ pub fn git_push(game_path: String, remote: String, branch: String, set_upstream:
 /// Pull from remote
 #[tauri::command]
 pub fn git_pull(game_path: String, remote: String, branch: String) -> Result<String, String> {
-    let output = Command::new("git")
+    let output = git_cmd()
         .args(["pull", &remote, &branch])
         .current_dir(&game_path)
         .output()

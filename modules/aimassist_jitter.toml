@@ -5,7 +5,6 @@ type = "fps"
 description = "Random right-stick jitter while ADS to keep aim assist engaged.\nShakes the stick in a random direction each frame within configurable range."
 state_display = "AJ"
 status_var = "AimJitterStatus"
-has_quick_toggle = true
 conflicts = [
     "aimassist_square",
     "aimassist_circular",

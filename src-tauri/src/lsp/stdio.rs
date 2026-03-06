@@ -18,13 +18,19 @@ impl StdioLspProvider {
         args: &[&str],
         app_handle: AppHandle,
     ) -> Result<Self, String> {
-        let mut child = tokio::process::Command::new(command)
-            .args(args)
+        let mut cmd = tokio::process::Command::new(command);
+        cmd.args(args)
             .stdin(std::process::Stdio::piped())
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped())
-            .kill_on_drop(true)
-            .spawn()
+            .kill_on_drop(true);
+        #[cfg(target_os = "windows")]
+        {
+            use std::os::windows::process::CommandExt;
+            const CREATE_NO_WINDOW: u32 = 0x08000000;
+            cmd.creation_flags(CREATE_NO_WINDOW);
+        }
+        let mut child = cmd.spawn()
             .map_err(|e| format!("Failed to spawn LSP server: {}", e))?;
 
         let stdin = child

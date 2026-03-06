@@ -3,6 +3,12 @@ use crate::models::game_meta::GameMeta;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
+/// Strip the Windows `\\?\` extended-length path prefix for cleaner display.
+fn display_path(path: &Path) -> String {
+    let s = path.display().to_string();
+    s.strip_prefix(r"\\?\").unwrap_or(&s).to_string()
+}
+
 /// Result of a build operation
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct BuildResult {
@@ -63,7 +69,7 @@ fn preprocess_recursive(
             };
             logs.push(BuildLogEntry {
                 level: "error".to_string(),
-                message: format!("File not found: {}", abs.display()),
+                message: format!("File not found: {}", display_path(&abs)),
             });
             *success = false;
             return format!("// Error: Missing file {}\n", file_path.display());
@@ -97,7 +103,7 @@ fn preprocess_recursive(
         Err(e) => {
             logs.push(BuildLogEntry {
                 level: "error".to_string(),
-                message: format!("Could not read {}: {}", abs_path.display(), e),
+                message: format!("Could not read {}: {}", display_path(&abs_path), e),
             });
             *success = false;
             include_stack.pop();
@@ -135,7 +141,7 @@ fn preprocess_recursive(
             if !*success {
                 logs.push(BuildLogEntry {
                     level: "error".to_string(),
-                    message: format!("  Referenced from: {}:{}", abs_path.display(), line_num),
+                    message: format!("  Referenced from: {}:{}", display_path(&abs_path), line_num),
                 });
             }
 

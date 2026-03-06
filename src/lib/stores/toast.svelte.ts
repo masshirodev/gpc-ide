@@ -34,8 +34,11 @@ export function getUnreadCount(): number {
 export function addToast(
     message: string,
     type: Toast['type'] = 'info',
-    duration = 4000
+    duration?: number
 ) {
+    if (duration === undefined) {
+        duration = type === 'error' ? 8000 : type === 'warning' ? 6000 : 4000;
+    }
     const id = nextId++;
     toasts = [...toasts, { id, message, type, duration }];
 

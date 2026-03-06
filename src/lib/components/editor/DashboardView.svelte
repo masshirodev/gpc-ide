@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { GameSummary } from '$lib/types/config';
+	import { GAME_TYPE_LABELS } from '$lib/stores/settings.svelte';
 	import * as m from '$lib/paraglide/messages.js';
 
 	interface WorkspaceGroup {
@@ -146,7 +147,7 @@
 									</div>
 								</div>
 								<div class="flex shrink-0 items-center gap-1.5">
-									<span class="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-500 uppercase">
+									<span class="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-500 uppercase" title={GAME_TYPE_LABELS[game.game_type] ?? game.game_type.toUpperCase()}>
 										{game.game_type}
 									</span>
 									{#if game.generation_mode === 'flow'}

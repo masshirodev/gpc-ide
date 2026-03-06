@@ -5,7 +5,6 @@ type = "fps"
 description = "Micro square stick movement while ADS to engage aim assist.\nRotates the right stick in small increments across 4 angles."
 state_display = "AA"
 status_var = "AimAssistStatus"
-has_quick_toggle = true
 conflicts = [
     "aimassist_jitter",
     "aimassist_circular",

@@ -33,6 +33,12 @@ interface AppSettings {
 
 const BUILTIN_GAME_TYPES = ['fps', 'tps', 'fgs'];
 
+export const GAME_TYPE_LABELS: Record<string, string> = {
+    fps: 'FPS (First Person Shooter)',
+    tps: 'TPS (Third Person Shooter)',
+    fgs: 'FGS (Fighting Game)',
+};
+
 const MAX_RECENT_FILES = 20;
 
 const DEFAULTS: AppSettings = {
