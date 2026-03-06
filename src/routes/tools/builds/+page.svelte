@@ -103,8 +103,13 @@
 				if (buildQueue[i].game.generation_mode === 'flow') {
 					const flowProject = await loadFlowProject(gamePath);
 					if (flowProject) {
-						const gpcCode = generateMergedFlowGpc(flowProject);
+						const { code: gpcCode, extraFiles } = generateMergedFlowGpc(flowProject);
 						await writeFile(gamePath + '/main.gpc', gpcCode);
+						for (const [fn, content] of Object.entries(extraFiles)) {
+							try { await readFile(gamePath + '/' + fn); } catch {
+								await writeFile(gamePath + '/' + fn, content);
+							}
+						}
 					}
 				}
 

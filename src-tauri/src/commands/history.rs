@@ -1,4 +1,3 @@
-use crate::models::config::GameConfig;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -13,6 +12,13 @@ pub struct SnapshotMeta {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct SnapshotIndex {
     snapshots: Vec<SnapshotMeta>,
+}
+
+/// Bundled snapshot for flow-based games
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct FlowSnapshot {
+    game_json: String,
+    flows_json: String,
 }
 
 fn history_dir(game_path: &str) -> PathBuf {
@@ -51,13 +57,19 @@ fn now_ts() -> u64 {
         .as_secs()
 }
 
-/// Create a snapshot of the current config.toml
+/// Detect whether a game directory is flow-based (has game.json) or legacy (has config.toml)
+fn is_flow_game(game_path: &str) -> bool {
+    PathBuf::from(game_path).join("game.json").exists()
+}
+
+/// Get the snapshot file extension based on game type
+fn snapshot_ext(game_path: &str) -> &'static str {
+    if is_flow_game(game_path) { "json" } else { "toml" }
+}
+
+/// Create a snapshot of the current game state
 #[tauri::command]
 pub fn create_snapshot(game_path: String, label: Option<String>) -> Result<SnapshotMeta, String> {
-    let config_path = PathBuf::from(&game_path).join("config.toml");
-    let content = std::fs::read_to_string(&config_path)
-        .map_err(|e| format!("Failed to read config.toml: {}", e))?;
-
     let ts = now_ts();
     let id = format!("{}", ts);
 
@@ -65,10 +77,33 @@ pub fn create_snapshot(game_path: String, label: Option<String>) -> Result<Snaps
     std::fs::create_dir_all(&dir)
         .map_err(|e| format!("Failed to create .history directory: {}", e))?;
 
-    // Save the TOML content as-is
-    let snapshot_file = dir.join(format!("{}.toml", id));
-    std::fs::write(&snapshot_file, &content)
-        .map_err(|e| format!("Failed to write snapshot: {}", e))?;
+    if is_flow_game(&game_path) {
+        // Flow-based game: snapshot game.json + flows.json
+        let game_json_path = PathBuf::from(&game_path).join("game.json");
+        let flows_json_path = PathBuf::from(&game_path).join("flows.json");
+
+        let game_json = std::fs::read_to_string(&game_json_path)
+            .map_err(|e| format!("Failed to read game.json: {}", e))?;
+        let flows_json = std::fs::read_to_string(&flows_json_path)
+            .unwrap_or_else(|_| "{}".to_string());
+
+        let bundle = FlowSnapshot { game_json, flows_json };
+        let content = serde_json::to_string_pretty(&bundle)
+            .map_err(|e| format!("Failed to serialize snapshot: {}", e))?;
+
+        let snapshot_file = dir.join(format!("{}.json", id));
+        std::fs::write(&snapshot_file, &content)
+            .map_err(|e| format!("Failed to write snapshot: {}", e))?;
+    } else {
+        // Legacy config-based game: snapshot config.toml
+        let config_path = PathBuf::from(&game_path).join("config.toml");
+        let content = std::fs::read_to_string(&config_path)
+            .map_err(|e| format!("Failed to read config.toml: {}", e))?;
+
+        let snapshot_file = dir.join(format!("{}.toml", id));
+        std::fs::write(&snapshot_file, &content)
+            .map_err(|e| format!("Failed to write snapshot: {}", e))?;
+    }
 
     let meta = SnapshotMeta {
         id: id.clone(),
@@ -92,11 +127,22 @@ pub fn list_snapshots(game_path: String) -> Result<Vec<SnapshotMeta>, String> {
     Ok(snapshots)
 }
 
-/// Get a snapshot's config content
+/// Get a snapshot's content (for preview)
 #[tauri::command]
 pub fn get_snapshot(game_path: String, snapshot_id: String) -> Result<String, String> {
-    let file = history_dir(&game_path).join(format!("{}.toml", snapshot_id));
-    std::fs::read_to_string(&file)
+    let ext = snapshot_ext(&game_path);
+    let file = history_dir(&game_path).join(format!("{}.{}", snapshot_id, ext));
+
+    // Try the detected extension first, then fall back to the other
+    if file.exists() {
+        return std::fs::read_to_string(&file)
+            .map_err(|e| format!("Snapshot not found: {}", e));
+    }
+
+    // Fallback: try the other extension (for snapshots created before migration)
+    let alt_ext = if ext == "json" { "toml" } else { "json" };
+    let alt_file = history_dir(&game_path).join(format!("{}.{}", snapshot_id, alt_ext));
+    std::fs::read_to_string(&alt_file)
         .map_err(|e| format!("Snapshot not found: {}", e))
 }
 
@@ -106,15 +152,38 @@ pub fn rollback_snapshot(game_path: String, snapshot_id: String) -> Result<Snaps
     // Auto-snapshot current state before rollback
     let auto_meta = create_snapshot(game_path.clone(), Some("Auto-save before rollback".into()))?;
 
-    // Read the target snapshot
-    let file = history_dir(&game_path).join(format!("{}.toml", snapshot_id));
-    let content = std::fs::read_to_string(&file)
+    let ext = snapshot_ext(&game_path);
+    let file = history_dir(&game_path).join(format!("{}.{}", snapshot_id, ext));
+
+    // Try detected extension, then fallback
+    let snapshot_file = if file.exists() {
+        file
+    } else {
+        let alt_ext = if ext == "json" { "toml" } else { "json" };
+        history_dir(&game_path).join(format!("{}.{}", snapshot_id, alt_ext))
+    };
+
+    let content = std::fs::read_to_string(&snapshot_file)
         .map_err(|e| format!("Snapshot not found: {}", e))?;
 
-    // Write it as the current config
-    let config_path = PathBuf::from(&game_path).join("config.toml");
-    std::fs::write(&config_path, &content)
-        .map_err(|e| format!("Failed to restore config: {}", e))?;
+    if snapshot_file.extension().map(|e| e == "json").unwrap_or(false) {
+        // Flow snapshot: restore game.json + flows.json
+        let bundle: FlowSnapshot = serde_json::from_str(&content)
+            .map_err(|e| format!("Failed to parse flow snapshot: {}", e))?;
+
+        let game_json_path = PathBuf::from(&game_path).join("game.json");
+        std::fs::write(&game_json_path, &bundle.game_json)
+            .map_err(|e| format!("Failed to restore game.json: {}", e))?;
+
+        let flows_json_path = PathBuf::from(&game_path).join("flows.json");
+        std::fs::write(&flows_json_path, &bundle.flows_json)
+            .map_err(|e| format!("Failed to restore flows.json: {}", e))?;
+    } else {
+        // Legacy snapshot: restore config.toml
+        let config_path = PathBuf::from(&game_path).join("config.toml");
+        std::fs::write(&config_path, &content)
+            .map_err(|e| format!("Failed to restore config: {}", e))?;
+    }
 
     Ok(auto_meta)
 }
@@ -122,10 +191,13 @@ pub fn rollback_snapshot(game_path: String, snapshot_id: String) -> Result<Snaps
 /// Delete a snapshot
 #[tauri::command]
 pub fn delete_snapshot(game_path: String, snapshot_id: String) -> Result<(), String> {
-    let file = history_dir(&game_path).join(format!("{}.toml", snapshot_id));
-    if file.exists() {
-        std::fs::remove_file(&file)
-            .map_err(|e| format!("Failed to delete snapshot file: {}", e))?;
+    // Try both extensions
+    for ext in &["toml", "json"] {
+        let file = history_dir(&game_path).join(format!("{}.{}", snapshot_id, ext));
+        if file.exists() {
+            std::fs::remove_file(&file)
+                .map_err(|e| format!("Failed to delete snapshot file: {}", e))?;
+        }
     }
 
     let mut index = load_index(&game_path);

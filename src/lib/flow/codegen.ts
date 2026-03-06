@@ -28,7 +28,7 @@ export function flowVarsToPersistVars(vars: FlowVariable[], profileCount: number
 		let min = v.min;
 		let max = v.max;
 
-		if (min === undefined || max === undefined) {
+		if (min == null || max == null) {
 			// Infer range from type when not explicitly set
 			switch (v.type) {
 				case 'int8':
@@ -60,8 +60,8 @@ export function flowVarsToPersistVars(vars: FlowVariable[], profileCount: number
 
 /**
  * Generate bitpack-based Flow_Save / Flow_Load functions.
- * Uses SPVAR_5+ for auto-generated data, leaving SPVAR_1-4 for user use.
- * SPVAR_0 is the data-exists marker.
+ * Uses SPVAR_6+ for auto-generated data, leaving SPVAR_2-5 for user use.
+ * SPVAR_1 is the data-exists marker.
  */
 export function generateBitpackPersistence(vars: PersistVar[]): string {
 	if (vars.length === 0) return '';
@@ -69,7 +69,7 @@ export function generateBitpackPersistence(vars: PersistVar[]): string {
 	const hasArrayLoop = vars.some((v) => v.arrayLoop);
 	const lines: string[] = [];
 
-	lines.push(`define SPVAR_BITPACK_START = SPVAR_5;`);
+	lines.push(`define SPVAR_BITPACK_START = SPVAR_6;`);
 	if (hasArrayLoop) {
 		lines.push(`int _bp_loop_i;`);
 	}
@@ -95,13 +95,13 @@ export function generateBitpackPersistence(vars: PersistVar[]): string {
 		}
 	}
 	lines.push(`    flush_spvar();`);
-	lines.push(`    set_pvar(SPVAR_0, 1);`);
+	lines.push(`    set_pvar(SPVAR_1, 1);`);
 	lines.push(`}`);
 	lines.push(``);
 
 	// Flow_Load
 	lines.push(`function Flow_Load() {`);
-	lines.push(`    if(get_pvar(SPVAR_0) != 1) return;`);
+	lines.push(`    if(get_pvar(SPVAR_1, 0x80000000, 0x7FFFFFFF, 0) != 1) return;`);
 	lines.push(`    spvar_current_slot = SPVAR_BITPACK_START;`);
 	lines.push(`    spvar_current_bit = 0;`);
 	lines.push(`    spvar_current_value = 0;`);
@@ -133,6 +133,112 @@ export function generateBitpackPersistence(vars: PersistVar[]): string {
  * @param options.skipPersistence - When true, omit persistence functions and
  *        Flow_Load() call (used by merged codegen which generates combined persistence).
  */
+
+/** Composite multiple pixel-art sub-nodes into a single image buffer */
+function compositePixelArts(
+	arts: { sub: SubNode; x: number; y: number }[]
+): { x: number; y: number; w: number; h: number; hexRows: string[] } | null {
+	// Decode each pixel-art and find bounding box
+	const decoded: { pixels: Uint8Array; cropW: number; cropH: number; x: number; y: number }[] =
+		[];
+
+	for (const { sub, x, y } of arts) {
+		const scene = sub.config.scene as { pixels?: string } | null;
+		if (!scene?.pixels) continue;
+		try {
+			const raw = atob(scene.pixels);
+			const bytes = new Uint8Array(raw.length);
+			for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+			const cropW = (sub.config.width as number) || 128;
+			const cropH = (sub.config.height as number) || 64;
+			decoded.push({ pixels: bytes, cropW, cropH, x, y });
+		} catch {
+			// skip invalid
+		}
+	}
+
+	if (decoded.length === 0) return null;
+
+	// Compute bounding box
+	let minX = 128,
+		minY = 64,
+		maxX = 0,
+		maxY = 0;
+	for (const d of decoded) {
+		minX = Math.min(minX, d.x);
+		minY = Math.min(minY, d.y);
+		maxX = Math.max(maxX, d.x + d.cropW);
+		maxY = Math.max(maxY, d.y + d.cropH);
+	}
+	// Clamp to OLED bounds
+	minX = Math.max(0, minX);
+	minY = Math.max(0, minY);
+	maxX = Math.min(128, maxX);
+	maxY = Math.min(64, maxY);
+
+	const w = maxX - minX;
+	const h = maxY - minY;
+	if (w <= 0 || h <= 0) return null;
+
+	// Composite onto a single buffer (1 bit per pixel, row-major MSB-first)
+	const rowBytes = Math.ceil(w / 8);
+	const buffer = new Uint8Array(rowBytes * h);
+
+	for (const d of decoded) {
+		for (let py = 0; py < d.cropH && d.y + py < maxY; py++) {
+			for (let px = 0; px < d.cropW && d.x + px < maxX; px++) {
+				// Read source pixel
+				const srcByte = py * 16 + Math.floor(px / 8);
+				const srcBit = 7 - (px % 8);
+				if (srcByte >= d.pixels.length || !(d.pixels[srcByte] & (1 << srcBit))) continue;
+
+				// Write to composite buffer
+				const dx = d.x + px - minX;
+				const dy = d.y + py - minY;
+				const dstByte = dy * rowBytes + Math.floor(dx / 8);
+				const dstBit = 7 - (dx % 8);
+				buffer[dstByte] |= 1 << dstBit;
+			}
+		}
+	}
+
+	// Pack into GPC const image format (row-major MSB-first, width-aligned)
+	const packed: number[] = [];
+	let currentByte = 0;
+	let bit = 0;
+	for (let py = 0; py < h; py++) {
+		for (let px = 0; px < w; px++) {
+			currentByte <<= 1;
+			const byteIdx = py * rowBytes + Math.floor(px / 8);
+			const bitIdx = 7 - (px % 8);
+			if (buffer[byteIdx] & (1 << bitIdx)) {
+				currentByte |= 1;
+			}
+			bit++;
+			if (bit === 8) {
+				packed.push(currentByte);
+				currentByte = 0;
+				bit = 0;
+			}
+		}
+	}
+	if (bit > 0) {
+		packed.push(currentByte << (8 - bit));
+	}
+
+	// Format hex rows
+	const hexRows: string[] = [];
+	for (let i = 0; i < packed.length; i += 16) {
+		const row = packed
+			.slice(i, Math.min(i + 16, packed.length))
+			.map((b) => `0x${b.toString(16).padStart(2, '0').toUpperCase()}`)
+			.join(', ');
+		hexRows.push(`    ${row}`);
+	}
+
+	return { x: minX, y: minY, w, h, hexRows };
+}
+
 export function generateFlowGpc(
 	graph: FlowGraph,
 	profileCount: number = 0,
@@ -164,15 +270,9 @@ export function generateFlowGpc(
 	lines.push(`// ====================================================`);
 	lines.push(``);
 
-	// Imports for common helpers
-	lines.push(`import common/helper;`);
-	lines.push(`import common/oled;`);
-	const hasPersistence =
-		graph.settings.persistenceEnabled && !options?.skipPersistence && collectPersistVars(graph).length > 0;
-	if (hasPersistence) {
-		lines.push(`import common/bitpack;`);
-	}
-	lines.push(``);
+	const wantsPersistence =
+		graph.settings.persistenceEnabled && collectPersistVars(graph).length > 0;
+	const hasPersistence = wantsPersistence && !options?.skipPersistence;
 
 	// State defines
 	lines.push(`// ===== STATE DEFINITIONS =====`);
@@ -262,20 +362,50 @@ export function generateFlowGpc(
 		lines.push(``);
 	}
 
-	// Pre-generate sub-node code to collect strings for const string[] declarations
+	// Pre-generate sub-node code to collect strings and images for top-level declarations
 	const nodeSubNodeCode = new Map<string, string[]>();
 	const nodeStrings = new Map<string, string[]>();
+	const nodeImages = new Map<string, string[]>();
 
 	for (const node of sorted) {
 		if (node.subNodes.length === 0) continue;
 		const safeName = sanitizeName(node.label);
 		const sortedSubs = getSortedSubNodes(node);
 		const strings: string[] = [];
+		const images: string[] = [];
 		const stringArrayName = `FlowText_${safeName}`;
 		const codeLines: string[] = [];
 		let cursorIndex = 0;
 
+		// Collect pixel-art sub-nodes to merge into a single const image
+		const pixelArtSubs: { sub: SubNode; x: number; y: number }[] = [];
 		for (const sub of sortedSubs) {
+			if (sub.type === 'pixel-art') {
+				const pixelY = computeSubNodePixelY(node, sub);
+				const pixelX = sub.position === 'absolute' ? (sub.x ?? 0) : node.stackOffsetX;
+				pixelArtSubs.push({ sub, x: pixelX, y: pixelY });
+			}
+		}
+
+		// Merge pixel-art sub-nodes into one composite image
+		if (pixelArtSubs.length > 0) {
+			const composited = compositePixelArts(pixelArtSubs);
+			if (composited) {
+				const imageName = `Flow_${safeName}_img${images.length}`;
+				images.push(
+					`const image ${imageName} = {${composited.w}, ${composited.h},\n${composited.hexRows.join(',\n')}\n};`
+				);
+				codeLines.push(
+					`    // Pixel Art (merged)\n    image_oled(${composited.x}, ${composited.y}, TRUE, TRUE, ${imageName}[0]);`
+				);
+			}
+		}
+
+		const pixelArtIds = new Set(pixelArtSubs.map((p) => p.sub.id));
+
+		for (const sub of sortedSubs) {
+			if (pixelArtIds.has(sub.id)) continue; // already handled above
+
 			const def = getSubNodeDef(sub.type);
 			if (!def) continue;
 
@@ -292,6 +422,7 @@ export function generateFlowGpc(
 				buttons: bm,
 				stringArrayName,
 				strings,
+				images,
 			};
 
 			const configWithLabel = { ...sub.config, label: sub.label };
@@ -305,6 +436,7 @@ export function generateFlowGpc(
 
 		nodeSubNodeCode.set(node.id, codeLines);
 		nodeStrings.set(node.id, strings);
+		nodeImages.set(node.id, images);
 	}
 
 	// Emit const string[] declarations for each node that has text
@@ -323,11 +455,48 @@ export function generateFlowGpc(
 	}
 	if (hasStringDecls) lines.push(``);
 
+	// Emit const image declarations for pixel-art sub-nodes
+	let hasImageDecls = false;
+	for (const node of sorted) {
+		const images = nodeImages.get(node.id);
+		if (images && images.length > 0) {
+			if (!hasImageDecls) {
+				lines.push(`// ===== IMAGE DATA =====`);
+				hasImageDecls = true;
+			}
+			for (const decl of images) {
+				lines.push(decl);
+			}
+		}
+	}
+	if (hasImageDecls) lines.push(``);
+
 	// OLED draw functions (legacy: nodes with oledScene but no sub-nodes)
+	// Emit legacy scene image declarations before any function defs
 	for (const node of sorted) {
 		if (node.oledScene && node.subNodes.length === 0) {
+			const { declaration, fn: _fn } = generateOledDrawFunction(node);
+			if (declaration) {
+				lines.push(declaration);
+				lines.push(``);
+			}
+		}
+	}
+
+	// Imports for common helpers (after all const declarations, since imports contain functions)
+	lines.push(`import common/helper;`);
+	lines.push(`import common/oled;`);
+	if (hasPersistence) {
+		lines.push(`import common/bitpack;`);
+	}
+	lines.push(``);
+
+	// OLED draw function bodies
+	for (const node of sorted) {
+		if (node.oledScene && node.subNodes.length === 0) {
+			const { fn } = generateOledDrawFunction(node);
 			lines.push(`// ===== DRAW: ${node.label} =====`);
-			lines.push(generateOledDrawFunction(node));
+			lines.push(fn);
 			lines.push(``);
 		}
 	}
@@ -422,6 +591,9 @@ export function generateFlowGpc(
 				for (const line of node.onExit.trim().split('\n')) {
 					lines.push(`        ${line.trim()}`);
 				}
+			}
+			if (wantsPersistence) {
+				lines.push(`        Flow_Save();`);
 			}
 			lines.push(`        FlowStackTop = FlowStackTop - 1;`);
 			lines.push(`        FlowCurrentState = FlowStateStack[FlowStackTop];`);
@@ -594,12 +766,13 @@ function generateConditionCode(edge: FlowEdge): string | null {
 	return result;
 }
 
-function generateOledDrawFunction(node: FlowNode): string {
+function generateOledDrawFunction(node: FlowNode): { declaration: string; fn: string } {
 	const safeName = sanitizeName(node.label);
-	const lines: string[] = [];
+	const fnLines: string[] = [];
+	let declaration = '';
 
-	lines.push(`function Draw_Flow_${safeName}() {`);
-	lines.push(`    cls_oled(OLED_BLACK);`);
+	fnLines.push(`function Draw_Flow_${safeName}() {`);
+	fnLines.push(`    cls_oled(OLED_BLACK);`);
 
 	if (node.oledScene) {
 		try {
@@ -609,22 +782,48 @@ function generateOledDrawFunction(node: FlowNode): string {
 				bytes[i] = binaryStr.charCodeAt(i);
 			}
 
+			// Pack into const image format (row-major, MSB-first)
+			const packed: number[] = [];
+			let currentByte = 0;
+			let bit = 0;
 			for (let y = 0; y < 64; y++) {
 				for (let x = 0; x < 128; x++) {
+					currentByte <<= 1;
 					const byteIdx = y * 16 + Math.floor(x / 8);
 					const bitIdx = 7 - (x % 8);
 					if (byteIdx < bytes.length && (bytes[byteIdx] & (1 << bitIdx)) !== 0) {
-						lines.push(`    pixel_oled(${x}, ${y}, 1);`);
+						currentByte |= 1;
+					}
+					bit++;
+					if (bit === 8) {
+						packed.push(currentByte);
+						currentByte = 0;
+						bit = 0;
 					}
 				}
 			}
+			if (bit > 0) {
+				packed.push(currentByte << (8 - bit));
+			}
+
+			const imageName = `Flow_Scene_${safeName}`;
+			const hexRows: string[] = [];
+			for (let i = 0; i < packed.length; i += 16) {
+				const row = packed
+					.slice(i, Math.min(i + 16, packed.length))
+					.map((b) => `0x${b.toString(16).padStart(2, '0').toUpperCase()}`)
+					.join(', ');
+				hexRows.push(`    ${row}`);
+			}
+			declaration = `const image ${imageName} = {128, 64,\n${hexRows.join(',\n')}\n};`;
+			fnLines.push(`    image_oled(0, 0, TRUE, TRUE, ${imageName}[0]);`);
 		} catch {
-			lines.push(`    // Error decoding OLED scene data`);
+			fnLines.push(`    // Error decoding OLED scene data`);
 		}
 	}
 
-	lines.push(`}`);
-	return lines.join('\n');
+	fnLines.push(`}`);
+	return { declaration, fn: fnLines.join('\n') };
 }
 
 export function collectPersistVars(graph: FlowGraph): FlowVariable[] {

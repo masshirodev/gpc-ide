@@ -90,6 +90,8 @@ export interface SubNodeCodegenContext {
 	stringArrayName: string;
 	/** Shared mutable array — sub-nodes push their text strings here */
 	strings: string[];
+	/** Shared mutable array — sub-nodes push const image declarations here */
+	images: string[];
 }
 
 /** Register a string in the codegen context, returning its index. Deduplicates. */
@@ -140,6 +142,8 @@ export interface ModuleNodeData {
 	triggerCode?: string;
 	options: ModuleNodeOption[];
 	extraVars: Record<string, string>;
+	/** Button/key params from module definition — key: param key, value: selected button constant */
+	params?: Record<string, string>;
 	conflicts: string[];
 	needsWeapondata: boolean;
 	/** Weapon names for weapondata modules — generates Weapons[] array and WEAPON_COUNT */
@@ -186,6 +190,7 @@ export interface FlowNode {
 	subNodes: SubNode[];
 	stackOffsetX: number;
 	stackOffsetY: number;
+	lineMargin?: number;
 	visibleCount?: number;
 	scrollMode?: 'window' | 'wrap';
 	/** Button that navigates back to the previous state (e.g. 'PS5_CIRCLE') */
@@ -423,7 +428,7 @@ export function createFlowNode(
 	label: string,
 	position: { x: number; y: number }
 ): FlowNode {
-	return {
+	const node: FlowNode = {
 		id: crypto.randomUUID(),
 		type,
 		label,
@@ -441,6 +446,11 @@ export function createFlowNode(
 		stackOffsetX: 0,
 		stackOffsetY: 0,
 	};
+	// Menu-like nodes default to PS5_CIRCLE as back button
+	if (type === 'menu' || type === 'submenu' || type === 'home' || type === 'intro') {
+		node.backButton = 'PS5_CIRCLE';
+	}
+	return node;
 }
 
 export function createFlowEdge(

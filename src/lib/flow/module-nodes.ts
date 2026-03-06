@@ -38,6 +38,21 @@ export function createModuleNode(
 	// Parse the combo field into separate code sections
 	const parsed = parseComboField(moduleDef.combo ?? '');
 
+	// Strip config_menu rendering functions — the flow editor generates menus instead
+	const menuFunctions = collectConfigMenuFunctions(moduleDef);
+	const functionsCode =
+		menuFunctions.length > 0
+			? stripFunctions(parsed.functionsCode, menuFunctions)
+			: parsed.functionsCode;
+
+	// Build params map from module definition (button/key params with defaults)
+	const params: Record<string, string> = {};
+	for (const p of moduleDef.params) {
+		if (p.type === 'button' || p.type === 'key') {
+			params[p.key] = p.default ?? '';
+		}
+	}
+
 	const moduleData: ModuleNodeData = {
 		moduleId: moduleDef.id,
 		moduleName: moduleDef.display_name,
@@ -45,10 +60,11 @@ export function createModuleNode(
 		enableVariable: enableVar,
 		initCode: '',
 		mainCode: moduleDef.trigger ?? '',
-		functionsCode: parsed.functionsCode,
+		functionsCode,
 		comboCode: parsed.comboCode,
 		options,
 		extraVars: { ...moduleDef.extra_vars },
+		params: Object.keys(params).length > 0 ? params : undefined,
 		conflicts: moduleDef.conflicts ?? [],
 		needsWeapondata: moduleDef.needs_weapondata ?? false,
 	};
@@ -208,4 +224,48 @@ function findBlockEndFromLines(lines: string[], startIdx: number): number {
 
 function capitalize(s: string): string {
 	return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+/**
+ * Collect function names referenced by a module's config_menu.
+ * These are legacy menu rendering functions that the flow editor replaces.
+ */
+function collectConfigMenuFunctions(moduleDef: ModuleDefinition): string[] {
+	const cm = moduleDef.config_menu;
+	if (!cm) return [];
+	const names: string[] = [];
+	if (cm.render_function) names.push(cm.render_function);
+	if (cm.display_function) names.push(cm.display_function);
+	if (cm.edit_function) names.push(cm.edit_function);
+	return names;
+}
+
+/**
+ * Remove named function definitions from a code string.
+ * Matches `function Name(...) { ... }` blocks (with balanced braces).
+ */
+function stripFunctions(code: string, functionNames: string[]): string {
+	if (!code.trim() || functionNames.length === 0) return code;
+
+	const namePattern = functionNames.map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+	const lines = code.split('\n');
+	const result: string[] = [];
+	let i = 0;
+
+	while (i < lines.length) {
+		const trimmed = lines[i].trimStart();
+		const fnMatch = new RegExp(`^function\\s+(${namePattern})\\s*\\(`).exec(trimmed);
+		if (fnMatch) {
+			// Skip this entire function block
+			const blockEnd = findBlockEndFromLines(lines, i);
+			i = blockEnd + 1;
+			// Skip trailing blank lines
+			while (i < lines.length && !lines[i].trim()) i++;
+			continue;
+		}
+		result.push(lines[i]);
+		i++;
+	}
+
+	return result.join('\n').trim();
 }

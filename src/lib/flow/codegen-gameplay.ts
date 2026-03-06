@@ -16,6 +16,8 @@ export interface GameplayCodegenResult {
 	initCode: string[];
 	mainLoopCode: string[];
 	functions: string[];
+	/** Separate file contents that should be written alongside main.gpc */
+	extraFiles: Record<string, string>;
 }
 
 /**
@@ -42,6 +44,7 @@ export function generateGameplayGpc(graph: FlowGraph): GameplayCodegenResult {
 		initCode: [],
 		mainLoopCode: [],
 		functions: [],
+		extraFiles: {},
 	};
 
 	const moduleNodes = graph.nodes.filter((n) => n.type === 'module' && n.moduleData);
@@ -55,14 +58,41 @@ export function generateGameplayGpc(graph: FlowGraph): GameplayCodegenResult {
 		const safeName = sanitizeName(md.moduleId);
 
 		// Weapon data defines + array (weapondata module only)
-		if (md.moduleId === 'weapondata' && md.weaponNames && md.weaponNames.length > 0) {
-			const count = md.weaponNames.length;
+		if (md.moduleId === 'weapondata') {
+			const names = md.weaponNames ?? [];
+			const count = names.length;
 			result.defines.push(`define WEAPON_COUNT = ${count};`);
-			result.defines.push(`define WEAPON_MAX_INDEX = ${count - 1};`);
-			const quoted = md.weaponNames.map((w) => `"${w}"`).join(', ');
-			result.functions.push(`// Weapon names`);
-			result.functions.push(`const string Weapons[] = { ${quoted} };`);
-			result.functions.push('');
+			result.defines.push(`define WEAPON_MAX_INDEX = ${Math.max(count - 1, 0)};`);
+			if (count > 0) {
+				const quoted = names.map((w) => `"${w}"`).join(', ');
+				result.functions.push(`// Weapon names`);
+				result.functions.push(`const string Weapons[] = { ${quoted} };`);
+				result.functions.push('');
+
+				// Generate recoiltable.gpc as a separate file if any module needs it
+				const needsRecoilTable = moduleNodes.some(
+					(n) => n.moduleData?.moduleId === 'antirecoil_timeline'
+				);
+				if (needsRecoilTable) {
+					result.functions.push(`// Weapon recoil table — loaded from recoiltable.gpc`);
+					result.functions.push(`#include "recoiltable.gpc"`);
+					result.functions.push('');
+
+					// Generate separate recoiltable.gpc file content
+					const rtLines: string[] = [];
+					rtLines.push(`// Weapon recoil table (10 phases x 2 axes per weapon)`);
+					rtLines.push(`// Edit values in the Recoil tab or Spray Pattern tool`);
+					const zeros = Array(20).fill(' 0').join(',');
+					const rows = names.map(
+						(w, i) => `    {${zeros}} ${i < count - 1 ? ',' : ' '} /* ${String(i).padStart(4)} ${w} */`
+					);
+					rtLines.push(`const int8 WeaponRecoilTable[][] = {`);
+					rtLines.push(`//  V0  H0  V1  H1  V2  H2  V3  H3  V4  H4  V5  H5  V6  H6  V7  H7  V8  H8  V9  H9`);
+					rtLines.push(...rows);
+					rtLines.push(`};`);
+					result.extraFiles['recoiltable.gpc'] = rtLines.join('\n');
+				}
+			}
 		}
 
 		// Variables: enable + options + extras
@@ -76,8 +106,16 @@ export function generateGameplayGpc(graph: FlowGraph): GameplayCodegenResult {
 		// Extra vars from module definition
 		for (const [name, type] of Object.entries(md.extraVars)) {
 			if (!declaredVars.has(name)) {
-				result.variables.push(`${type} ${name};`);
+				result.variables.push(formatExtraVar(name, type));
 				declaredVars.add(name);
+			}
+		}
+
+		// Button param defines
+		if (md.params) {
+			for (const [key, value] of Object.entries(md.params)) {
+				const defineName = `${md.moduleId.toUpperCase()}_${key.toUpperCase()}`;
+				result.defines.push(`define ${defineName} = ${value};`);
 			}
 		}
 
@@ -276,13 +314,31 @@ function generateVarDecl(v: FlowVariable): string {
 		return `int8 ${v.name}[${size}];`;
 	}
 	const profile = v.perProfile ? ' [profile]' : '';
-	return `${v.type}${profile} ${v.name} = ${v.defaultValue};`;
+	return `${v.type} ${v.name}${profile} = ${v.defaultValue};`;
 }
 
 /**
  * Extract the combo name from a combo code block.
  * Looks for `combo <name> {` pattern.
  */
+/**
+ * Format an extra_vars entry into a valid GPC declaration.
+ * Handles: "int", "int [profile]", "int [216]"
+ * Produces: "int Name;", "int Name [profile];", "int Name[216];"
+ */
+function formatExtraVar(name: string, type: string): string {
+	const arrayMatch = type.match(/^(\w+)\s*\[(.+)\]$/);
+	if (arrayMatch) {
+		const baseType = arrayMatch[1];
+		const size = arrayMatch[2].trim();
+		if (size === 'profile') {
+			return `${baseType} ${name} [profile];`;
+		}
+		return `${baseType} ${name}[${size}];`;
+	}
+	return `${type} ${name};`;
+}
+
 function extractComboName(comboCode: string): string | null {
 	const match = comboCode.match(/combo\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\{/);
 	return match ? match[1] : null;

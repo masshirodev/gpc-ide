@@ -106,6 +106,9 @@ pub struct ModuleNodeData {
     pub options: Vec<ModuleNodeOption>,
     #[serde(default)]
     pub extra_vars: HashMap<String, String>,
+    /// Button/key params from module definition — key: param key, value: selected button constant
+    #[serde(default)]
+    pub params: Option<HashMap<String, String>>,
     #[serde(default)]
     pub conflicts: Vec<String>,
     #[serde(default)]

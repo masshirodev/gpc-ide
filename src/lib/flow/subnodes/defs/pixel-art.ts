@@ -46,9 +46,6 @@ export const pixelArtDef: SubNodeDef = {
 		const scene = config.scene as { pixels?: string } | null;
 		if (!scene?.pixels) return '    // Pixel Art: no scene data';
 
-		const lines: string[] = [];
-		lines.push(`    // Pixel Art scene`);
-
 		try {
 			const raw = atob(scene.pixels);
 			const bytes = new Uint8Array(raw.length);
@@ -57,19 +54,48 @@ export const pixelArtDef: SubNodeDef = {
 			const cropW = (config.width as number) || 128;
 			const cropH = (config.height as number) || 64;
 
+			// Pack pixels into row-major MSB-first bytes (GPC const image format)
+			const packed: number[] = [];
+			let currentByte = 0;
+			let bit = 0;
 			for (let py = 0; py < cropH && py < 64; py++) {
 				for (let px = 0; px < cropW && px < 128; px++) {
+					currentByte <<= 1;
 					const byteIdx = py * 16 + Math.floor(px / 8);
 					const bitIdx = 7 - (px % 8);
 					if (byteIdx < bytes.length && bytes[byteIdx] & (1 << bitIdx)) {
-						lines.push(`    pixel_oled(${ctx.x + px}, ${ctx.y + py}, 1);`);
+						currentByte |= 1;
+					}
+					bit++;
+					if (bit === 8) {
+						packed.push(currentByte);
+						currentByte = 0;
+						bit = 0;
 					}
 				}
 			}
-		} catch {
-			lines.push('    // Error decoding pixel data');
-		}
+			if (bit > 0) {
+				packed.push(currentByte << (8 - bit));
+			}
 
-		return lines.join('\n');
+			// Format hex data in rows of 16 bytes
+			const hexRows: string[] = [];
+			for (let i = 0; i < packed.length; i += 16) {
+				const row = packed
+					.slice(i, Math.min(i + 16, packed.length))
+					.map((b) => `0x${b.toString(16).padStart(2, '0').toUpperCase()}`)
+					.join(', ');
+				hexRows.push(`    ${row}`);
+			}
+
+			const imageIdx = ctx.images.length;
+			const imageName = `${ctx.varPrefix}_img${imageIdx}`;
+			const decl = `const image ${imageName} = {${cropW}, ${cropH},\n${hexRows.join(',\n')}\n};`;
+			ctx.images.push(decl);
+
+			return `    // Pixel Art scene\n    image_oled(${ctx.x}, ${ctx.y}, TRUE, TRUE, ${imageName}[0]);`;
+		} catch {
+			return '    // Error decoding pixel data';
+		}
 	},
 };

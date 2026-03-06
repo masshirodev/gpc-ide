@@ -1,9 +1,6 @@
 
 import helper;
 
-// Control Helper Functions
-// Common utilities for input
-
 // Press a button
 function press(button) {
     set_val(button, 100);

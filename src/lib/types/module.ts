@@ -34,6 +34,7 @@ export interface ModuleDefinition {
 export interface ConfigMenu {
 	name: string;
 	type: string;
+	render_function?: string;
 	display_function?: string;
 	edit_function?: string;
 	profile_aware?: boolean;

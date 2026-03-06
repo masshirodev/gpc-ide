@@ -835,10 +835,7 @@ fn build_game_impl(
     };
 
     // Write output
-    let mut header = format!(
-        "// GENERATED FILE - DO NOT EDIT\n// Source: {}\n",
-        main_path.display()
-    );
+    let mut header = "".to_string();
     if let Some(ref comments) = header_comments {
         for line in comments.lines() {
             header.push_str(&format!("// {}\n", line));

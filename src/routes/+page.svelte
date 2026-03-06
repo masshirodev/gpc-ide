@@ -96,12 +96,15 @@
 	import HistoryPanel from '$lib/components/editor/HistoryPanel.svelte';
 	import GitPanel from '$lib/components/editor/GitPanel.svelte';
 	import { getDiagnosticsStore, getFileSeverityMap } from '$lib/stores/diagnostics.svelte';
+	import { getFlowStore } from '$lib/stores/flow.svelte';
 	import { getKeyCombo, matchesCombo } from '$lib/stores/keybindings.svelte';
 	import CommandPalette from '$lib/components/layout/CommandPalette.svelte';
 	import type { Command } from '$lib/components/layout/CommandPalette.svelte';
+	import RecoilTableEditor from '$lib/components/editor/RecoilTableEditor.svelte';
 
 	let store = getGameStore();
 	let editorStore = getEditorStore();
+	let flowStore = getFlowStore();
 	let ui = getUiStore();
 	let lspStore = getLspStore();
 	let settingsStore = getSettings();
@@ -236,10 +239,25 @@
 	let activeFileGitChanges = $state<GitLineChange[]>([]);
 
 	// Page tab state
-	let activeTab = $state<'overview' | 'files' | 'flow' | 'build' | 'history' | 'git'>('overview');
+	let activeTab = $state<'overview' | 'files' | 'flow' | 'build' | 'history' | 'git' | 'recoil'>('overview');
 
 	// Git repo detection
 	let isGitRepo = $state(false);
+
+	// Recoil tab state
+	let recoilContent = $state<string | null>(null);
+	let recoilFilePath = $state<string | null>(null);
+
+	// Detect antirecoil_timeline module in flow project
+	let hasAntirecoilTimeline = $derived.by(() => {
+		if (!flowStore.project) return false;
+		const gameplayFlow = flowStore.project.flows.find((f) => f.flowType === 'gameplay');
+		if (!gameplayFlow) return false;
+		return gameplayFlow.nodes.some(
+			(n) => n.type === 'module' && n.moduleData?.moduleId === 'antirecoil_timeline'
+		);
+	});
+
 	let gameTabs = $derived((() => {
 		const isFlow = store.selectedGame?.generation_mode === 'flow';
 		const tabs = ['overview'];
@@ -248,8 +266,10 @@
 		} else {
 			tabs.push('files');
 		}
-		tabs.push('build', 'history');
-		if (isGitRepo) tabs.push('git');
+		if (hasAntirecoilTimeline) {
+			tabs.push('recoil');
+		}
+		tabs.push('build', 'history', 'git');
 		return tabs;
 	})());
 
@@ -490,6 +510,22 @@
 			});
 	});
 
+	// Load recoil table content when recoil tab is selected
+	$effect(() => {
+		if (activeTab === 'recoil' && store.selectedGame) {
+			const gamePath = store.selectedGame.path;
+			const path = `${gamePath}/recoiltable.gpc`;
+			recoilFilePath = path;
+			readFile(path)
+				.then((content) => {
+					recoilContent = content;
+				})
+				.catch(() => {
+					recoilContent = '';
+				});
+		}
+	});
+
 	// Auto-collapse sidebar when switching to files tab
 	$effect(() => {
 		if (activeTab === 'files' || activeTab === 'flow') {
@@ -595,8 +631,13 @@
 			if (store.selectedGame.generation_mode === 'flow') {
 				const flowProject = await loadFlowProject(gamePath);
 				if (flowProject) {
-					const gpcCode = generateMergedFlowGpc(flowProject);
+					const { code: gpcCode, extraFiles } = generateMergedFlowGpc(flowProject);
 					await writeFile(gamePath + '/main.gpc', gpcCode);
+					for (const [fileName, content] of Object.entries(extraFiles)) {
+						try { await readFile(gamePath + '/' + fileName); } catch {
+							await writeFile(gamePath + '/' + fileName, content);
+						}
+					}
 				}
 			}
 
@@ -708,17 +749,31 @@
 			const newValues = transfer.values;
 			clearRecoilTransfer();
 
-			openTab(filePath).then(() => {
-				activeTab = 'files';
-				const tab = editorStore.tabs.find((t) => t.path === filePath);
-				if (tab) {
-					const entries = parseRecoilTable(tab.content);
+			// If returning to recoiltable.gpc and the recoil tab is available, use it
+			if (filePath.endsWith('recoiltable.gpc') && hasAntirecoilTimeline) {
+				readFile(filePath).then((content) => {
+					const entries = parseRecoilTable(content);
 					const updated = updateWeaponValues(entries, weaponIndex, newValues);
-					const newContent = serializeRecoilTable(tab.content, updated);
-					updateTabContent(filePath, newContent);
+					const newContent = serializeRecoilTable(content, updated);
+					writeFile(filePath, newContent);
+					recoilContent = newContent;
+					recoilFilePath = filePath;
+					activeTab = 'recoil';
 					addToast(`Applied recoil values for weapon #${weaponIndex}`, 'success');
-				}
-			});
+				});
+			} else {
+				openTab(filePath).then(() => {
+					activeTab = 'files';
+					const tab = editorStore.tabs.find((t) => t.path === filePath);
+					if (tab) {
+						const entries = parseRecoilTable(tab.content);
+						const updated = updateWeaponValues(entries, weaponIndex, newValues);
+						const newContent = serializeRecoilTable(tab.content, updated);
+						updateTabContent(filePath, newContent);
+						addToast(`Applied recoil values for weapon #${weaponIndex}`, 'success');
+					}
+				});
+			}
 		}
 
 		// Handle return from keyboard mapper tool — apply updated mappings
@@ -938,7 +993,7 @@
 					class:hover:text-zinc-200={activeTab !== tab}
 					onclick={() => (activeTab = tab as typeof activeTab)}
 				>
-					{{ overview: m.page_tab_overview(), files: m.page_tab_files(), flow: m.page_tab_flow(), build: m.page_tab_build(), history: m.page_tab_history(), git: m.page_tab_git() }[tab]}
+					{{ overview: m.page_tab_overview(), files: m.page_tab_files(), flow: m.page_tab_flow(), build: m.page_tab_build(), history: m.page_tab_history(), git: m.page_tab_git(), recoil: 'Recoil' }[tab]}
 					{#if tab === 'build' && buildResult}
 						<span
 							class="ml-1 inline-block h-2 w-2 rounded-full"
@@ -956,6 +1011,7 @@
 				meta={store.selectedMeta}
 				config={store.selectedConfig}
 				onTagsChanged={async () => { await loadGames(settings.workspaces); }}
+				onMetaChanged={async () => { await loadGames(settings.workspaces); if (store.selectedGame) await selectGame(store.selectedGame); }}
 				onSaveAsTemplate={() => (showSaveTemplateModal = true)}
 				onExportZip={handleExportZip}
 			/>
@@ -1029,13 +1085,36 @@
 				onRenameSnapshot={handleRenameSnapshot}
 				onRenameLabelChange={(v) => (renameLabel = v)}
 			/>
+		{:else if activeTab === 'recoil'}
+			{#if recoilContent !== null}
+				<RecoilTableEditor
+					content={recoilContent}
+					gamePath={store.selectedGame?.path ?? ''}
+					filePath={recoilFilePath ?? undefined}
+					onchange={async (newContent) => {
+						recoilContent = newContent;
+						if (recoilFilePath) {
+							await writeFile(recoilFilePath, newContent);
+							addToast('Recoil table saved', 'success');
+						}
+					}}
+				/>
+			{:else}
+				<div class="flex h-64 items-center justify-center text-sm text-zinc-500">
+					Loading recoil table...
+				</div>
+			{/if}
 		{:else if activeTab === 'git'}
 			<GitPanel
 				gamePath={store.selectedGame?.path ?? ''}
+				{isGitRepo}
 				onCommitted={async () => {
 					if (store.selectedGame) {
 						await refreshFileTree(store.selectedGame.path);
 					}
+				}}
+				onRepoInit={async () => {
+					isGitRepo = true;
 				}}
 			/>
 		{/if}

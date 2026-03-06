@@ -2,9 +2,6 @@
 import helper;
 import control;
 
-// FGC Helper Functions
-// Common utilities for fighting game scripts
-
 // Side variable: 0 = P1 (facing right), 1 = P2 (facing left)
 int Side;
 int _dir_lx, _dir_ly;

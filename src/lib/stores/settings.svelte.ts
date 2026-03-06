@@ -28,6 +28,7 @@ interface AppSettings {
     snippets: Snippet[];
     pinnedGames: string[];
     recentFiles: string[];
+    defaultHeaderComments: string;
 }
 
 const BUILTIN_GAME_TYPES = ['fps', 'tps', 'fgs'];
@@ -52,6 +53,7 @@ const DEFAULTS: AppSettings = {
     snippets: [],
     pinnedGames: [],
     recentFiles: [],
+    defaultHeaderComments: '',
 };
 
 const STORAGE_KEY = 'zen-forge-settings';

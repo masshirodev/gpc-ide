@@ -11,6 +11,7 @@ pub struct CreateGameParams {
     pub console_type: Option<String>,
     pub version: u32,
     pub workspace_path: Option<String>,
+    pub header_comments: Option<String>,
 }
 
 /// Result of game creation
@@ -61,7 +62,7 @@ pub fn create_game(
         username: params.username.clone(),
         generation_mode: "flow".to_string(),
         tags: None,
-        header_comments: None,
+        header_comments: params.header_comments.clone(),
     };
 
     let meta_content = serde_json::to_string_pretty(&meta)

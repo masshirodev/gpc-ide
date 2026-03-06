@@ -1,5 +1,4 @@
-use serde::Serialize;
-use std::collections::HashMap;
+use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::process::Command;
 
@@ -205,4 +204,143 @@ pub fn git_status_detailed(game_path: String) -> Result<Vec<GitDetailedStatus>, 
     }
 
     Ok(results)
+}
+
+/// Initialize a git repository in the given directory
+#[tauri::command]
+pub fn git_init(game_path: String) -> Result<String, String> {
+    let output = Command::new("git")
+        .args(["init"])
+        .current_dir(&game_path)
+        .output()
+        .map_err(|e| format!("Failed to run git init: {}", e))?;
+
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).to_string());
+    }
+    Ok(String::from_utf8_lossy(&output.stdout).to_string())
+}
+
+/// Remote info returned to the frontend
+#[derive(Debug, Clone, Serialize)]
+pub struct GitRemote {
+    pub name: String,
+    pub url: String,
+}
+
+/// List configured remotes
+#[tauri::command]
+pub fn git_remote_list(game_path: String) -> Result<Vec<GitRemote>, String> {
+    let output = Command::new("git")
+        .args(["remote", "-v"])
+        .current_dir(&game_path)
+        .output()
+        .map_err(|e| format!("Failed to run git remote: {}", e))?;
+
+    if !output.status.success() {
+        return Ok(Vec::new());
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let mut seen = std::collections::HashSet::new();
+    let mut remotes = Vec::new();
+
+    for line in stdout.lines() {
+        let parts: Vec<&str> = line.split_whitespace().collect();
+        if parts.len() >= 2 {
+            let name = parts[0].to_string();
+            if seen.insert(name.clone()) {
+                remotes.push(GitRemote {
+                    name,
+                    url: parts[1].to_string(),
+                });
+            }
+        }
+    }
+
+    Ok(remotes)
+}
+
+/// Add a remote
+#[tauri::command]
+pub fn git_remote_add(game_path: String, name: String, url: String) -> Result<(), String> {
+    let output = Command::new("git")
+        .args(["remote", "add", &name, &url])
+        .current_dir(&game_path)
+        .output()
+        .map_err(|e| format!("Failed to add remote: {}", e))?;
+
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).to_string());
+    }
+    Ok(())
+}
+
+/// Remove a remote
+#[tauri::command]
+pub fn git_remote_remove(game_path: String, name: String) -> Result<(), String> {
+    let output = Command::new("git")
+        .args(["remote", "remove", &name])
+        .current_dir(&game_path)
+        .output()
+        .map_err(|e| format!("Failed to remove remote: {}", e))?;
+
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).to_string());
+    }
+    Ok(())
+}
+
+/// Get current branch name
+#[tauri::command]
+pub fn git_current_branch(game_path: String) -> Result<String, String> {
+    let output = Command::new("git")
+        .args(["rev-parse", "--abbrev-ref", "HEAD"])
+        .current_dir(&game_path)
+        .output()
+        .map_err(|e| format!("Failed to get branch: {}", e))?;
+
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).to_string());
+    }
+    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+}
+
+/// Push to remote
+#[tauri::command]
+pub fn git_push(game_path: String, remote: String, branch: String, set_upstream: bool) -> Result<String, String> {
+    let mut args = vec!["push".to_string()];
+    if set_upstream {
+        args.push("-u".to_string());
+    }
+    args.push(remote);
+    args.push(branch);
+
+    let output = Command::new("git")
+        .args(&args)
+        .current_dir(&game_path)
+        .output()
+        .map_err(|e| format!("Failed to push: {}", e))?;
+
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).to_string());
+    }
+    let out = String::from_utf8_lossy(&output.stdout).to_string();
+    let err = String::from_utf8_lossy(&output.stderr).to_string();
+    Ok(format!("{}{}", out, err))
+}
+
+/// Pull from remote
+#[tauri::command]
+pub fn git_pull(game_path: String, remote: String, branch: String) -> Result<String, String> {
+    let output = Command::new("git")
+        .args(["pull", &remote, &branch])
+        .current_dir(&game_path)
+        .output()
+        .map_err(|e| format!("Failed to pull: {}", e))?;
+
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).to_string());
+    }
+    Ok(String::from_utf8_lossy(&output.stdout).to_string())
 }

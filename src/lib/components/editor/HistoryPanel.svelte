@@ -246,7 +246,7 @@
 							<div class="h-80">
 								<MonacoEditor
 									value={snapshotPreview.content}
-									language="ini"
+									language={snapshotPreview.content.trimStart().startsWith('{') ? 'json' : 'ini'}
 									readonly={true}
 								/>
 							</div>

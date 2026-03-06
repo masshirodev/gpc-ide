@@ -185,7 +185,7 @@ export class FlowEmulator {
 					}
 				}
 
-				// Handle value items with LEFT/RIGHT
+				// Handle value/array items with LEFT/RIGHT
 				if (cursor >= 0 && cursor < interactiveSubs.length) {
 					const sub = interactiveSubs[cursor];
 					if (sub.type === 'value-item' && sub.boundVariable) {
@@ -199,6 +199,19 @@ export class FlowEmulator {
 						}
 						if (this.eventPress(bm.right) && val < max) {
 							val = Math.min(max, val + step);
+							this.state.variables.set(sub.boundVariable, val);
+						}
+					}
+					if (sub.type === 'array-item' && sub.boundVariable) {
+						const arraySize = (sub.config.arraySize as number) ?? 10;
+						const maxIdx = arraySize - 1;
+						let val = (this.state.variables.get(sub.boundVariable) as number) ?? 0;
+						if (this.eventPress(bm.left)) {
+							val = val > 0 ? val - 1 : maxIdx;
+							this.state.variables.set(sub.boundVariable, val);
+						}
+						if (this.eventPress(bm.right)) {
+							val = val < maxIdx ? val + 1 : 0;
 							this.state.variables.set(sub.boundVariable, val);
 						}
 					}

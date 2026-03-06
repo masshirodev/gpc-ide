@@ -1,8 +1,4 @@
 
-// ===================== HELPER GLOBALS =====================
-
-// NOTE: Menu, Menu_Page, rect_y are now defined in Modules/core.gpc (modular system)
-
 import oled;
 
 // ===================== HELPERS =====================
@@ -42,20 +38,4 @@ function jitter_custom(base, jpercent, jmin, jmax) {
 
     // Return base + random offset in range [-jrange, +jrange]
     return base + (abs(_jitter_seed) % (_jitter_range * 2 + 1)) - _jitter_range;
-}
-
-// ===================== PACKERS =====================
-// -100..100, stored as 0..200
-// Prioritize bitpacking for memory efficiency
-
-// @DEPRECATED: Prioritize bitpacking for memory efficiency instead
-// Pack a single value at specified index (0-3)
-function PackValue(value, index) {
-    return (value + 100) << (index * 8);
-}
-
-// @DEPRECATED: Prioritize bitpacking for memory efficiency instead
-// Unpack a single value from packed int by index (0-3)
-function UnpackValue(packed, index) {
-    return ((packed >> (index * 8)) & 0xFF) - 100;
 }

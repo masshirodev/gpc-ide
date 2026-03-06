@@ -67,6 +67,7 @@ export interface CreateGameParams {
 	console_type?: string;
 	version: number;
 	workspace_path?: string;
+	header_comments?: string;
 }
 
 export interface CreateGameResult {
@@ -183,6 +184,44 @@ export interface GitDetailedStatus {
 
 export async function gitStatusDetailed(gamePath: string): Promise<GitDetailedStatus[]> {
 	return invoke<GitDetailedStatus[]>('git_status_detailed', { gamePath });
+}
+
+export async function gitInit(gamePath: string): Promise<string> {
+	return invoke<string>('git_init', { gamePath });
+}
+
+export interface GitRemote {
+	name: string;
+	url: string;
+}
+
+export async function gitRemoteList(gamePath: string): Promise<GitRemote[]> {
+	return invoke<GitRemote[]>('git_remote_list', { gamePath });
+}
+
+export async function gitRemoteAdd(gamePath: string, name: string, url: string): Promise<void> {
+	return invoke<void>('git_remote_add', { gamePath, name, url });
+}
+
+export async function gitRemoteRemove(gamePath: string, name: string): Promise<void> {
+	return invoke<void>('git_remote_remove', { gamePath, name });
+}
+
+export async function gitCurrentBranch(gamePath: string): Promise<string> {
+	return invoke<string>('git_current_branch', { gamePath });
+}
+
+export async function gitPush(
+	gamePath: string,
+	remote: string,
+	branch: string,
+	setUpstream: boolean = false
+): Promise<string> {
+	return invoke<string>('git_push', { gamePath, remote, branch, setUpstream });
+}
+
+export async function gitPull(gamePath: string, remote: string, branch: string): Promise<string> {
+	return invoke<string>('git_pull', { gamePath, remote, branch });
 }
 
 export interface FileTreeEntry {

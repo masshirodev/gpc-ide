@@ -2,6 +2,7 @@
 	import type { GameConfig, GameSummary, GameMeta } from '$lib/types/config';
 	import { saveGameMeta } from '$lib/tauri/commands';
 	import { addToast } from '$lib/stores/toast.svelte';
+	import { getSettings, updateSettings } from '$lib/stores/settings.svelte';
 	import * as m from '$lib/paraglide/messages.js';
 
 	interface Props {
@@ -9,13 +10,65 @@
 		meta: GameMeta | null;
 		config: GameConfig | null;
 		onTagsChanged?: (tags: string[]) => void;
+		onMetaChanged?: () => void;
 		onSaveAsTemplate?: () => void;
 		onExportZip?: () => void;
 	}
 
-	let { game, meta, config, onTagsChanged, onSaveAsTemplate, onExportZip }: Props = $props();
+	let { game, meta, config, onTagsChanged, onMetaChanged, onSaveAsTemplate, onExportZip }: Props = $props();
 
 	let isFlowGame = $derived(game.generation_mode === 'flow');
+
+	let settingsStore = getSettings();
+	let settings = $derived($settingsStore);
+
+	// --- Metadata editing ---
+	let editingMeta = $state(false);
+	let editName = $state('');
+	let editGameType = $state('');
+	let editConsoleType = $state('');
+	let editVersion = $state(0);
+	let editUsername = $state('');
+	let editFilename = $state('');
+	let metaSaving = $state(false);
+
+	function startEditingMeta() {
+		if (!meta) return;
+		editName = meta.name;
+		editGameType = meta.game_type;
+		editConsoleType = meta.console_type;
+		editVersion = meta.version;
+		editUsername = meta.username ?? '';
+		editFilename = meta.filename;
+		editingMeta = true;
+	}
+
+	function cancelEditingMeta() {
+		editingMeta = false;
+	}
+
+	async function saveMetadata() {
+		if (!meta) return;
+		metaSaving = true;
+		try {
+			await saveGameMeta(game.path, {
+				...meta,
+				name: editName,
+				game_type: editGameType,
+				console_type: editConsoleType,
+				version: editVersion,
+				username: editUsername || undefined,
+				filename: editFilename
+			});
+			editingMeta = false;
+			addToast('Game metadata saved', 'success', 2000);
+			onMetaChanged?.();
+		} catch (e) {
+			addToast(`Failed to save metadata: ${e}`, 'error');
+		} finally {
+			metaSaving = false;
+		}
+	}
 
 	// --- Header comments editing ---
 	let headerComments = $state('');
@@ -39,6 +92,11 @@
 		} finally {
 			commentsSaving = false;
 		}
+	}
+
+	function saveHeaderCommentsAsDefault() {
+		updateSettings({ defaultHeaderComments: headerComments || '' });
+		addToast('Saved as default for new games', 'success', 2000);
 	}
 
 	// --- Tags editing ---
@@ -81,37 +139,118 @@
 	<!-- Flow-based game overview -->
 	<div class="grid grid-cols-2 gap-4">
 		<div class="rounded-lg border border-zinc-800 bg-zinc-900 p-4">
-			<h2 class="mb-3 text-sm font-semibold tracking-wider text-zinc-400 uppercase">
-				{m.editor_overview_metadata()}
-			</h2>
-			<div class="space-y-2">
-				<div class="flex items-center justify-between rounded bg-zinc-800/50 px-3 py-2">
-					<span class="text-sm text-zinc-400">{m.editor_overview_name()}</span>
-					<span class="text-sm text-zinc-200">{meta.name}</span>
-				</div>
-				<div class="flex items-center justify-between rounded bg-zinc-800/50 px-3 py-2">
-					<span class="text-sm text-zinc-400">{m.editor_overview_game_type()}</span>
-					<span class="rounded bg-emerald-900/50 px-1.5 py-0.5 text-xs font-medium text-emerald-400 uppercase">{meta.game_type}</span>
-				</div>
-				<div class="flex items-center justify-between rounded bg-zinc-800/50 px-3 py-2">
-					<span class="text-sm text-zinc-400">{m.editor_overview_console()}</span>
-					<span class="text-sm text-zinc-200 uppercase">{meta.console_type}</span>
-				</div>
-				<div class="flex items-center justify-between rounded bg-zinc-800/50 px-3 py-2">
-					<span class="text-sm text-zinc-400">{m.editor_overview_version()}</span>
-					<span class="text-sm text-zinc-200">{meta.version}</span>
-				</div>
-				{#if meta.username}
-					<div class="flex items-center justify-between rounded bg-zinc-800/50 px-3 py-2">
-						<span class="text-sm text-zinc-400">{m.editor_overview_username()}</span>
-						<span class="text-sm text-zinc-200">{meta.username}</span>
-					</div>
+			<div class="mb-3 flex items-center justify-between">
+				<h2 class="text-sm font-semibold tracking-wider text-zinc-400 uppercase">
+					{m.editor_overview_metadata()}
+				</h2>
+				{#if !editingMeta}
+					<button
+						class="rounded border border-zinc-700 px-2 py-0.5 text-[10px] text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
+						onclick={startEditingMeta}
+					>
+						Edit
+					</button>
 				{/if}
-				<div class="flex items-center justify-between rounded bg-zinc-800/50 px-3 py-2">
-					<span class="text-sm text-zinc-400">{m.editor_overview_filename_template()}</span>
-					<code class="rounded bg-zinc-800 px-2 py-0.5 text-xs text-emerald-400">{meta.filename}</code>
-				</div>
 			</div>
+
+			{#if editingMeta}
+				<div class="space-y-2">
+					<div class="rounded bg-zinc-800/50 px-3 py-2">
+						<label class="mb-1 block text-xs text-zinc-400">{m.editor_overview_name()}</label>
+						<input
+							class="w-full rounded border border-zinc-700 bg-zinc-800 px-2 py-1 text-sm text-zinc-200 focus:border-emerald-500 focus:outline-none"
+							bind:value={editName}
+						/>
+					</div>
+					<div class="rounded bg-zinc-800/50 px-3 py-2">
+						<label class="mb-1 block text-xs text-zinc-400">{m.editor_overview_game_type()}</label>
+						<input
+							class="w-full rounded border border-zinc-700 bg-zinc-800 px-2 py-1 text-sm text-zinc-200 focus:border-emerald-500 focus:outline-none"
+							bind:value={editGameType}
+						/>
+					</div>
+					<div class="rounded bg-zinc-800/50 px-3 py-2">
+						<label class="mb-1 block text-xs text-zinc-400">{m.editor_overview_console()}</label>
+						<select
+							class="w-full rounded border border-zinc-700 bg-zinc-800 px-2 py-1 text-sm text-zinc-200 focus:border-emerald-500 focus:outline-none"
+							bind:value={editConsoleType}
+						>
+							<option value="ps5">PS5</option>
+							<option value="ps4">PS4</option>
+							<option value="xbox">Xbox</option>
+							<option value="switch">Switch</option>
+						</select>
+					</div>
+					<div class="rounded bg-zinc-800/50 px-3 py-2">
+						<label class="mb-1 block text-xs text-zinc-400">{m.editor_overview_version()}</label>
+						<input
+							type="number"
+							class="w-full rounded border border-zinc-700 bg-zinc-800 px-2 py-1 text-sm text-zinc-200 focus:border-emerald-500 focus:outline-none"
+							bind:value={editVersion}
+							min="0"
+						/>
+					</div>
+					<div class="rounded bg-zinc-800/50 px-3 py-2">
+						<label class="mb-1 block text-xs text-zinc-400">{m.editor_overview_username()}</label>
+						<input
+							class="w-full rounded border border-zinc-700 bg-zinc-800 px-2 py-1 text-sm text-zinc-200 placeholder-zinc-600 focus:border-emerald-500 focus:outline-none"
+							bind:value={editUsername}
+							placeholder="Optional"
+						/>
+					</div>
+					<div class="rounded bg-zinc-800/50 px-3 py-2">
+						<label class="mb-1 block text-xs text-zinc-400">{m.editor_overview_filename_template()}</label>
+						<input
+							class="w-full rounded border border-zinc-700 bg-zinc-800 px-2 py-1 font-mono text-sm text-zinc-200 focus:border-emerald-500 focus:outline-none"
+							bind:value={editFilename}
+						/>
+					</div>
+					<div class="flex items-center gap-2 pt-1">
+						<button
+							class="rounded bg-emerald-600 px-3 py-1 text-xs font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
+							onclick={saveMetadata}
+							disabled={metaSaving}
+						>
+							{metaSaving ? 'Saving...' : 'Save'}
+						</button>
+						<button
+							class="rounded border border-zinc-700 px-3 py-1 text-xs text-zinc-400 hover:bg-zinc-800"
+							onclick={cancelEditingMeta}
+						>
+							Cancel
+						</button>
+					</div>
+				</div>
+			{:else}
+				<div class="space-y-2">
+					<div class="flex items-center justify-between rounded bg-zinc-800/50 px-3 py-2">
+						<span class="text-sm text-zinc-400">{m.editor_overview_name()}</span>
+						<span class="text-sm text-zinc-200">{meta.name}</span>
+					</div>
+					<div class="flex items-center justify-between rounded bg-zinc-800/50 px-3 py-2">
+						<span class="text-sm text-zinc-400">{m.editor_overview_game_type()}</span>
+						<span class="rounded bg-emerald-900/50 px-1.5 py-0.5 text-xs font-medium text-emerald-400 uppercase">{meta.game_type}</span>
+					</div>
+					<div class="flex items-center justify-between rounded bg-zinc-800/50 px-3 py-2">
+						<span class="text-sm text-zinc-400">{m.editor_overview_console()}</span>
+						<span class="text-sm text-zinc-200 uppercase">{meta.console_type}</span>
+					</div>
+					<div class="flex items-center justify-between rounded bg-zinc-800/50 px-3 py-2">
+						<span class="text-sm text-zinc-400">{m.editor_overview_version()}</span>
+						<span class="text-sm text-zinc-200">{meta.version}</span>
+					</div>
+					{#if meta.username}
+						<div class="flex items-center justify-between rounded bg-zinc-800/50 px-3 py-2">
+							<span class="text-sm text-zinc-400">{m.editor_overview_username()}</span>
+							<span class="text-sm text-zinc-200">{meta.username}</span>
+						</div>
+					{/if}
+					<div class="flex items-center justify-between rounded bg-zinc-800/50 px-3 py-2">
+						<span class="text-sm text-zinc-400">{m.editor_overview_filename_template()}</span>
+						<code class="rounded bg-zinc-800 px-2 py-0.5 text-xs text-emerald-400">{meta.filename}</code>
+					</div>
+				</div>
+			{/if}
 		</div>
 
 		<div class="rounded-lg border border-zinc-800 bg-zinc-900 p-4">
@@ -211,15 +350,24 @@
 	<div class="mt-4 rounded-lg border border-zinc-800 bg-zinc-900 p-4">
 		<div class="mb-3 flex items-center justify-between">
 			<h2 class="text-sm font-semibold tracking-wider text-zinc-400 uppercase">Build Header Comments</h2>
-			<button
-				class="rounded px-2.5 py-1 text-xs font-medium text-white disabled:opacity-50 {commentsSaving
-					? 'bg-zinc-700'
-					: 'bg-emerald-600 hover:bg-emerald-500'}"
-				onclick={saveHeaderComments}
-				disabled={commentsSaving}
-			>
-				{commentsSaving ? 'Saving...' : 'Save'}
-			</button>
+			<div class="flex items-center gap-2">
+				<button
+					class="rounded px-2.5 py-1 text-xs font-medium text-white disabled:opacity-50 {commentsSaving
+						? 'bg-zinc-700'
+						: 'bg-emerald-600 hover:bg-emerald-500'}"
+					onclick={saveHeaderComments}
+					disabled={commentsSaving}
+				>
+					{commentsSaving ? 'Saving...' : 'Save'}
+				</button>
+				<button
+					class="rounded border border-zinc-700 px-2.5 py-1 text-xs text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
+					onclick={saveHeaderCommentsAsDefault}
+					title="Save current header comments as the default for newly created games"
+				>
+					Save as Default
+				</button>
+			</div>
 		</div>
 		<textarea
 			class="w-full rounded border border-zinc-700 bg-zinc-800 px-3 py-2 font-mono text-xs text-zinc-200 placeholder-zinc-600 focus:border-emerald-500 focus:outline-none"

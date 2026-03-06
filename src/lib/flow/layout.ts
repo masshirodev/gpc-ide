@@ -119,13 +119,15 @@ export function computeSubNodePixelY(node: FlowNode, subNode: SubNode): number {
 	if (subNode.type === 'pixel-art') return subNode.y ?? 0;
 
 	const stacked = getSortedSubNodes(node).filter((sn) => sn.position === 'stack');
+	const margin = node.lineMargin ?? 0;
 	let y = node.stackOffsetY;
-	for (const sn of stacked) {
+	for (let i = 0; i < stacked.length; i++) {
+		const sn = stacked[i];
 		if (sn.id === subNode.id) return y;
 		const def = getSubNodeDef(sn.type);
 		// Skip pixel-art height in stack accumulation since they overlay
 		if (sn.type === 'pixel-art') continue;
-		y += def?.stackHeight ?? 8;
+		y += (def?.stackHeight ?? 8) + margin;
 	}
 	return y;
 }

@@ -52,7 +52,8 @@
 				game_type: gameType,
 				console_type: consoleType,
 				version,
-				workspace_path: settings.workspaces.length > 0 ? settings.workspaces[0] : undefined
+				workspace_path: settings.workspaces.length > 0 ? settings.workspaces[0] : undefined,
+				header_comments: settings.defaultHeaderComments || undefined
 			};
 
 			const result = await createGame(params);

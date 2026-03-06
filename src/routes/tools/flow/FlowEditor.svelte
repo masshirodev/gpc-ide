@@ -61,7 +61,7 @@
 		updateProfile,
 		setProfileSwitch,
 	} from '$lib/stores/flow.svelte';
-	import { saveFlowProject, loadFlowProject, listModules, getModule, writeFile, buildGame } from '$lib/tauri/commands';
+	import { saveFlowProject, loadFlowProject, listModules, getModule, readFile, writeFile, buildGame } from '$lib/tauri/commands';
 	import { generateMergedFlowGpc } from '$lib/flow/codegen-merged';
 	import { createModuleNode } from '$lib/flow/module-nodes';
 	import { getFlowOledTransfer, setFlowOledTransfer, clearFlowOledTransfer } from '$lib/stores/flow-transfer.svelte';
@@ -106,6 +106,7 @@
 	});
 	let showChunkSave = $state(false);
 	let showChunkLibrary = $state(true);
+	let showRightPanel = $state(true);
 	let chunkRefreshKey = $state(0);
 	let showEmulator = $state(false);
 	let showProfiles = $state(false);
@@ -338,10 +339,16 @@
 			markClean();
 
 			// Generate the merged GPC code
-			const gpcCode = generateMergedFlowGpc(project);
+			const { code: gpcCode, extraFiles } = generateMergedFlowGpc(project);
 
-			// Write as main.gpc (flow-generated code is self-contained)
+			// Write main.gpc and any extra files (e.g. recoiltable.gpc)
 			await writeFile(gamePath + '/main.gpc', gpcCode);
+			for (const [fileName, content] of Object.entries(extraFiles)) {
+				// Only write extra files if they don't already exist (preserve user edits)
+				try { await readFile(gamePath + '/' + fileName); } catch {
+					await writeFile(gamePath + '/' + fileName, content);
+				}
+			}
 
 			// Trigger the build pipeline
 			const workspacePath = (settings.workspaces ?? []).find(
@@ -499,6 +506,17 @@
 <!-- Main content -->
 <div class="flex min-h-0 flex-1">
 	{#if flowStore.graph}
+		<!-- Left sidebar toggle -->
+		<button
+			class="flex w-5 shrink-0 items-center justify-center border-r border-zinc-800 bg-zinc-900/80 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300"
+			onclick={() => (showChunkLibrary = !showChunkLibrary)}
+			title={showChunkLibrary ? 'Collapse library' : 'Expand library'}
+		>
+			<svg class="h-3.5 w-3.5 transition-transform {showChunkLibrary ? '' : 'rotate-180'}" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+				<path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
+			</svg>
+		</button>
+
 		<!-- Chunk Library -->
 		{#if showChunkLibrary}
 			<ChunkLibrary
@@ -538,7 +556,19 @@
 			onZoom={setZoom}
 		/>
 
+		<!-- Right sidebar toggle -->
+		<button
+			class="flex w-5 shrink-0 items-center justify-center border-l border-zinc-800 bg-zinc-900/80 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300"
+			onclick={() => (showRightPanel = !showRightPanel)}
+			title={showRightPanel ? 'Collapse properties' : 'Expand properties'}
+		>
+			<svg class="h-3.5 w-3.5 transition-transform {showRightPanel ? '' : 'rotate-180'}" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+				<path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
+			</svg>
+		</button>
+
 		<!-- Right panel: Properties / Profiles -->
+		{#if showRightPanel}
 		<div class="flex h-full w-72 shrink-0 flex-col border-l border-zinc-800 bg-zinc-900">
 			<!-- Panel tabs -->
 			<div class="flex border-b border-zinc-800">
@@ -591,6 +621,7 @@
 				{/if}
 			</div>
 		</div>
+		{/if}
 	{:else}
 		<div class="flex flex-1 items-center justify-center text-sm text-zinc-500">
 			<div class="text-center">

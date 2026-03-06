@@ -23,6 +23,7 @@
 	import { OLED_WIDTH } from '../../tools/oled/types';
 	import type { SpriteCollectionSummary, SpriteCollection } from '$lib/types/sprite';
 	import { renderNodePreview, pixelsToDataUrl } from '$lib/flow/oled-preview';
+	import MenuLayoutBuilder from '$lib/components/editor/MenuLayoutBuilder.svelte';
 
 	interface Props {
 		selectedNode: FlowNode | null;
@@ -229,6 +230,11 @@
 	let editEnableVariable = $state('');
 	let moduleCodeTab = $state<'init' | 'main' | 'functions' | 'combos'>('main');
 	let isModuleNode = $derived(selectedNode?.type === 'module');
+	let showLayoutBuilder = $state(false);
+	let isMenuNode = $derived(
+		selectedNode?.type === 'menu' || selectedNode?.type === 'submenu' ||
+		selectedNode?.type === 'home' || selectedNode?.type === 'intro'
+	);
 
 	// OLED Preview for nodes with sub-nodes
 	let oledPreview = $derived(
@@ -334,6 +340,15 @@
 		if (!selectedNode?.moduleData) return;
 		const md = { ...selectedNode.moduleData };
 		md.weaponNames = (md.weaponNames ?? []).filter((w) => w !== name);
+		onUpdateNode(selectedNode.id, { moduleData: md });
+	}
+
+	function updateModuleParam(key: string, value: string) {
+		if (!selectedNode?.moduleData) return;
+		const md = { ...selectedNode.moduleData };
+		const params = { ...(md.params ?? {}) };
+		params[key] = value;
+		md.params = params;
 		onUpdateNode(selectedNode.id, { moduleData: md });
 	}
 
@@ -554,6 +569,42 @@
 		const toIdx = fromIdx + direction;
 		if (toIdx < 0 || toIdx >= sortedSubNodes.length) return;
 		onReorderSubNodes(selectedNode.id, fromIdx, toIdx);
+	}
+
+	// Drag and drop state for subnode reordering
+	let dragSubNodeIdx = $state<number | null>(null);
+	let dragOverSubNodeIdx = $state<number | null>(null);
+
+	function handleSubNodeDragStart(e: DragEvent, idx: number) {
+		dragSubNodeIdx = idx;
+		if (e.dataTransfer) {
+			e.dataTransfer.effectAllowed = 'move';
+			e.dataTransfer.setData('text/plain', String(idx));
+		}
+	}
+
+	function handleSubNodeDragOver(e: DragEvent, idx: number) {
+		e.preventDefault();
+		if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+		dragOverSubNodeIdx = idx;
+	}
+
+	function handleSubNodeDragLeave() {
+		dragOverSubNodeIdx = null;
+	}
+
+	function handleSubNodeDrop(e: DragEvent, toIdx: number) {
+		e.preventDefault();
+		if (dragSubNodeIdx !== null && dragSubNodeIdx !== toIdx && selectedNode) {
+			onReorderSubNodes(selectedNode.id, dragSubNodeIdx, toIdx);
+		}
+		dragSubNodeIdx = null;
+		dragOverSubNodeIdx = null;
+	}
+
+	function handleSubNodeDragEnd() {
+		dragSubNodeIdx = null;
+		dragOverSubNodeIdx = null;
 	}
 
 	function handleSubNodeParamUpdate(key: string, value: unknown) {
@@ -839,6 +890,27 @@
 				<p class="mt-0.5 text-[10px] text-zinc-600">Toggle variable shared with Menu Flow</p>
 			</div>
 
+			<!-- Button Params (modules that need custom buttons) -->
+			{#if selectedNode.moduleData?.params && Object.keys(selectedNode.moduleData.params).length > 0}
+				<div class="mb-3">
+					<label class="mb-1 block text-xs text-zinc-400">Button Mapping</label>
+					<div class="space-y-1.5">
+						{#each Object.entries(selectedNode.moduleData.params) as [key, value]}
+							<div>
+								<label class="mb-0.5 block text-[10px] text-zinc-500">{key.replace(/_/g, ' ')}</label>
+								<ButtonSelect
+									{value}
+									onchange={(v) => updateModuleParam(key, v)}
+								/>
+								<p class="mt-0.5 text-[10px] text-zinc-600">
+									{selectedNode.moduleData?.moduleId.toUpperCase()}_{key.toUpperCase()}
+								</p>
+							</div>
+						{/each}
+					</div>
+				</div>
+			{/if}
+
 			<!-- Weapon Names (weapondata module only) -->
 			{#if selectedNode.moduleData?.moduleId === 'weapondata'}
 				<div class="mb-3">
@@ -1097,8 +1169,27 @@
 			<h3 class="text-xs font-medium uppercase tracking-wider text-zinc-500">Node Properties</h3>
 		</div>
 		<div class="flex-1 overflow-y-auto px-3 py-2">
-			<!-- OLED Preview -->
-			{#if oledPreview}
+			<!-- OLED Preview + Layout Builder button for menu nodes -->
+			{#if isMenuNode && selectedNode.subNodes.length > 0}
+				<div class="mb-3">
+					{#if oledPreview}
+						<div class="rounded border border-zinc-800 bg-zinc-950 p-2">
+							<img
+								src={oledPreview}
+								alt="OLED preview"
+								class="w-full"
+								style="image-rendering: pixelated;"
+							/>
+						</div>
+					{/if}
+					<button
+						class="mt-1.5 w-full rounded bg-zinc-700 px-2 py-1.5 text-[11px] font-medium text-zinc-200 hover:bg-zinc-600"
+						onclick={() => (showLayoutBuilder = true)}
+					>
+						Open Layout Builder
+					</button>
+				</div>
+			{:else if oledPreview}
 				<div class="mb-3 rounded border border-zinc-800 bg-zinc-950 p-2">
 					<div class="mb-1 text-[10px] font-medium text-zinc-500 uppercase">OLED Preview</div>
 					<img
@@ -1191,9 +1282,17 @@
 					<div class="space-y-0.5">
 						{#each sortedSubNodes as subNode, i (subNode.id)}
 							{@const def = getSubNodeDef(subNode.type)}
-							<div class="flex items-center gap-1 rounded bg-zinc-800 px-1.5 py-1">
-								<!-- Reorder buttons -->
-								<div class="flex flex-col">
+							<div
+								class="flex items-center gap-1 rounded px-1.5 py-1 transition-colors {dragOverSubNodeIdx === i && dragSubNodeIdx !== i ? 'border border-emerald-500/50 bg-emerald-900/20' : 'bg-zinc-800'} {dragSubNodeIdx === i ? 'opacity-40' : ''}"
+								draggable="true"
+								ondragstart={(e) => handleSubNodeDragStart(e, i)}
+								ondragover={(e) => handleSubNodeDragOver(e, i)}
+								ondragleave={handleSubNodeDragLeave}
+								ondrop={(e) => handleSubNodeDrop(e, i)}
+								ondragend={handleSubNodeDragEnd}
+							>
+								<!-- Drag handle + reorder buttons -->
+								<div class="flex flex-col cursor-grab active:cursor-grabbing">
 									<button
 										class="text-zinc-600 hover:text-zinc-300 disabled:opacity-30"
 										disabled={i === 0}
@@ -1621,3 +1720,15 @@
 		</div>
 	{/if}
 </div>
+
+{#if selectedNode && isMenuNode}
+	<MenuLayoutBuilder
+		open={showLayoutBuilder}
+		node={selectedNode}
+		{onUpdateNode}
+		{onAddSubNode}
+		{onRemoveSubNode}
+		{onUpdateSubNode}
+		onclose={() => (showLayoutBuilder = false)}
+	/>
+{/if}
