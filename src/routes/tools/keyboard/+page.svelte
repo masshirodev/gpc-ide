@@ -31,6 +31,8 @@
 
 	let mappings = $state<KeyMapping[]>([]);
 	let returnTo = $state<string | null>(null);
+	let returnPath = $state<string | undefined>(undefined);
+	let nodeId = $state<string | undefined>(undefined);
 
 	// Console state
 	let outputConsole = $state<ConsoleType>('ps5');
@@ -43,12 +45,16 @@
 	let sourceTab = $state<'keyboard' | 'controller'>('keyboard');
 	let sourceFilter = $state('');
 
+	let hasTransfer = $derived(returnTo !== null || returnPath !== undefined);
+
 	// Load transfer data on mount (must be in onMount for client-side state)
 	onMount(() => {
 		const transfer = getKeyboardTransfer();
 		if (transfer) {
 			mappings = [...transfer.mappings];
 			returnTo = transfer.returnTo;
+			returnPath = transfer.returnPath;
+			nodeId = transfer.nodeId;
 			outputConsole = transfer.outputConsole;
 			inputConsole = transfer.inputConsole;
 			clearKeyboardTransfer();
@@ -56,14 +62,16 @@
 	});
 
 	function handleReturnToEditor() {
-		if (returnTo === null) return;
+		if (!hasTransfer) return;
 		setKeyboardTransfer({
 			mappings: [...mappings],
 			returnTo,
 			outputConsole,
-			inputConsole
+			inputConsole,
+			returnPath,
+			nodeId
 		});
-		goto('/');
+		goto(returnPath ?? '/');
 	}
 
 	function handleTargetClick(buttonName: string) {
@@ -199,12 +207,12 @@
 					Clear All
 				</button>
 			{/if}
-			{#if returnTo}
+			{#if hasTransfer}
 				<button
 					class="rounded bg-emerald-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-emerald-500"
 					onclick={handleReturnToEditor}
 				>
-					Return to Editor
+					{returnPath === '/tools/flow' ? 'Return to Flow' : 'Return to Editor'}
 				</button>
 			{/if}
 		</div>

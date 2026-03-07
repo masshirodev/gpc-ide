@@ -6,6 +6,10 @@ export interface KeyboardTransfer {
 	returnTo: string | null;
 	outputConsole: ConsoleType;
 	inputConsole: ConsoleType;
+	/** Route to navigate back to (e.g. '/tools/flow') */
+	returnPath?: string;
+	/** Flow node ID to update when returning from mapper */
+	nodeId?: string;
 }
 
 const STORAGE_KEY = 'keyboard-transfer';

@@ -32,7 +32,12 @@ export function syncModuleMenus(project: FlowProject): boolean {
 
 	const allModuleNodes = gameplayFlow.nodes.filter((n) => n.type === 'module' && n.moduleData);
 	// Only modules with options get menu items — data-only modules (e.g. weapondata) are skipped
-	const moduleNodes = allModuleNodes.filter((n) => n.moduleData!.options.length > 0);
+	// For alwaysActive modules, only include if they have non-Status options (the Speed value, etc.)
+	const moduleNodes = allModuleNodes.filter((n) => {
+		const md = n.moduleData!;
+		if (md.alwaysActive) return md.options.length > 0;
+		return md.options.length > 0;
+	});
 	const moduleMap = new Map(moduleNodes.map((n) => [n.moduleData!.moduleId, n]));
 	const activeModuleIds = new Set(moduleMap.keys());
 
@@ -139,11 +144,15 @@ export function syncModuleMenus(project: FlowProject): boolean {
 			min: opt.min,
 			max: opt.max,
 			defaultValue: opt.defaultValue,
+			arrayName: opt.arrayName,
+			arraySize: opt.arraySize,
+			onChangeCode: opt.onChangeCode,
 		}));
 
 		const desiredVarSet = new Set(desiredOptions.map((o) => o.variable));
+		const suppressedVars = new Set(submenuNode.autoSuppressed ?? []);
 
-		// Remove stale sub-nodes
+		// Remove stale sub-nodes (but not user-suppressed ones — they're already gone)
 		const staleSubNodes = autoSubNodes.filter(
 			(s) => s.boundVariable && !desiredVarSet.has(s.boundVariable)
 		);
@@ -153,30 +162,44 @@ export function syncModuleMenus(project: FlowProject): boolean {
 			changed = true;
 		}
 
-		// Add missing sub-nodes
+		// Add missing sub-nodes (skip user-suppressed variables)
 		for (const opt of desiredOptions) {
+			if (suppressedVars.has(opt.variable)) continue;
 			if (!existingVarMap.has(opt.variable)) {
 				const order = submenuNode.subNodes.length;
-				const subNode =
-					opt.type === 'toggle'
-						? createToggleSubNode(opt.label, opt.variable, moduleId, order)
-						: createValueSubNode(
-								opt.label,
-								opt.variable,
-								moduleId,
-								order,
-								opt.min ?? 0,
-								opt.max ?? 100
-							);
+				let subNode: SubNode;
+				if (opt.type === 'toggle') {
+					subNode = createToggleSubNode(opt.label, opt.variable, moduleId, order);
+				} else if (opt.type === 'array') {
+					subNode = createArraySubNode(
+						opt.label,
+						opt.variable,
+						moduleId,
+						order,
+						opt.arrayName ?? 'ArrayData',
+						opt.arraySize ?? 10,
+						opt.onChangeCode
+					);
+				} else {
+					subNode = createValueSubNode(
+						opt.label,
+						opt.variable,
+						moduleId,
+						order,
+						opt.min ?? 0,
+						opt.max ?? 100,
+						opt.onChangeCode
+					);
+				}
 				submenuNode.subNodes.push(subNode);
 				changed = true;
 			}
 		}
 
-		// --- Reconcile submenu variables (add missing, never remove) ---
-		const existingNodeVars = new Set(submenuNode.variables.map((v) => v.name));
+		// --- Reconcile submenu variables (add missing, sync existing) ---
 		for (const opt of desiredOptions) {
-			if (!existingNodeVars.has(opt.variable)) {
+			const existing = submenuNode.variables.find((v) => v.name === opt.variable);
+			if (!existing) {
 				submenuNode.variables.push({
 					name: opt.variable,
 					type: 'int',
@@ -186,6 +209,10 @@ export function syncModuleMenus(project: FlowProject): boolean {
 					max: opt.max,
 				});
 				changed = true;
+			} else {
+				if (existing.defaultValue !== opt.defaultValue) { existing.defaultValue = opt.defaultValue; changed = true; }
+				if (existing.min !== opt.min) { existing.min = opt.min; changed = true; }
+				if (existing.max !== opt.max) { existing.max = opt.max; changed = true; }
 			}
 		}
 
@@ -245,11 +272,24 @@ export function syncModuleMenus(project: FlowProject): boolean {
 		changed = true;
 	}
 
+	// --- Sync gameplay node variables from their options ---
+	for (const modNode of allModuleNodes) {
+		const md = modNode.moduleData!;
+		for (const opt of md.options) {
+			const nodeVar = modNode.variables.find((v) => v.name === opt.variable);
+			if (nodeVar) {
+				if (nodeVar.defaultValue !== opt.defaultValue) { nodeVar.defaultValue = opt.defaultValue; changed = true; }
+				if (nodeVar.min !== opt.min) { nodeVar.min = opt.min; changed = true; }
+				if (nodeVar.max !== opt.max) { nodeVar.max = opt.max; changed = true; }
+			}
+		}
+	}
+
 	// --- Sync shared variables (all modules, including data-only) ---
 	const allSharedVarNames = new Set<string>();
 	for (const modNode of allModuleNodes) {
 		const md = modNode.moduleData!;
-		allSharedVarNames.add(md.enableVariable);
+		if (!md.alwaysActive) allSharedVarNames.add(md.enableVariable);
 		for (const opt of md.options) {
 			allSharedVarNames.add(opt.variable);
 		}
@@ -257,18 +297,22 @@ export function syncModuleMenus(project: FlowProject): boolean {
 
 	for (const modNode of allModuleNodes) {
 		const md = modNode.moduleData!;
+		// alwaysActive modules don't need an enable variable
+		if (md.alwaysActive) continue;
 		if (!project.sharedVariables.some((v) => v.name === md.enableVariable)) {
+			const enableOpt = md.options.find((o) => o.variable === md.enableVariable);
 			project.sharedVariables.push({
 				name: md.enableVariable,
 				type: 'int',
-				defaultValue: 0,
+				defaultValue: enableOpt?.defaultValue ?? 0,
 				persist: true,
 			});
 			changed = true;
 		}
 		for (const opt of md.options) {
 			if (opt.variable === md.enableVariable) continue;
-			if (!project.sharedVariables.some((v) => v.name === opt.variable)) {
+			const existing = project.sharedVariables.find((v) => v.name === opt.variable);
+			if (!existing) {
 				project.sharedVariables.push({
 					name: opt.variable,
 					type: 'int',
@@ -278,6 +322,10 @@ export function syncModuleMenus(project: FlowProject): boolean {
 					max: opt.max,
 				});
 				changed = true;
+			} else {
+				if (existing.defaultValue !== opt.defaultValue) { existing.defaultValue = opt.defaultValue; changed = true; }
+				if (existing.min !== opt.min) { existing.min = opt.min; changed = true; }
+				if (existing.max !== opt.max) { existing.max = opt.max; changed = true; }
 			}
 		}
 	}
@@ -307,6 +355,7 @@ function createParentSettingsNode(menuFlow: FlowGraph): FlowNode {
 		comboCode: '',
 		onEnter: '',
 		onExit: '',
+		initCode: '',
 		variables: [],
 		isInitialState: false,
 		subNodes: [],
@@ -383,7 +432,8 @@ function createValueSubNode(
 	moduleId: string,
 	order: number,
 	min: number,
-	max: number
+	max: number,
+	onChangeCode?: string
 ): SubNode {
 	return {
 		id: crypto.randomUUID(),
@@ -404,6 +454,40 @@ function createValueSubNode(
 			format: '{value}',
 			font: 'default',
 			[AUTO_TAG]: moduleId,
+			...(onChangeCode ? { onChangeCode } : {}),
+		},
+		boundVariable: variable,
+	};
+}
+
+function createArraySubNode(
+	label: string,
+	variable: string,
+	moduleId: string,
+	order: number,
+	arrayName: string,
+	arraySize: number,
+	onChangeCode?: string
+): SubNode {
+	return {
+		id: crypto.randomUUID(),
+		type: 'array-item',
+		label,
+		position: 'stack',
+		order,
+		interactive: true,
+		config: {
+			label,
+			cursorStyle: 'invert',
+			prefixChar: '>',
+			prefixSpacing: 1,
+			arrayName,
+			arraySize,
+			useCountVar: false,
+			countVar: '',
+			font: 'default',
+			[AUTO_TAG]: moduleId,
+			...(onChangeCode ? { onChangeCode } : {}),
 		},
 		boundVariable: variable,
 	};

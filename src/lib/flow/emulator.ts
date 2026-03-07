@@ -10,6 +10,7 @@ export interface EmulatorState {
 	stateTimer: number;
 	variables: Map<string, number | string>;
 	cursorPositions: Map<string, number>; // nodeId -> cursor index
+	scrollOffsets: Map<string, number>; // nodeId -> scroll window offset
 	statePath: string[]; // history of node IDs visited
 	inputLog: string[];
 	frameCount: number;
@@ -89,6 +90,7 @@ export class FlowEmulator {
 			stateTimer: 0,
 			variables,
 			cursorPositions: new Map(),
+			scrollOffsets: new Map(),
 			statePath: [initialNode.id],
 			inputLog: [],
 			frameCount: 0,
@@ -111,6 +113,10 @@ export class FlowEmulator {
 
 	getCursor(nodeId: string): number {
 		return this.state.cursorPositions.get(nodeId) ?? 0;
+	}
+
+	getScrollOffset(nodeId: string): number {
+		return this.state.scrollOffsets.get(nodeId) ?? 0;
 	}
 
 	// ==================== Input ====================
@@ -176,6 +182,15 @@ export class FlowEmulator {
 				}
 				this.state.cursorPositions.set(node.id, cursor);
 
+				// Window scroll offset tracking
+				if (node.scrollMode === 'window') {
+					const visCount = node.visibleCount ?? interactiveSubs.length;
+					let scroll = this.getScrollOffset(node.id);
+					if (cursor < scroll) scroll = cursor;
+					if (cursor >= scroll + visCount) scroll = cursor - visCount + 1;
+					this.state.scrollOffsets.set(node.id, scroll);
+				}
+
 				// Handle toggle items with CONFIRM
 				if (this.eventPress(bm.confirm) && cursor >= 0 && cursor < interactiveSubs.length) {
 					const sub = interactiveSubs[cursor];
@@ -203,7 +218,11 @@ export class FlowEmulator {
 						}
 					}
 					if (sub.type === 'array-item' && sub.boundVariable) {
-						const arraySize = (sub.config.arraySize as number) ?? 10;
+						let arraySize = (sub.config.arraySize as number) ?? 10;
+						if (sub.config.useCountVar && sub.config.countVar) {
+							const countVal = this.state.variables.get(sub.config.countVar as string);
+							if (typeof countVal === 'number' && countVal > 0) arraySize = countVal;
+						}
 						const maxIdx = arraySize - 1;
 						let val = (this.state.variables.get(sub.boundVariable) as number) ?? 0;
 						if (this.eventPress(bm.left)) {
@@ -344,14 +363,44 @@ export class FlowEmulator {
 		const sortedSubs = getSortedSubNodes(node);
 		const interactiveSubs = this.getInteractiveSubNodes(node);
 		const cursor = this.getCursor(node.id);
+		const scrollOffset = node.scrollMode === 'window' ? this.getScrollOffset(node.id) : 0;
+		const visCount = node.scrollMode === 'window' ? (node.visibleCount ?? interactiveSubs.length) : Infinity;
 
 		let cursorIndex = 0;
+		// For window mode, track Y offset adjustment
+		let windowYShift = 0;
+		if (node.scrollMode === 'window' && scrollOffset > 0) {
+			// Calculate the pixel height of skipped interactive items
+			const margin = node.lineMargin ?? 0;
+			let skipped = 0;
+			for (const sub of sortedSubs) {
+				if (!sub.interactive) continue;
+				if (skipped >= scrollOffset) break;
+				const def = getSubNodeDef(sub.type);
+				windowYShift += (def?.stackHeight ?? 8) + margin;
+				skipped++;
+			}
+		}
+
 		for (const sub of sortedSubs) {
 			const def = getSubNodeDef(sub.type);
 			if (!def) continue;
 
-			const pixelY = computeSubNodePixelY(node, sub);
+			// In window mode, skip interactive items outside the visible window
+			if (node.scrollMode === 'window' && sub.interactive) {
+				if (cursorIndex < scrollOffset || cursorIndex >= scrollOffset + visCount) {
+					cursorIndex++;
+					continue;
+				}
+			}
+
+			let pixelY = computeSubNodePixelY(node, sub);
 			const pixelX = sub.position === 'absolute' ? (sub.x ?? 0) : node.stackOffsetX;
+
+			// Shift Y for window mode (non-absolute items only)
+			if (node.scrollMode === 'window' && sub.position !== 'absolute' && windowYShift > 0) {
+				pixelY -= windowYShift;
+			}
 
 			const isSelected = sub.interactive && cursorIndex === cursor;
 			const boundValue = sub.boundVariable

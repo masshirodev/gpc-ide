@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { FileTreeEntry } from '$lib/tauri/commands';
 	import { getFileIconColor, canDeleteFile } from '$lib/utils/editor-helpers';
+	import { getSettings, removeRecentFile, clearRecentFiles } from '$lib/stores/settings.svelte';
 	import * as m from '$lib/paraglide/messages.js';
 
 	interface ThemeAccent {
@@ -21,6 +22,7 @@
 		expandedDirs: Set<string>;
 		activeFilePath: string | null;
 		themeAccent: ThemeAccent;
+		gamePath?: string;
 		fileSeverities?: Map<string, number>;
 		gitFileStatuses?: Map<string, string>;
 		dragOver?: boolean;
@@ -36,6 +38,7 @@
 		expandedDirs,
 		activeFilePath,
 		themeAccent,
+		gamePath = '',
 		fileSeverities = new Map(),
 		gitFileStatuses = new Map(),
 		dragOver = false,
@@ -45,6 +48,17 @@
 		onNewFile,
 		onImportTemplate
 	}: Props = $props();
+
+	let settingsStore = getSettings();
+	let settings = $derived($settingsStore);
+	let showRecentFiles = $state(true);
+
+	// Recent files filtered to current game
+	let recentFilesForGame = $derived(
+		gamePath
+			? settings.recentFiles.filter((f) => f.startsWith(gamePath + '/')).slice(0, 10)
+			: []
+	);
 
 	function severityDot(path: string): string | null {
 		const sev = fileSeverities.get(path);
@@ -90,6 +104,71 @@
 	</div>
 	<!-- File Tree Content -->
 	<div class="scrollbar-none flex-1 overflow-y-auto p-1.5">
+		<!-- Recent Files for this game -->
+		{#if recentFilesForGame.length > 0}
+			<div class="mb-1.5">
+				<div class="flex items-center justify-between px-1">
+					<button
+						class="flex items-center gap-1 text-[10px] font-medium tracking-wider text-zinc-500 uppercase hover:text-zinc-400"
+						onclick={() => (showRecentFiles = !showRecentFiles)}
+					>
+						<svg
+							class="h-3 w-3 transition-transform"
+							class:rotate-90={showRecentFiles}
+							viewBox="0 0 20 20"
+							fill="currentColor"
+						>
+							<path
+								fill-rule="evenodd"
+								d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z"
+								clip-rule="evenodd"
+							/>
+						</svg>
+						{m.layout_sidebar_recent()}
+					</button>
+					<button
+						class="text-[10px] text-zinc-600 hover:text-zinc-400"
+						onclick={() => clearRecentFiles()}
+						title={m.layout_sidebar_clear_recent()}
+					>
+						{m.common_clear()}
+					</button>
+				</div>
+				{#if showRecentFiles}
+					{#each recentFilesForGame as filePath}
+						<div
+							class="tree-item group flex items-center rounded"
+							style={activeFilePath === filePath ? `background: ${themeAccent.bg}` : ''}
+						>
+							<button
+								class="flex flex-1 items-center gap-1.5 px-2 py-0.5 text-left text-xs {activeFilePath === filePath ? '' : 'text-zinc-400'}"
+								style={activeFilePath === filePath ? `color: ${themeAccent.text}` : ''}
+								onclick={() => onFileClick(filePath)}
+								title={filePath}
+							>
+								<svg class="h-3 w-3 shrink-0 text-zinc-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+									<path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+								</svg>
+								{filePath.split('/').pop()}
+							</button>
+							<button
+								class="p-0.5 text-zinc-600 opacity-0 group-hover:opacity-100 hover:text-red-400"
+								onclick={(e) => {
+									e.stopPropagation();
+									removeRecentFile(filePath);
+								}}
+								title={m.layout_sidebar_remove_recent()}
+							>
+								<svg class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
+									<path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
+								</svg>
+							</button>
+						</div>
+					{/each}
+				{/if}
+				<div class="mx-1 my-1 border-b border-zinc-800"></div>
+			</div>
+		{/if}
 		{#each fileTree as entry}
 			{#if entry.is_dir}
 				<div class="mb-0.5">

@@ -152,7 +152,7 @@
                 <Sidebar onSelectGame={handleSelectGame} onDeleteGame={handleDeleteGame} onCollapse={toggleSidebar} onOpenSettings={() => settingsOpen = true} onNewFromTemplate={() => (showNewFromTemplate = true)} />
             </div>
         {/if}
-        <main class="flex-1 overflow-y-auto bg-zinc-950">
+        <main class="h-full flex-1 overflow-y-auto bg-zinc-950">
             {@render children()}
         </main>
     </div>

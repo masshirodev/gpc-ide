@@ -284,7 +284,7 @@
 	}
 </script>
 
-<div class="relative flex h-full flex-col bg-zinc-950 text-zinc-200">
+<div class="relative flex h-full flex-col overflow-hidden bg-zinc-950 text-zinc-200">
 	<!-- Editor fullscreen overlay (absolute, not fixed, to avoid Tauri title bar drag region) -->
 	{#if editing}
 		<div class="absolute inset-0 z-50 bg-zinc-950">

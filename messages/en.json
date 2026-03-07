@@ -182,7 +182,7 @@
 	"modal_new_file_title": "New File",
 	"modal_new_file_filename_label": "Filename",
 	"modal_new_file_filename_placeholder": "e.g., custom.gpc",
-	"modal_new_file_hint": ".gpc extension will be added automatically if not provided",
+	"modal_new_file_hint": ".gpc extension will be added automatically if no extension is provided",
 	"modal_save_template_title": "Save as Project Template",
 	"modal_save_template_name_label": "Template Name",
 	"modal_save_template_name_placeholder": "My Template",

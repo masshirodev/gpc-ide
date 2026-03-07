@@ -292,6 +292,8 @@ export function generateFlowGpc(
 	lines.push(`int FlowCurrentState;`);
 	lines.push(`int FlowPrevState = -1;`);
 	lines.push(`int FlowStateTimer;`);
+	lines.push(`int FlowRedraw = TRUE;`);
+	lines.push(`int FlowEntered;`);
 	if (hasBackButton) {
 		lines.push(`int FlowStateStack[8];`);
 		lines.push(`int FlowStackTop = 0;`);
@@ -325,7 +327,12 @@ export function generateFlowGpc(
 	}
 
 	// Per-node variables + auto cursor/scroll vars
-	const declaredVars = new Set<string>(['FlowCurrentState', 'FlowPrevState', 'FlowStateTimer']);
+	const declaredVars = new Set<string>([
+		'FlowCurrentState',
+		'FlowPrevState',
+		'FlowStateTimer',
+		...graph.globalVariables.map((v) => v.name)
+	]);
 	for (const node of sorted) {
 		const safeName = sanitizeName(node.label);
 		const interactiveSubs = getInteractiveSubNodes(node);
@@ -348,6 +355,14 @@ export function generateFlowGpc(
 				lines.push(`int ${cursorVar};`);
 				declaredVars.add(cursorVar);
 			}
+			// Auto-declare scroll variable for window mode
+			if (node.scrollMode === 'window') {
+				const scrollVar = `Flow_${safeName}_scroll`;
+				if (!declaredVars.has(scrollVar)) {
+					lines.push(`int ${scrollVar};`);
+					declaredVars.add(scrollVar);
+				}
+			}
 		}
 
 		if (node.variables.length > 0 || interactiveSubs.length > 0) {
@@ -364,6 +379,7 @@ export function generateFlowGpc(
 
 	// Pre-generate sub-node code to collect strings and images for top-level declarations
 	const nodeSubNodeCode = new Map<string, string[]>();
+	const nodeSubNodeInputCode = new Map<string, string[]>();
 	const nodeStrings = new Map<string, string[]>();
 	const nodeImages = new Map<string, string[]>();
 
@@ -375,6 +391,7 @@ export function generateFlowGpc(
 		const images: string[] = [];
 		const stringArrayName = `FlowText_${safeName}`;
 		const codeLines: string[] = [];
+		const inputLines: string[] = [];
 		let cursorIndex = 0;
 
 		// Collect pixel-art sub-nodes to merge into a single const image
@@ -431,10 +448,19 @@ export function generateFlowGpc(
 				codeLines.push(code);
 			}
 
+			// Collect input-handling code (runs every cycle, separate from rendering)
+			if (def.generateGpcInput) {
+				const inputCode = def.generateGpcInput(configWithLabel, ctx);
+				if (inputCode.trim()) {
+					inputLines.push(inputCode);
+				}
+			}
+
 			if (sub.interactive) cursorIndex++;
 		}
 
 		nodeSubNodeCode.set(node.id, codeLines);
+		nodeSubNodeInputCode.set(node.id, inputLines);
 		nodeStrings.set(node.id, strings);
 		nodeImages.set(node.id, images);
 	}
@@ -511,10 +537,16 @@ export function generateFlowGpc(
 		lines.push(`// ===== STATE: ${node.label} =====`);
 		lines.push(`function FlowState_${safeName}() {`);
 
+		// Block all inputs (prevent button presses from reaching the console)
+		if (node.blockInputs) {
+			lines.push(`    block_all_inputs();`);
+		}
+
 		// onEnter logic (runs once when entering state)
 		if (node.onEnter.trim()) {
 			lines.push(`    // On enter`);
-			lines.push(`    if(FlowPrevState != FLOW_STATE_${safeName}) {`);
+			lines.push(`    if(FlowEntered) {`);
+			lines.push(`        FlowEntered = FALSE;`);
 			for (const line of node.onEnter.trim().split('\n')) {
 				lines.push(`        ${line.trim()}`);
 			}
@@ -523,20 +555,27 @@ export function generateFlowGpc(
 
 		if (hasSubNodes) {
 			// === V2: Sub-node based rendering ===
-			lines.push(`    cls_oled(OLED_BLACK);`);
 
-			// Cursor navigation logic
+			// Cursor navigation logic (runs every cycle, sets FlowRedraw)
 			if (interactiveSubs.length > 0) {
 				const cursorVar = `Flow_${safeName}_cursor`;
 				const maxCursor = interactiveSubs.length - 1;
 				lines.push(``);
 				lines.push(`    // Cursor navigation`);
 				if (node.scrollMode === 'wrap') {
-					lines.push(`    if(event_press(${bm.up})) { if(${cursorVar} > 0) ${cursorVar} = ${cursorVar} - 1; else ${cursorVar} = ${maxCursor}; }`);
-					lines.push(`    if(event_press(${bm.down})) { if(${cursorVar} < ${maxCursor}) ${cursorVar} = ${cursorVar} + 1; else ${cursorVar} = 0; }`);
+					lines.push(`    if(event_press(${bm.up})) { if(${cursorVar} > 0) ${cursorVar} = ${cursorVar} - 1; else ${cursorVar} = ${maxCursor}; FlowRedraw = TRUE; }`);
+					lines.push(`    if(event_press(${bm.down})) { if(${cursorVar} < ${maxCursor}) ${cursorVar} = ${cursorVar} + 1; else ${cursorVar} = 0; FlowRedraw = TRUE; }`);
+				} else if (node.scrollMode === 'window') {
+					const visCount = node.visibleCount ?? interactiveSubs.length;
+					const scrollVar = `Flow_${safeName}_scroll`;
+					lines.push(`    if(event_press(${bm.up}) && ${cursorVar} > 0) { ${cursorVar} = ${cursorVar} - 1; FlowRedraw = TRUE; }`);
+					lines.push(`    if(event_press(${bm.down}) && ${cursorVar} < ${maxCursor}) { ${cursorVar} = ${cursorVar} + 1; FlowRedraw = TRUE; }`);
+					lines.push(`    // Window scrolling`);
+					lines.push(`    if(${cursorVar} < ${scrollVar}) ${scrollVar} = ${cursorVar};`);
+					lines.push(`    if(${cursorVar} >= ${scrollVar} + ${visCount}) ${scrollVar} = ${cursorVar} - ${visCount} + 1;`);
 				} else {
-					lines.push(`    if(event_press(${bm.up}) && ${cursorVar} > 0) ${cursorVar} = ${cursorVar} - 1;`);
-					lines.push(`    if(event_press(${bm.down}) && ${cursorVar} < ${maxCursor}) ${cursorVar} = ${cursorVar} + 1;`);
+					lines.push(`    if(event_press(${bm.up}) && ${cursorVar} > 0) { ${cursorVar} = ${cursorVar} - 1; FlowRedraw = TRUE; }`);
+					lines.push(`    if(event_press(${bm.down}) && ${cursorVar} < ${maxCursor}) { ${cursorVar} = ${cursorVar} + 1; FlowRedraw = TRUE; }`);
 				}
 
 				// Toggle interaction (confirm toggles the bound variable)
@@ -544,25 +583,44 @@ export function generateFlowGpc(
 					const sub = interactiveSubs[i];
 					if (sub.type === 'toggle-item' && sub.boundVariable) {
 						const bv = profileVar(sub.boundVariable);
-						lines.push(`    if(${cursorVar} == ${i} && event_press(${bm.confirm})) ${bv} = !${bv};`);
+						lines.push(`    if(${cursorVar} == ${i} && event_press(${bm.confirm})) { ${bv} = !${bv}; FlowRedraw = TRUE; }`);
 					}
 				}
 			}
 
+			// Sub-node input handling (value adjust, array cycling — runs every cycle)
+			const inputCode = nodeSubNodeInputCode.get(node.id);
+			if (inputCode && inputCode.length > 0) {
+				lines.push(``);
+				for (const code of inputCode) {
+					lines.push(code);
+				}
+			}
+
+			// Rendering (only when dirty)
 			lines.push(``);
-			lines.push(`    // Sub-node rendering`);
+			lines.push(`    // Render (only when state changes or input received)`);
+			lines.push(`    if(FlowRedraw) {`);
+			lines.push(`        FlowRedraw = FALSE;`);
+			lines.push(`        cls_oled(OLED_BLACK);`);
 
 			// Use pre-generated sub-node code (collected during string pass)
 			const subCode = nodeSubNodeCode.get(node.id);
 			if (subCode) {
 				for (const code of subCode) {
-					lines.push(code);
+					// Indent sub-node code by one extra level inside the if block
+					lines.push(code.replace(/^    /gm, '        '));
 				}
 			}
+
+			lines.push(`    }`);
 		} else {
 			// === Legacy: raw code + OLED scene ===
 			if (node.oledScene) {
-				lines.push(`    Draw_Flow_${safeName}();`);
+				lines.push(`    if(FlowRedraw) {`);
+				lines.push(`        FlowRedraw = FALSE;`);
+				lines.push(`        Draw_Flow_${safeName}();`);
+				lines.push(`    }`);
 			}
 
 			if (node.gpcCode.trim()) {
@@ -669,6 +727,16 @@ export function generateFlowGpc(
 	if (hasPersistence) {
 		lines.push(`    Flow_Load();`);
 	}
+	// Per-node init code (e.g. VM speed setup that must run at startup)
+	for (const node of sorted) {
+		const code = (node.initCode ?? '').trim();
+		if (code) {
+			lines.push(`    // Init: ${node.label}`);
+			for (const line of code.split('\n')) {
+				lines.push(`    ${line}`);
+			}
+		}
+	}
 	lines.push(`}`);
 	lines.push(``);
 
@@ -683,10 +751,12 @@ export function generateFlowGpc(
 		lines.push(`    ${keyword}(FlowCurrentState == FLOW_STATE_${safeName}) { FlowState_${safeName}(); }`);
 	}
 	lines.push(``);
-	lines.push(`    // State timer`);
+	lines.push(`    // State change detection`);
 	lines.push(`    if(FlowCurrentState != FlowPrevState) {`);
 	lines.push(`        FlowStateTimer = 0;`);
 	lines.push(`        FlowPrevState = FlowCurrentState;`);
+	lines.push(`        FlowRedraw = TRUE;`);
+	lines.push(`        FlowEntered = TRUE;`);
 	lines.push(`    }`);
 	lines.push(`    FlowStateTimer = FlowStateTimer + get_rtime();`);
 	lines.push(`}`);

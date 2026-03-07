@@ -15,9 +15,10 @@
 	import { goto } from '$app/navigation';
 	import { PixelHistory } from './history';
 	import { shiftPixels, drawText } from './drawing';
-	import { createEmptyPixels, clonePixels, invertPixels, pixelsToBase64, base64ToPixels } from './pixels';
+	import { createEmptyPixels, clonePixels, invertPixels, pixelsToBase64, base64ToPixels, getPixel } from './pixels';
+	import { bytesPerRow } from '$lib/utils/sprite-pixels';
 	import { getFont } from './fonts';
-	import type { OledScene, DrawTool, BrushShape, AnimationConfig, OledProject, TextState } from './types';
+	import { OLED_WIDTH, OLED_HEIGHT, type OledScene, type DrawTool, type BrushShape, type AnimationConfig, type OledProject, type TextState } from './types';
 	import { writeFile, readFile } from '$lib/tauri/commands';
 
 	// --- Flow editor transfer ---
@@ -50,6 +51,8 @@
 	let showCodeRunner = $state(false);
 	let showStamps = $state(false);
 	let stampData = $state<{ pixels: Uint8Array; width: number; height: number; scale: number } | null>(null);
+	let importStampActive = $state(false);
+	let importStampBase = $state<{ pixels: Uint8Array; width: number; height: number } | null>(null);
 	let pixelVersion = $state(0);
 
 	// Per-scene history
@@ -157,11 +160,67 @@
 	}
 
 	// --- Import ---
+	function oledPixelsToStamp(pixels: Uint8Array): { pixels: Uint8Array; width: number; height: number } | null {
+		let minX = OLED_WIDTH, minY = OLED_HEIGHT, maxX = -1, maxY = -1;
+		for (let y = 0; y < OLED_HEIGHT; y++) {
+			for (let x = 0; x < OLED_WIDTH; x++) {
+				if (getPixel(pixels, x, y)) {
+					if (x < minX) minX = x;
+					if (x > maxX) maxX = x;
+					if (y < minY) minY = y;
+					if (y > maxY) maxY = y;
+				}
+			}
+		}
+		if (maxX < 0) return null;
+
+		const w = maxX - minX + 1;
+		const h = maxY - minY + 1;
+		const bpr = bytesPerRow(w);
+		const spritePixels = new Uint8Array(bpr * h);
+
+		for (let y = 0; y < h; y++) {
+			for (let x = 0; x < w; x++) {
+				if (getPixel(pixels, minX + x, minY + y)) {
+					const byteIdx = y * bpr + Math.floor(x / 8);
+					const bitIdx = 7 - (x % 8);
+					spritePixels[byteIdx] |= 1 << bitIdx;
+				}
+			}
+		}
+		return { pixels: spritePixels, width: w, height: h };
+	}
+
 	function handleImportApply(pixels: Uint8Array) {
-		handleBeforeDraw();
-		handleDraw(pixels);
 		showImport = false;
-		addToast('Image imported', 'success', 2000);
+		const stamp = oledPixelsToStamp(pixels);
+		if (!stamp) {
+			addToast('No visible pixels in imported image', 'warning', 2000);
+			return;
+		}
+		importStampBase = stamp;
+		importStampActive = true;
+		stampData = { ...stamp, scale: 1 };
+		showStamps = false;
+		addToast('Click on canvas to place, Escape to cancel', 'info', 3000);
+	}
+
+	function handleImportStampScale(newScale: number) {
+		if (!importStampBase) return;
+		stampData = { ...importStampBase, scale: newScale };
+	}
+
+	function handleImportStampPlaced() {
+		if (!importStampActive) return;
+		importStampActive = false;
+		importStampBase = null;
+		stampData = null;
+	}
+
+	function cancelImportStamp() {
+		importStampActive = false;
+		importStampBase = null;
+		stampData = null;
 	}
 
 	// --- Text tool ---
@@ -249,6 +308,12 @@
 	function handleKeydown(e: KeyboardEvent) {
 		if ((e.target as HTMLElement)?.tagName === 'INPUT' || (e.target as HTMLElement)?.tagName === 'SELECT') return;
 
+		if (e.key === 'Escape' && importStampActive) {
+			e.preventDefault();
+			cancelImportStamp();
+			return;
+		}
+
 		if (e.ctrlKey && e.key === 'z' && !e.shiftKey) {
 			e.preventDefault();
 			undo();
@@ -299,7 +364,7 @@
 				pixels: pixelData,
 			},
 		});
-		goto('/tools/flow');
+		goto(flowTransfer.returnPath ?? '/tools/flow');
 	}
 </script>
 
@@ -386,7 +451,7 @@
 					: 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'}"
 				onclick={() => {
 					showStamps = !showStamps;
-					if (showStamps) { showExport = false; showSequencer = false; }
+					if (showStamps) { showExport = false; showSequencer = false; cancelImportStamp(); }
 					if (!showStamps) { stampData = null; }
 				}}
 			>
@@ -469,7 +534,32 @@
 					onBeforeDraw={handleBeforeDraw}
 					onDraw={handleDraw}
 					onTextOriginSet={handleTextOriginSet}
+					onStampPlaced={importStampActive ? handleImportStampPlaced : undefined}
 				/>
+
+				{#if importStampActive && importStampBase}
+					<div class="absolute top-3 left-1/2 z-20 flex -translate-x-1/2 items-center gap-3 rounded-lg border border-zinc-700 bg-zinc-900/95 px-4 py-2 shadow-xl backdrop-blur-sm">
+						<span class="text-xs text-zinc-400">Scale</span>
+						<input
+							type="range"
+							min="1"
+							max="4"
+							value={stampData?.scale ?? 1}
+							oninput={(e) => handleImportStampScale(parseInt(e.currentTarget.value))}
+							class="w-20 accent-emerald-600"
+						/>
+						<span class="w-5 text-xs text-zinc-300">{stampData?.scale ?? 1}x</span>
+						<span class="mx-1 text-zinc-700">|</span>
+						<span class="text-xs text-zinc-500">{importStampBase.width}×{importStampBase.height}px</span>
+						<span class="mx-1 text-zinc-700">|</span>
+						<button
+							class="rounded px-2 py-0.5 text-xs text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
+							onclick={cancelImportStamp}
+						>
+							Cancel
+						</button>
+					</div>
+				{/if}
 			</div>
 
 			<!-- Right sidebar panels (overlay so they don't push canvas off-screen) -->

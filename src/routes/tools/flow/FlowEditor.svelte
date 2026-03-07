@@ -60,14 +60,18 @@
 		removeProfile,
 		updateProfile,
 		setProfileSwitch,
+		formatLayout,
 	} from '$lib/stores/flow.svelte';
 	import { saveFlowProject, loadFlowProject, listModules, getModule, readFile, writeFile, buildGame } from '$lib/tauri/commands';
 	import { generateMergedFlowGpc } from '$lib/flow/codegen-merged';
 	import { mergeRecoilTable, parseWeaponNames } from '$lib/utils/recoil-parser';
 	import { createModuleNode } from '$lib/flow/module-nodes';
 	import { getFlowOledTransfer, setFlowOledTransfer, clearFlowOledTransfer } from '$lib/stores/flow-transfer.svelte';
+	import { getKeyboardTransfer, clearKeyboardTransfer } from '$lib/stores/keyboard-transfer.svelte';
+	import { serializeKeyboardMappings } from '$lib/utils/keyboard-parser';
 	import { goto } from '$app/navigation';
-	import { onMount } from 'svelte';
+	import { page } from '$app/state';
+	import { onMount, untrack } from 'svelte';
 	import type { FlowNodeType, FlowChunk, FlowType } from '$lib/types/flow';
 	import { createFlowNode } from '$lib/types/flow';
 	import type { ModuleSummary } from '$lib/types/module';
@@ -146,31 +150,55 @@
 		}
 	});
 
-	// Load flow project from selected game on mount
-	onMount(async () => {
-		// Handle return from OLED editor with pixel data
-		const transfer = getFlowOledTransfer();
-		if (transfer && flowStore.graph) {
-			const node = flowStore.graph.nodes.find((n) => n.id === transfer.nodeId);
-			if (node) {
-				if (transfer.subNodeId) {
-					// Apply to pixel-art sub-node
-					const sub = node.subNodes.find((s) => s.id === transfer.subNodeId);
-					if (sub && sub.type === 'pixel-art') {
-						updateSubNode(node.id, sub.id, {
-							config: { ...sub.config, scene: { id: transfer.scene.id, name: transfer.scene.name, pixels: transfer.scene.pixels } },
-						});
-						addToast('Pixel art updated from OLED editor', 'success');
-					}
-				} else {
-					// Apply to node-level oledScene (legacy)
-					updateNode(node.id, { oledScene: transfer.scene });
-					addToast('OLED scene updated', 'success');
-				}
-			}
-			clearFlowOledTransfer();
-		}
+	// Apply pending transfers once the graph is loaded
+	let transfersApplied = $state(false);
+	$effect(() => {
+		if (transfersApplied) return;
+		const graph = flowStore.graph;
+		if (!graph) return;
+		transfersApplied = true;
 
+		untrack(() => {
+			// Handle return from OLED editor with pixel data
+			const transfer = getFlowOledTransfer();
+			if (transfer) {
+				const node = graph.nodes.find((n) => n.id === transfer.nodeId);
+				if (node) {
+					if (transfer.subNodeId) {
+						const sub = node.subNodes.find((s) => s.id === transfer.subNodeId);
+						if (sub && sub.type === 'pixel-art') {
+							updateSubNode(node.id, sub.id, {
+								config: { ...sub.config, scene: { id: transfer.scene.id, name: transfer.scene.name, pixels: transfer.scene.pixels } },
+							});
+							addToast('Pixel art updated from OLED editor', 'success');
+						}
+					} else {
+						updateNode(node.id, { oledScene: transfer.scene });
+						addToast('OLED scene updated', 'success');
+					}
+				}
+				clearFlowOledTransfer();
+			}
+
+			// Handle return from Keyboard Mapper with updated mappings
+			const kbTransfer = getKeyboardTransfer();
+			if (kbTransfer?.nodeId) {
+				const node = graph.nodes.find((n) => n.id === kbTransfer.nodeId);
+				if (node?.moduleData) {
+					const skeleton = `function ApplyKeyboard() {\n    // No mappings configured\n}`;
+					const newComboCode = serializeKeyboardMappings(skeleton, kbTransfer.mappings);
+					updateNode(node.id, {
+						moduleData: { ...node.moduleData, comboCode: newComboCode }
+					});
+					addToast(`Keyboard mappings updated (${kbTransfer.mappings.length} mappings)`, 'success');
+				}
+				clearKeyboardTransfer();
+			}
+		});
+	});
+
+	// Load available modules for gameplay flow on mount
+	onMount(async () => {
 		// Load available modules for gameplay flow
 		try {
 			const workspacePaths = settings.workspaces ?? [];
@@ -404,6 +432,7 @@
 						pixels: btoa(String.fromCharCode(...new Uint8Array(1024))),
 					},
 			returnTo: flowStore.gamePath,
+			returnPath: page.url.pathname,
 		});
 		goto('/tools/oled');
 	}
@@ -441,6 +470,8 @@
 		if (template.stackOffsetY !== undefined) node.stackOffsetY = template.stackOffsetY;
 		if (template.onEnter !== undefined) node.onEnter = template.onEnter;
 		if (template.onExit !== undefined) node.onExit = template.onExit;
+		if (template.initCode !== undefined) node.initCode = template.initCode;
+		if (template.moduleData) node.moduleData = structuredClone(template.moduleData);
 		node.chunkRef = chunk.id;
 
 		if (!flowStore.graph) return;
@@ -458,6 +489,8 @@
 				stackOffsetY: node.stackOffsetY,
 				onEnter: node.onEnter,
 				onExit: node.onExit,
+				initCode: node.initCode,
+				moduleData: node.moduleData,
 				chunkRef: node.chunkRef,
 			});
 			selectNode(created.id);
@@ -503,6 +536,7 @@
 		onNewGraph={handleNewGraph}
 		onLoadGraph={handleLoad}
 		onEmulator={() => (showEmulator = true)}
+		onFormat={formatLayout}
 		canUndo={canUndo()}
 		canRedo={canRedo()}
 		{hasSelection}

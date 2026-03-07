@@ -335,6 +335,79 @@ export function moveNodeDone(_nodeId?: string) {
 	pushUndo('Move node');
 }
 
+/** Auto-layout nodes in a left-to-right BFS grid based on edge connections. */
+export function formatLayout() {
+	if (!state.graph) return;
+	pushUndo('Format layout');
+
+	const nodes = state.graph.nodes;
+	const edges = state.graph.edges;
+	if (nodes.length === 0) return;
+
+	const NODE_W = 260;
+	const NODE_H = 160;
+	const START_X = 100;
+	const START_Y = 100;
+
+	// Build adjacency map
+	const outgoing = new Map<string, string[]>();
+	for (const edge of edges) {
+		if (!outgoing.has(edge.sourceNodeId)) outgoing.set(edge.sourceNodeId, []);
+		outgoing.get(edge.sourceNodeId)!.push(edge.targetNodeId);
+	}
+
+	// BFS to assign columns
+	const initialNode = nodes.find((n) => n.isInitialState) || nodes[0];
+	const visited = new Set<string>();
+	const columns = new Map<string, number>();
+	const queue: { id: string; col: number }[] = [{ id: initialNode.id, col: 0 }];
+	visited.add(initialNode.id);
+	columns.set(initialNode.id, 0);
+
+	while (queue.length > 0) {
+		const { id, col } = queue.shift()!;
+		const targets = outgoing.get(id) ?? [];
+		for (const targetId of targets) {
+			if (!visited.has(targetId)) {
+				visited.add(targetId);
+				columns.set(targetId, col + 1);
+				queue.push({ id: targetId, col: col + 1 });
+			}
+		}
+	}
+
+	// Assign any unvisited nodes to the next column
+	let maxCol = 0;
+	for (const col of columns.values()) maxCol = Math.max(maxCol, col);
+	for (const node of nodes) {
+		if (!columns.has(node.id)) {
+			maxCol++;
+			columns.set(node.id, maxCol);
+		}
+	}
+
+	// Group by column, then assign row positions
+	const colNodes = new Map<number, string[]>();
+	for (const [id, col] of columns) {
+		if (!colNodes.has(col)) colNodes.set(col, []);
+		colNodes.get(col)!.push(id);
+	}
+
+	state.graph.nodes = nodes.map((n) => {
+		const col = columns.get(n.id) ?? 0;
+		const nodesInCol = colNodes.get(col) ?? [n.id];
+		const row = nodesInCol.indexOf(n.id);
+		return {
+			...n,
+			position: {
+				x: START_X + col * NODE_W,
+				y: START_Y + row * NODE_H,
+			},
+		};
+	});
+	state.dirty = true;
+}
+
 export function setInitialState(nodeId: string) {
 	if (!state.graph) return;
 	pushUndo('Set initial state');
@@ -647,6 +720,12 @@ export function removeSubNode(nodeId: string, subNodeId: string) {
 	if (!node) return;
 
 	pushUndo('Remove sub-node');
+
+	// Track removal of auto-generated sub-nodes so syncModuleMenus won't re-create them
+	const removedSub = node.subNodes.find((sn) => sn.id === subNodeId);
+	if (removedSub?.config?.['__auto_module'] && removedSub.boundVariable) {
+		node.autoSuppressed = [...(node.autoSuppressed ?? []), removedSub.boundVariable];
+	}
 
 	// Remove edges that reference this sub-node
 	state.graph.edges = state.graph.edges.filter(

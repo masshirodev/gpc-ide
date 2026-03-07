@@ -5,6 +5,7 @@ export interface FlowOledTransfer {
 	subNodeId?: string;
 	scene: SerializedScene;
 	returnTo: string | null; // game path
+	returnPath?: string; // route to navigate back to (e.g. '/' for flow tab, '/tools/flow' for standalone)
 }
 
 let transfer = $state<FlowOledTransfer | null>(null);

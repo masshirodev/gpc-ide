@@ -115,6 +115,8 @@ export interface SubNodeDef {
 	stackHeight?: number;
 	render: (config: Record<string, unknown>, ctx: SubNodeRenderContext) => void;
 	generateGpc: (config: Record<string, unknown>, ctx: SubNodeCodegenContext) => string;
+	/** Generate input-handling GPC code (runs every cycle, separate from rendering). */
+	generateGpcInput?: (config: Record<string, unknown>, ctx: SubNodeCodegenContext) => string;
 }
 
 // ==================== Module Node Data (Gameplay Flow) ====================
@@ -122,10 +124,16 @@ export interface SubNodeDef {
 export interface ModuleNodeOption {
 	name: string;
 	variable: string;
-	type: 'toggle' | 'value';
+	type: 'toggle' | 'value' | 'array';
 	defaultValue: number;
 	min?: number;
 	max?: number;
+	/** For 'array' type: name of the const string[] array in GPC code */
+	arrayName?: string;
+	/** For 'array' type: number of entries in the array */
+	arraySize?: number;
+	/** GPC code to run when the value changes in the menu (e.g. 'ApplyVMSpeed();') */
+	onChangeCode?: string;
 }
 
 export interface ModuleNodeData {
@@ -150,6 +158,8 @@ export interface ModuleNodeData {
 	needsWeapondata: boolean;
 	/** Weapon names for weapondata modules — generates Weapons[] array and WEAPON_COUNT */
 	weaponNames?: string[];
+	/** When true, mainCode runs without enable variable guard and no Status toggle is created */
+	alwaysActive?: boolean;
 }
 
 export interface FlowVariable {
@@ -187,6 +197,8 @@ export interface FlowNode {
 	variables: FlowVariable[];
 	onEnter: string;
 	onExit: string;
+	/** Code injected into the init {} block (runs once at script startup, after Flow_Load) */
+	initCode: string;
 	chunkRef: string | null;
 	// v2: sub-node system
 	subNodes: SubNode[];
@@ -197,8 +209,12 @@ export interface FlowNode {
 	scrollMode?: 'window' | 'wrap';
 	/** Button that navigates back to the previous state (e.g. 'PS5_CIRCLE') */
 	backButton?: string;
+	/** When true, calls block_all_inputs() so menu navigation doesn't send inputs to the console */
+	blockInputs?: boolean;
 	/** Module data for gameplay flow module nodes */
 	moduleData?: ModuleNodeData;
+	/** Variable names of auto-generated sub-nodes the user intentionally removed */
+	autoSuppressed?: string[];
 }
 
 // ==================== Flow Edge Types ====================
@@ -443,6 +459,7 @@ export function createFlowNode(
 		variables: [],
 		onEnter: '',
 		onExit: '',
+		initCode: '',
 		chunkRef: null,
 		subNodes: [],
 		stackOffsetX: 0,

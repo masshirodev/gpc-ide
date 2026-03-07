@@ -2,7 +2,7 @@
 	import { goto } from '$app/navigation';
 	import { createGame, saveFlowProject } from '$lib/tauri/commands';
 	import type { CreateGameParams } from '$lib/tauri/commands';
-	import { loadGames } from '$lib/stores/game.svelte';
+	import { loadGames, selectGame, getGameStore } from '$lib/stores/game.svelte';
 	import { getSettings, getAllGameTypes, GAME_TYPE_LABELS } from '$lib/stores/settings.svelte';
 	import { CONSOLE_TYPES, CONSOLE_LABELS, type ConsoleType } from '$lib/utils/console-buttons';
 	import * as m from '$lib/paraglide/messages.js';
@@ -67,10 +67,16 @@
 				console.warn('Failed to create flow project:', flowError);
 			}
 
-			// Refresh the game list
+			// Refresh the game list and select the new game
 			await loadGames(settings.workspaces);
 
-			// Navigate to dashboard
+			const store = getGameStore();
+			const newGame = store.games.find((g) => g.path === result.game_path);
+			if (newGame) {
+				await selectGame(newGame);
+			}
+
+			// Navigate to the game overview page
 			goto('/');
 		} catch (e) {
 			createError = e instanceof Error ? e.message : String(e);

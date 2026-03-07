@@ -62,6 +62,8 @@ pub struct FlowNode {
     #[serde(default)]
     pub on_exit: String,
     #[serde(default)]
+    pub init_code: String,
+    #[serde(default)]
     pub chunk_ref: Option<String>,
     // v2: sub-node system
     #[serde(default)]
@@ -76,6 +78,8 @@ pub struct FlowNode {
     pub scroll_mode: Option<String>,
     #[serde(default)]
     pub back_button: Option<String>,
+    #[serde(default)]
+    pub block_inputs: Option<bool>,
     #[serde(default)]
     pub module_data: Option<ModuleNodeData>,
 }
@@ -118,6 +122,9 @@ pub struct ModuleNodeData {
     pub needs_weapondata: bool,
     #[serde(default)]
     pub weapon_names: Option<Vec<String>>,
+    /// When true, mainCode runs without enable variable guard
+    #[serde(default)]
+    pub always_active: Option<bool>,
 }
 
 /// A configurable option on a module node
@@ -126,13 +133,19 @@ pub struct ModuleNodeData {
 pub struct ModuleNodeOption {
     pub name: String,
     pub variable: String,
-    pub r#type: String, // "toggle" | "value"
+    pub r#type: String, // "toggle" | "value" | "array"
     #[serde(default)]
     pub default_value: i32,
     #[serde(default)]
     pub min: Option<i32>,
     #[serde(default)]
     pub max: Option<i32>,
+    /// For 'array' type: name of the const string[] array in GPC code
+    #[serde(default)]
+    pub array_name: Option<String>,
+    /// For 'array' type: number of entries in the array
+    #[serde(default)]
+    pub array_size: Option<i32>,
 }
 
 /// An edge connecting two nodes representing a transition

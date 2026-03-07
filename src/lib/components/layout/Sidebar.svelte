@@ -2,8 +2,7 @@
 	import { getGameStore, gamesByType, clearSelection } from '$lib/stores/game.svelte';
 	import { goto } from '$app/navigation';
 	import type { GameSummary } from '$lib/types/config';
-	import { getSettings, togglePinnedGame, isGamePinned, removeRecentFile, clearRecentFiles } from '$lib/stores/settings.svelte';
-	import { openTab } from '$lib/stores/editor.svelte';
+	import { getSettings, togglePinnedGame, isGamePinned } from '$lib/stores/settings.svelte';
 	import * as m from '$lib/paraglide/messages.js';
 	import AppLogo from './AppLogo.svelte';
 
@@ -26,10 +25,6 @@
 	let pinnedGames = $derived(
 		store.games.filter(g => settings.pinnedGames.includes(g.path))
 	);
-
-	// Recent files (just filenames for display)
-	let recentFiles = $derived(settings.recentFiles);
-	let showRecentFiles = $state(false);
 
 	interface ToolItem {
 		href: string;
@@ -194,10 +189,11 @@
 		[...new Set(store.games.flatMap(g => g.tags ?? []))].sort()
 	);
 	let filteredGrouped = $derived(() => {
-		if (!activeTagFilter) return grouped;
+		const pinnedPaths = new Set(settings.pinnedGames);
 		const filtered: Record<string, typeof store.games> = {};
 		for (const [type, games] of Object.entries(grouped)) {
-			const matching = games.filter(g => g.tags?.includes(activeTagFilter!));
+			let matching = games.filter(g => !pinnedPaths.has(g.path));
+			if (activeTagFilter) matching = matching.filter(g => g.tags?.includes(activeTagFilter!));
 			if (matching.length > 0) filtered[type] = matching;
 		}
 		return filtered;
@@ -289,67 +285,6 @@
 					</div>
 				</div>
 			{/each}
-		{/if}
-
-		<!-- Recent Files -->
-		{#if recentFiles.length > 0}
-			<div class="mt-4 mb-1 flex items-center justify-between px-3">
-				<button
-					class="flex items-center gap-1 text-xs font-medium tracking-wider text-zinc-500 uppercase hover:text-zinc-400"
-					data-no-collapse
-					onclick={() => (showRecentFiles = !showRecentFiles)}
-				>
-					<svg
-						class="h-3 w-3 transition-transform"
-						class:rotate-90={showRecentFiles}
-						viewBox="0 0 20 20"
-						fill="currentColor"
-					>
-						<path
-							fill-rule="evenodd"
-							d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z"
-							clip-rule="evenodd"
-						/>
-					</svg>
-					{m.layout_sidebar_recent()}
-				</button>
-				<button
-					class="text-xs text-zinc-600 hover:text-zinc-400"
-					data-no-collapse
-					onclick={() => clearRecentFiles()}
-					title={m.layout_sidebar_clear_recent()}
-				>
-					{m.common_clear()}
-				</button>
-			</div>
-			{#if showRecentFiles}
-				{#each recentFiles.slice(0, 10) as filePath}
-					<div
-						class="group flex w-full items-center rounded px-3 py-1 text-left text-xs text-zinc-400 hover:bg-zinc-800 hover:text-zinc-300"
-					>
-						<button
-							class="flex-1 truncate text-left"
-							onclick={() => openTab(filePath)}
-							title={filePath}
-						>
-							{filePath.split('/').pop()}
-						</button>
-						<button
-							class="rounded p-0.5 text-zinc-600 opacity-0 group-hover:opacity-100 hover:text-red-400"
-							data-no-collapse
-							onclick={(e) => {
-								e.stopPropagation();
-								removeRecentFile(filePath);
-							}}
-							title={m.layout_sidebar_remove_recent()}
-						>
-							<svg class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
-								<path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
-							</svg>
-						</button>
-					</div>
-				{/each}
-			{/if}
 		{/if}
 
 		<div class="mt-4 mb-2 px-3 text-xs font-medium tracking-wider text-zinc-500 uppercase">

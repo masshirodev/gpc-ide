@@ -73,6 +73,7 @@ export function migrateFlowGraphV1toV2(graph: FlowGraph): FlowGraph {
 		if (!node.subNodes) node.subNodes = [];
 		if (node.stackOffsetX == null) node.stackOffsetX = 0;
 		if (node.stackOffsetY == null) node.stackOffsetY = 0;
+		if ((node as unknown as Record<string, unknown>).initCode == null) node.initCode = '';
 
 		let order = 0;
 

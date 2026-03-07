@@ -115,11 +115,23 @@ export const arrayItemDef: SubNodeDef = {
 			lines.push(`    print(80, ${ctx.y}, ${font}, OLED_WHITE, ${arrayName}[${boundVar}]);`);
 		}
 
-		// Wrap-around cycling with left/right
+		return lines.join('\n');
+	},
+	generateGpcInput(config, ctx) {
+		const arraySize = (config.arraySize as number) || 10;
+		const useCountVar = !!config.useCountVar;
+		const countVar = (config.countVar as string) || '';
+		const boundVar = ctx.boundVariable || '_array_idx';
+		const label = (config as Record<string, unknown>).label as string || 'Array';
 		const maxExpr = useCountVar && countVar ? `(${countVar} - 1)` : String(arraySize - 1);
+		const onChangeCode = (config.onChangeCode as string) || '';
+		const changeSuffix = onChangeCode ? ` ${onChangeCode}` : '';
+		const lines: string[] = [];
+
+		lines.push(`    // Array cycle: ${label}`);
 		lines.push(`    if(${ctx.cursorVar} == ${ctx.cursorIndex}) {`);
-		lines.push(`        if(event_press(${ctx.buttons.left})) { ${boundVar}--; if(${boundVar} < 0) ${boundVar} = ${maxExpr}; }`);
-		lines.push(`        if(event_press(${ctx.buttons.right})) { ${boundVar}++; if(${boundVar} > ${maxExpr}) ${boundVar} = 0; }`);
+		lines.push(`        if(event_press(${ctx.buttons.left})) { ${boundVar}--; if(${boundVar} < 0) ${boundVar} = ${maxExpr}; FlowRedraw = TRUE;${changeSuffix} }`);
+		lines.push(`        if(event_press(${ctx.buttons.right})) { ${boundVar}++; if(${boundVar} > ${maxExpr}) ${boundVar} = 0; FlowRedraw = TRUE;${changeSuffix} }`);
 		lines.push(`    }`);
 
 		return lines.join('\n');

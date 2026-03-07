@@ -16,6 +16,7 @@ export const toggleItemDef: SubNodeDef = {
 		onText: 'ON',
 		offText: 'OFF',
 		valueAlign: 'right',
+		valueMargin: 0,
 		font: 'default',
 	},
 	params: [
@@ -44,6 +45,7 @@ export const toggleItemDef: SubNodeDef = {
 				{ value: 'inline', label: 'Inline' },
 			],
 		},
+		{ key: 'valueMargin', label: 'Value Margin', type: 'number', default: 0, min: 0, max: 32, description: 'Pixel margin from right edge' },
 		{
 			key: 'font',
 			label: 'Font',
@@ -82,7 +84,8 @@ export const toggleItemDef: SubNodeDef = {
 		}
 
 		// Value text on the right
-		const valX = ctx.x + ctx.width - measureText(valText) - 2;
+		const margin = (config.valueMargin as number) ?? 0;
+		const valX = ctx.x + ctx.width - measureText(valText) - 2 - margin;
 		drawBitmapText(ctx.pixels, valText, valX, ctx.y, on);
 	},
 	generateGpc(config, ctx) {
@@ -105,9 +108,10 @@ export const toggleItemDef: SubNodeDef = {
 
 		lines.push(`    // Toggle: ${label} (index ${ctx.cursorIndex})`);
 
+		const valueMargin = (config.valueMargin as number) ?? 0;
 		const prefixOffset = (prefix.length + spacing) * 6;
 		const labelX = style === 'prefix' ? ctx.x + prefixOffset : ctx.x + 2;
-		const valX = valueAlign === 'right' ? 128 - Math.max(onText.length, offText.length) * 6 : labelX + (label.length + 1) * 6;
+		const valX = valueAlign === 'right' ? 128 - Math.max(onText.length, offText.length) * 6 - valueMargin : labelX + (label.length + 1) * 6;
 
 		if (style === 'invert') {
 			lines.push(`    if(${ctx.cursorVar} == ${ctx.cursorIndex}) {`);

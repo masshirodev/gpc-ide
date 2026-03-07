@@ -83,17 +83,22 @@ export function generateMergedFlowGpc(project: FlowProject): MergedFlowResult {
 
 	const sharedVarNames = new Set(project.sharedVariables.map((v) => v.name));
 
+	// Collect gameplay variable names to avoid re-declaration in menu code
+	const gameplayVarNames = new Set<string>();
+	for (const decl of gameplayResult.variables) {
+		const match = decl.match(/(?:int|int8|int16|int32)\s+(\w+)/);
+		if (match) gameplayVarNames.add(match[1]);
+	}
+
 	// Everything before init is declarations/functions
-	// Strip imports (already at top) and shared variable re-declarations
+	// Strip imports (already at top) and shared/gameplay variable re-declarations
 	const preInit = menuLines
 		.slice(0, initStartIdx >= 0 ? initStartIdx : mainStartIdx >= 0 ? mainStartIdx : menuLines.length)
 		.filter((l) => {
 			const trimmed = l.trim();
 			if (trimmed.startsWith('import ')) return false;
-			if (sharedVarNames.size > 0) {
-				const varMatch = trimmed.match(/^(?:int|int8|int16|int32)\s+(\w+)/);
-				if (varMatch && sharedVarNames.has(varMatch[1])) return false;
-			}
+			const varMatch = trimmed.match(/^(?:int|int8|int16|int32)\s+(\w+)/);
+			if (varMatch && (sharedVarNames.has(varMatch[1]) || gameplayVarNames.has(varMatch[1]))) return false;
 			return true;
 		});
 

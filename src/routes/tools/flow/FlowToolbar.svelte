@@ -17,6 +17,7 @@
 		onNewGraph: () => void;
 		onLoadGraph: () => void;
 		onEmulator: () => void;
+		onFormat: () => void;
 		canUndo: boolean;
 		canRedo: boolean;
 		hasSelection: boolean;
@@ -41,6 +42,7 @@
 		onNewGraph,
 		onLoadGraph,
 		onEmulator,
+		onFormat,
 		canUndo,
 		canRedo,
 		hasSelection,
@@ -189,6 +191,16 @@
 	>
 		<svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
 			<path d="M3 4a1 1 0 011-1h4a1 1 0 010 2H6.414l2.293 2.293a1 1 0 01-1.414 1.414L5 6.414V8a1 1 0 01-2 0V4zm9 1a1 1 0 010-2h4a1 1 0 011 1v4a1 1 0 01-2 0V6.414l-2.293 2.293a1 1 0 11-1.414-1.414L13.586 5H12zm-9 7a1 1 0 012 0v1.586l2.293-2.293a1 1 0 011.414 1.414L6.414 15H8a1 1 0 010 2H4a1 1 0 01-1-1v-4zm13 0a1 1 0 012 0v4a1 1 0 01-1 1h-4a1 1 0 010-2h1.586l-2.293-2.293a1 1 0 011.414-1.414L15.586 13V12z" />
+		</svg>
+	</button>
+
+	<button
+		class="rounded px-2 py-1 text-xs text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
+		onclick={onFormat}
+		title="Auto-layout nodes"
+	>
+		<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+			<path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h7" />
 		</svg>
 	</button>
 

@@ -17,6 +17,7 @@ export const valueItemDef: SubNodeDef = {
 		max: 100,
 		step: 1,
 		valueAlign: 'right',
+		valueMargin: 0,
 		format: '{value}',
 		adjustButtons: ['DPAD_LEFT', 'DPAD_RIGHT'],
 		font: 'default',
@@ -48,6 +49,7 @@ export const valueItemDef: SubNodeDef = {
 				{ value: 'inline', label: 'Inline' },
 			],
 		},
+		{ key: 'valueMargin', label: 'Value Margin', type: 'number', default: 0, min: 0, max: 32, description: 'Pixel margin from right edge' },
 		{ key: 'format', label: 'Format', type: 'string', default: '{value}', description: 'Use {value} as placeholder' },
 		{
 			key: 'font',
@@ -85,7 +87,8 @@ export const valueItemDef: SubNodeDef = {
 		}
 
 		// Value on right
-		const valX = ctx.x + ctx.width - measureText(valStr) - 2;
+		const margin = (config.valueMargin as number) ?? 0;
+		const valX = ctx.x + ctx.width - measureText(valStr) - 2 - margin;
 		drawBitmapText(ctx.pixels, valStr, valX, ctx.y, on);
 	},
 	generateGpc(config, ctx) {
@@ -105,9 +108,10 @@ export const valueItemDef: SubNodeDef = {
 
 		lines.push(`    // Value: ${label} (index ${ctx.cursorIndex})`);
 
+		const valueMargin = (config.valueMargin as number) ?? 0;
 		const prefixOffset = (prefix.length + spacing) * 6;
 		const labelX = style === 'prefix' ? ctx.x + prefixOffset : ctx.x + 2;
-		const valX = valueAlign === 'right' ? 104 : labelX + (label.length + 1) * 6;
+		const valX = valueAlign === 'right' ? 104 - valueMargin : labelX + (label.length + 1) * 6;
 
 		// Cursor rendering
 		if (style === 'invert') {
@@ -127,10 +131,22 @@ export const valueItemDef: SubNodeDef = {
 			lines.push(`    PrintNumber(${boundVar}, find_digits(${boundVar}), ${valX}, ${ctx.y}, ${font});`);
 		}
 
-		// Value adjustment logic (D-pad left/right when this item is selected)
+		return lines.join('\n');
+	},
+	generateGpcInput(config, ctx) {
+		const min = (config.min as number) ?? 0;
+		const max = (config.max as number) ?? 100;
+		const step = (config.step as number) || 1;
+		const boundVar = ctx.boundVariable || '_value_var';
+		const label = (config as Record<string, unknown>).label as string || 'Value';
+		const onChangeCode = (config.onChangeCode as string) || '';
+		const changeSuffix = onChangeCode ? ` ${onChangeCode}` : '';
+		const lines: string[] = [];
+
+		lines.push(`    // Value adjust: ${label}`);
 		lines.push(`    if(${ctx.cursorVar} == ${ctx.cursorIndex}) {`);
-		lines.push(`        if(event_press(${ctx.buttons.left}) && ${boundVar} > ${min}) ${boundVar} = ${boundVar} - ${step};`);
-		lines.push(`        if(event_press(${ctx.buttons.right}) && ${boundVar} < ${max}) ${boundVar} = ${boundVar} + ${step};`);
+		lines.push(`        if(event_press(${ctx.buttons.left}) && ${boundVar} > ${min}) { ${boundVar} = ${boundVar} - ${step}; FlowRedraw = TRUE;${changeSuffix} }`);
+		lines.push(`        if(event_press(${ctx.buttons.right}) && ${boundVar} < ${max}) { ${boundVar} = ${boundVar} + ${step}; FlowRedraw = TRUE;${changeSuffix} }`);
 		lines.push(`    }`);
 
 		return lines.join('\n');

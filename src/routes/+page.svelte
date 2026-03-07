@@ -70,6 +70,7 @@
 		clearKeyboardTransfer
 	} from '$lib/stores/keyboard-transfer.svelte';
 	import { getComboTransfer, clearComboTransfer } from '$lib/stores/combo-transfer.svelte';
+	import { getFlowOledTransfer } from '$lib/stores/flow-transfer.svelte';
 	import * as m from '$lib/paraglide/messages.js';
 	import {
 		type KeyMapping,
@@ -805,6 +806,11 @@
 			});
 		}
 
+		// Handle return from OLED editor with flow data — switch to flow tab
+		if (getFlowOledTransfer()) {
+			activeTab = 'flow';
+		}
+
 		// Handle return from combo editor — write combo GPC file into game
 		const comboTransfer = getComboTransfer();
 		if (comboTransfer?.returnTo && store.selectedGame?.path === comboTransfer.returnTo) {
@@ -1034,6 +1040,7 @@
 					{expandedDirs}
 					activeFilePath={editorStore.activeTabPath}
 					{themeAccent}
+					gamePath={store.selectedGame?.path ?? ''}
 					{fileSeverities}
 					{gitFileStatuses}
 					dragOver={fileDragOver}

@@ -25,6 +25,9 @@
 	import type { SpriteCollectionSummary, SpriteCollection } from '$lib/types/sprite';
 	import { renderNodePreview, pixelsToDataUrl } from '$lib/flow/oled-preview';
 	import MenuLayoutBuilder from '$lib/components/editor/MenuLayoutBuilder.svelte';
+	import { goto } from '$app/navigation';
+	import { setKeyboardTransfer } from '$lib/stores/keyboard-transfer.svelte';
+	import { parseKeyboardMappings } from '$lib/utils/keyboard-parser';
 
 	interface Props {
 		selectedNode: FlowNode | null;
@@ -94,7 +97,7 @@
 		{ value: 'custom', label: 'Custom Code' },
 	];
 
-	let codeTab = $state<'gpc' | 'enter' | 'exit' | 'combo'>('gpc');
+	let codeTab = $state<'gpc' | 'enter' | 'exit' | 'init' | 'combo'>('gpc');
 	let showSubNodePicker = $state(false);
 
 	// Sprite browsing state
@@ -182,6 +185,7 @@
 	let editGpcCode = $state('');
 	let editOnEnter = $state('');
 	let editOnExit = $state('');
+	let editNodeInitCode = $state('');
 	let editComboCode = $state('');
 
 	// Sync node → local state only when a different node is selected
@@ -190,6 +194,7 @@
 	let syncedGpcCode = '';
 	let syncedOnEnter = '';
 	let syncedOnExit = '';
+	let syncedNodeInitCode = '';
 	let syncedComboCode = '';
 
 	// Commit pending node edits before switching away
@@ -200,6 +205,7 @@
 		if (editGpcCode !== syncedGpcCode) updates.gpcCode = editGpcCode;
 		if (editOnEnter !== syncedOnEnter) updates.onEnter = editOnEnter;
 		if (editOnExit !== syncedOnExit) updates.onExit = editOnExit;
+		if (editNodeInitCode !== syncedNodeInitCode) updates.initCode = editNodeInitCode;
 		if (editComboCode !== syncedComboCode) updates.comboCode = editComboCode;
 		if (Object.keys(updates).length > 0) {
 			onUpdateNode(nodeId, updates);
@@ -215,6 +221,7 @@
 			editGpcCode = syncedGpcCode = selectedNode.gpcCode;
 			editOnEnter = syncedOnEnter = selectedNode.onEnter;
 			editOnExit = syncedOnExit = selectedNode.onExit;
+			editNodeInitCode = syncedNodeInitCode = selectedNode.initCode ?? '';
 			editComboCode = syncedComboCode = selectedNode.comboCode;
 		} else if (!selectedNode && lastSyncedNodeId) {
 			// Deselected — flush pending edits
@@ -496,6 +503,7 @@
 		if (editGpcCode !== selectedNode.gpcCode) updates.gpcCode = editGpcCode;
 		if (editOnEnter !== selectedNode.onEnter) updates.onEnter = editOnEnter;
 		if (editOnExit !== selectedNode.onExit) updates.onExit = editOnExit;
+		if (editNodeInitCode !== (selectedNode.initCode ?? '')) updates.initCode = editNodeInitCode;
 		if (editComboCode !== selectedNode.comboCode) updates.comboCode = editComboCode;
 		if (Object.keys(updates).length > 0) {
 			onUpdateNode(selectedNode.id, updates);
@@ -884,7 +892,8 @@
 				</div>
 			{/if}
 
-			<!-- Enable Variable -->
+			<!-- Enable Variable (hidden for alwaysActive modules) -->
+			{#if !selectedNode.moduleData?.alwaysActive}
 			<div class="mb-3">
 				<label class="mb-1 block text-xs text-zinc-400" for="module-enable-var">Enable Variable</label>
 				<input
@@ -897,6 +906,7 @@
 				/>
 				<p class="mt-0.5 text-[10px] text-zinc-600">Toggle variable shared with Menu Flow</p>
 			</div>
+			{/if}
 
 			<!-- Button Params (modules that need custom buttons) -->
 			{#if selectedNode.moduleData?.params && Object.keys(selectedNode.moduleData.params).length > 0}
@@ -984,6 +994,31 @@
 					{/if}
 				</div>
 			{/key}
+			{/if}
+
+			<!-- Send to Keyboard Mapper (keyboard module only) -->
+			{#if selectedNode.moduleData?.moduleId === 'keyboard'}
+				<div class="mb-3">
+					<button
+						class="w-full rounded bg-blue-600 px-2 py-1.5 text-xs font-medium text-white hover:bg-blue-500"
+						onclick={() => {
+							if (!selectedNode?.moduleData) return;
+							const mappings = parseKeyboardMappings(selectedNode.moduleData.comboCode);
+							setKeyboardTransfer({
+								mappings,
+								returnTo: null,
+								outputConsole: 'ps5',
+								inputConsole: 'ps5',
+								returnPath: '/tools/flow',
+								nodeId: selectedNode.id
+							});
+							goto('/tools/keyboard');
+						}}
+					>
+						Send to Mapper
+					</button>
+					<p class="mt-0.5 text-[10px] text-zinc-600">Edit mappings visually in the Keyboard Mapper tool</p>
+				</div>
 			{/if}
 
 			<!-- Weapon Names (weapondata module only) -->
@@ -1134,36 +1169,34 @@
 									<select
 										class="rounded border border-zinc-700 bg-zinc-900 px-1 py-0.5 text-xs text-zinc-300 focus:border-emerald-500 focus:outline-none"
 										value={opt.type}
-										onchange={(e) => updateModuleOption(i, { type: (e.target as HTMLSelectElement).value as 'toggle' | 'value' })}
+										onchange={(e) => updateModuleOption(i, { type: (e.target as HTMLSelectElement).value as 'toggle' | 'value' | 'array' })}
 									>
 										<option value="toggle">Toggle</option>
 										<option value="value">Value</option>
+										<option value="array">Array</option>
 									</select>
 								</div>
-								{#if opt.type === 'value'}
-									<div class="mt-1 flex gap-1">
+								{#if opt.type === 'value' || opt.type === 'array'}
+									<div class="mt-1 flex items-center gap-1">
+										<span class="text-[10px] text-zinc-500">Default</span>
 										<input
 											type="number"
-											class="w-16 rounded border border-zinc-700 bg-zinc-900 px-1 py-0.5 text-xs text-zinc-300 focus:border-emerald-500 focus:outline-none"
+											class="w-14 rounded border border-zinc-700 bg-zinc-900 px-1 py-0.5 text-xs text-zinc-300 focus:border-emerald-500 focus:outline-none"
 											value={opt.defaultValue}
-											placeholder="Default"
-											title="Default"
 											onchange={(e) => updateModuleOption(i, { defaultValue: parseInt((e.target as HTMLInputElement).value) || 0 })}
 										/>
+										<span class="text-[10px] text-zinc-500">Min</span>
 										<input
 											type="number"
-											class="w-14 rounded border border-zinc-700 bg-zinc-900 px-1 py-0.5 text-xs text-zinc-300 focus:border-emerald-500 focus:outline-none"
+											class="w-12 rounded border border-zinc-700 bg-zinc-900 px-1 py-0.5 text-xs text-zinc-300 focus:border-emerald-500 focus:outline-none"
 											value={opt.min ?? 0}
-											placeholder="Min"
-											title="Min"
 											onchange={(e) => updateModuleOption(i, { min: parseInt((e.target as HTMLInputElement).value) || 0 })}
 										/>
+										<span class="text-[10px] text-zinc-500">Max</span>
 										<input
 											type="number"
-											class="w-14 rounded border border-zinc-700 bg-zinc-900 px-1 py-0.5 text-xs text-zinc-300 focus:border-emerald-500 focus:outline-none"
+											class="w-12 rounded border border-zinc-700 bg-zinc-900 px-1 py-0.5 text-xs text-zinc-300 focus:border-emerald-500 focus:outline-none"
 											value={opt.max ?? 100}
-											placeholder="Max"
-											title="Max"
 											onchange={(e) => updateModuleOption(i, { max: parseInt((e.target as HTMLInputElement).value) || 100 })}
 										/>
 									</div>
@@ -1178,46 +1211,73 @@
 				{/if}
 			</div>
 
-			<!-- Variables (auto-generated from module) -->
-			<div class="mb-3">
-				<div class="mb-1 flex items-center justify-between">
-					<label class="text-xs text-zinc-400">Variables</label>
-					<button
-						class="rounded px-1.5 py-0.5 text-xs text-emerald-400 hover:bg-zinc-800"
-						onclick={addVariable}
-					>
-						+ Add
-					</button>
-				</div>
-				{#each selectedNode.variables as variable, i}
-					<div class="mb-1 flex items-center gap-1">
-						<input
-							type="text"
-							class="flex-1 rounded border border-zinc-700 bg-zinc-800 px-1.5 py-0.5 text-xs text-zinc-200 focus:border-emerald-500 focus:outline-none"
-							value={variable.name}
-							onchange={(e) => updateVariable(i, { name: (e.target as HTMLInputElement).value })}
-						/>
-						<select
-							class="rounded border border-zinc-700 bg-zinc-800 px-1 py-0.5 text-xs text-zinc-300 focus:border-emerald-500 focus:outline-none"
-							value={variable.type}
-							onchange={(e) => updateVariable(i, { type: (e.target as HTMLSelectElement).value as FlowVariableType })}
-						>
-							<option value="int">int</option>
-							<option value="int8">int8</option>
-							<option value="int16">int16</option>
-							<option value="int32">int32</option>
-						</select>
+			<!-- Variables (only those NOT already managed by Options) -->
+			{#if selectedNode.variables.some((v) => !(selectedNode.moduleData?.options ?? []).some((o) => o.variable === v.name)) || !selectedNode.moduleData?.options.length}
+				<div class="mb-3">
+					<div class="mb-1 flex items-center justify-between">
+						<label class="text-xs text-zinc-400">Variables</label>
 						<button
-							class="text-zinc-500 hover:text-red-400"
-							onclick={() => removeVariable(i)}
+							class="rounded px-1.5 py-0.5 text-xs text-emerald-400 hover:bg-zinc-800"
+							onclick={addVariable}
 						>
-							<svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-							</svg>
+							+ Add
 						</button>
 					</div>
-				{/each}
-			</div>
+					{#each selectedNode.variables.map((v, i) => ({ variable: v, index: i })).filter(({ variable }) => !(selectedNode.moduleData?.options ?? []).some((o) => o.variable === variable.name)) as { variable, index: i }}
+						<div class="mb-1 flex items-center gap-1">
+							<input
+								type="text"
+								class="flex-1 rounded border border-zinc-700 bg-zinc-800 px-1.5 py-0.5 text-xs text-zinc-200 focus:border-emerald-500 focus:outline-none"
+								value={variable.name}
+								onchange={(e) => updateVariable(i, { name: (e.target as HTMLInputElement).value })}
+							/>
+							<select
+								class="rounded border border-zinc-700 bg-zinc-800 px-1 py-0.5 text-xs text-zinc-300 focus:border-emerald-500 focus:outline-none"
+								value={variable.type}
+								onchange={(e) => updateVariable(i, { type: (e.target as HTMLSelectElement).value as FlowVariableType })}
+							>
+								<option value="int">int</option>
+								<option value="int8">int8</option>
+								<option value="int16">int16</option>
+								<option value="int32">int32</option>
+							</select>
+							<button
+								class="text-zinc-500 hover:text-red-400"
+								onclick={() => removeVariable(i)}
+							>
+								<svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+								</svg>
+							</button>
+						</div>
+						<div class="mb-1 ml-1 flex items-center gap-1">
+							<span class="text-[10px] text-zinc-500">Default</span>
+							<input
+								type="number"
+								class="w-16 rounded border border-zinc-700 bg-zinc-800 px-1.5 py-0.5 text-xs text-zinc-200 focus:border-emerald-500 focus:outline-none"
+								value={typeof variable.defaultValue === 'number' ? variable.defaultValue : 0}
+								onchange={(e) => updateVariable(i, { defaultValue: parseInt((e.target as HTMLInputElement).value) || 0 })}
+							/>
+							<span class="text-[10px] text-zinc-500">Min</span>
+							<input
+								type="number"
+								class="w-14 rounded border border-zinc-700 bg-zinc-800 px-1.5 py-0.5 text-xs text-zinc-200 focus:border-emerald-500 focus:outline-none"
+								value={variable.min ?? ''}
+								placeholder="—"
+								onchange={(e) => { const v = (e.target as HTMLInputElement).value; updateVariable(i, { min: v === '' ? undefined : parseInt(v) }); }}
+							/>
+							<span class="text-[10px] text-zinc-500">Max</span>
+							<input
+								type="number"
+								class="w-14 rounded border border-zinc-700 bg-zinc-800 px-1.5 py-0.5 text-xs text-zinc-200 focus:border-emerald-500 focus:outline-none"
+								value={variable.max ?? ''}
+								placeholder="—"
+								onchange={(e) => { const v = (e.target as HTMLInputElement).value; updateVariable(i, { max: v === '' ? undefined : parseInt(v) }); }}
+							/>
+						</div>
+					{/each}
+				</div>
+			{/if}
 
 			<!-- Actions -->
 			<div class="mt-4 space-y-2">
@@ -1473,6 +1533,20 @@
 				<p class="mt-0.5 text-[10px] text-zinc-600">Returns to the previous state when pressed</p>
 			</div>
 
+			<!-- Block Inputs -->
+			<div class="mb-3">
+				<label class="flex items-center gap-2">
+					<input
+						type="checkbox"
+						class="accent-emerald-500"
+						checked={selectedNode.blockInputs ?? false}
+						onchange={(e) => onUpdateNode(selectedNode!.id, { blockInputs: (e.target as HTMLInputElement).checked })}
+					/>
+					<span class="text-xs text-zinc-300">Block All Inputs</span>
+				</label>
+				<p class="mt-0.5 ml-5 text-[10px] text-zinc-600">Calls block_all_inputs() to prevent button presses from reaching the console while in this state</p>
+			</div>
+
 			<!-- Code Tabs -->
 			<div class="mb-2">
 				<label class="mb-1 block text-xs text-zinc-400">Code</label>
@@ -1481,6 +1555,7 @@
 						{ key: 'gpc', label: 'Main' },
 						{ key: 'enter', label: 'Enter' },
 						{ key: 'exit', label: 'Exit' },
+						{ key: 'init', label: 'Init' },
 						{ key: 'combo', label: 'Combo' },
 					] as tab}
 						<button
@@ -1516,6 +1591,13 @@
 						language="gpc"
 						label="On Exit"
 						onchange={(v) => { editOnExit = v; commitNodeCode(); }}
+					/>
+				{:else if codeTab === 'init'}
+					<MiniMonaco
+						value={editNodeInitCode}
+						language="gpc"
+						label="Init Code"
+						onchange={(v) => { editNodeInitCode = v; commitNodeCode(); }}
 					/>
 				{:else if codeTab === 'combo'}
 					<MiniMonaco
@@ -1583,6 +1665,32 @@
 								min="1"
 								max="256"
 								onchange={(e) => updateVariable(i, { arraySize: parseInt((e.target as HTMLInputElement).value) || 32 })}
+							/>
+						</div>
+					{:else}
+						<div class="mb-1 ml-1 flex items-center gap-1">
+							<span class="text-[10px] text-zinc-500">Default</span>
+							<input
+								type="number"
+								class="w-16 rounded border border-zinc-700 bg-zinc-800 px-1.5 py-0.5 text-xs text-zinc-200 focus:border-emerald-500 focus:outline-none"
+								value={typeof variable.defaultValue === 'number' ? variable.defaultValue : 0}
+								onchange={(e) => updateVariable(i, { defaultValue: parseInt((e.target as HTMLInputElement).value) || 0 })}
+							/>
+							<span class="text-[10px] text-zinc-500">Min</span>
+							<input
+								type="number"
+								class="w-14 rounded border border-zinc-700 bg-zinc-800 px-1.5 py-0.5 text-xs text-zinc-200 focus:border-emerald-500 focus:outline-none"
+								value={variable.min ?? ''}
+								placeholder="—"
+								onchange={(e) => { const v = (e.target as HTMLInputElement).value; updateVariable(i, { min: v === '' ? undefined : parseInt(v) }); }}
+							/>
+							<span class="text-[10px] text-zinc-500">Max</span>
+							<input
+								type="number"
+								class="w-14 rounded border border-zinc-700 bg-zinc-800 px-1.5 py-0.5 text-xs text-zinc-200 focus:border-emerald-500 focus:outline-none"
+								value={variable.max ?? ''}
+								placeholder="—"
+								onchange={(e) => { const v = (e.target as HTMLInputElement).value; updateVariable(i, { max: v === '' ? undefined : parseInt(v) }); }}
 							/>
 						</div>
 					{/if}

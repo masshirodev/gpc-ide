@@ -182,7 +182,7 @@
 	"modal_new_file_title": "Novo Arquivo",
 	"modal_new_file_filename_label": "Nome do Arquivo",
 	"modal_new_file_filename_placeholder": "ex. custom.gpc",
-	"modal_new_file_hint": "A extensão .gpc será adicionada automaticamente se não for fornecida",
+	"modal_new_file_hint": "A extensão .gpc será adicionada automaticamente se nenhuma extensão for fornecida",
 	"modal_save_template_title": "Salvar como Modelo de Projeto",
 	"modal_save_template_name_label": "Nome do Modelo",
 	"modal_save_template_name_placeholder": "Meu Modelo",

@@ -24,9 +24,10 @@
 		onBeforeDraw: () => void;
 		onDraw: (pixels: Uint8Array) => void;
 		onTextOriginSet: (x: number, y: number) => void;
+		onStampPlaced?: () => void;
 	}
 
-	let { pixels, tool, brush, filled, version, textState, stampData = null, onBeforeDraw, onDraw, onTextOriginSet }: Props = $props();
+	let { pixels, tool, brush, filled, version, textState, stampData = null, onBeforeDraw, onDraw, onTextOriginSet, onStampPlaced }: Props = $props();
 
 	let canvas: HTMLCanvasElement;
 	let container: HTMLDivElement;
@@ -252,6 +253,7 @@
 
 		onBeforeDraw();
 		onDraw(updated);
+		onStampPlaced?.();
 	}
 
 	function canvasToPixel(e: MouseEvent): [number, number] {

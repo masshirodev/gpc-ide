@@ -176,7 +176,7 @@
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <svelte:window onclick={handleClickOutside} />
 
-<div class="flex h-full flex-col overflow-y-auto bg-zinc-950 p-4">
+<div class="flex flex-col bg-zinc-950 p-4">
     {#if loadError}
         <div class="mb-3 rounded border border-red-800 bg-red-900/20 px-3 py-2 text-sm text-red-400">
             {loadError}

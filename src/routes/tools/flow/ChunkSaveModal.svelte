@@ -62,6 +62,7 @@
 					variables: plain.variables,
 					onEnter: plain.onEnter,
 					onExit: plain.onExit,
+					initCode: plain.initCode,
 					subNodes: plain.subNodes,
 					stackOffsetX: plain.stackOffsetX,
 					stackOffsetY: plain.stackOffsetY,

@@ -144,8 +144,9 @@ export function generateGameplayGpc(graph: FlowGraph): GameplayCodegenResult {
 		}
 
 		// Quick toggle: button combo or keyboard key to toggle enable variable
+		// (skipped for alwaysActive modules — they have no enable toggle)
 		const qt = md.quickToggle ?? [];
-		if (qt.length > 0 && md.enableVariable) {
+		if (!md.alwaysActive && qt.length > 0 && md.enableVariable) {
 			const isKb = qt[0].startsWith('KEY_');
 			result.mainLoopCode.push(`    // Quick Toggle: ${md.moduleName}`);
 			if (isKb) {
@@ -171,13 +172,20 @@ export function generateGameplayGpc(graph: FlowGraph): GameplayCodegenResult {
 
 		result.mainLoopCode.push(`    // ${md.moduleName}`);
 		if (mainCode) {
-			// Full code block — already contains if-checks and combo_run
-			result.mainLoopCode.push(`    if(${enableVar}) {`);
-			for (const line of mainCode.split('\n')) {
-				result.mainLoopCode.push(`        ${line.trim()}`);
+			if (md.alwaysActive) {
+				// Always-active modules run unguarded
+				for (const line of mainCode.split('\n')) {
+					result.mainLoopCode.push(`    ${line.trim()}`);
+				}
+			} else {
+				// Full code block — guarded by enable variable
+				result.mainLoopCode.push(`    if(${enableVar}) {`);
+				for (const line of mainCode.split('\n')) {
+					result.mainLoopCode.push(`        ${line.trim()}`);
+				}
+				result.mainLoopCode.push(`    }`);
 			}
-			result.mainLoopCode.push(`    }`);
-		} else {
+		} else if (!md.alwaysActive) {
 			// No main code — just guard combo with enable var
 			const comboName = extractComboName(md.comboCode);
 			if (comboName) {

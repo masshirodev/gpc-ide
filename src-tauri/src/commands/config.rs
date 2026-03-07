@@ -99,14 +99,10 @@ fn collect_tree_entries(
     Ok(())
 }
 
-/// Create a new standalone .gpc file in the game directory
+/// Create a new standalone file in the game directory (defaults to .gpc if no extension given)
 #[tauri::command]
 pub fn create_standalone_file(game_path: String, filename: String) -> Result<String, String> {
-    let filename = if filename.ends_with(".gpc") {
-        filename
-    } else {
-        format!("{}.gpc", filename)
-    };
+    let filename = resolve_filename(filename);
 
     if filename.contains('/') || filename.contains('\\') {
         return Err("Filename cannot contain slashes".to_string());
@@ -118,14 +114,28 @@ pub fn create_standalone_file(game_path: String, filename: String) -> Result<Str
         return Err(format!("File already exists: {}", filename));
     }
 
-    let content = format!(
-        "// {}\n// Created by Cronus IDE\n\n// Add your code here\n",
-        filename
-    );
+    let content = if filename.ends_with(".gpc") {
+        format!(
+            "// {}\n// Created by Cronus IDE\n\n// Add your code here\n",
+            filename
+        )
+    } else {
+        String::new()
+    };
     std::fs::write(&file_path, &content)
         .map_err(|e| format!("Failed to create file: {}", e))?;
 
     Ok(file_path.to_string_lossy().to_string())
+}
+
+/// Resolve filename: adds .gpc if no extension is present.
+/// Extracted for testability.
+fn resolve_filename(filename: String) -> String {
+    if filename.contains('.') {
+        filename
+    } else {
+        format!("{}.gpc", filename)
+    }
 }
 
 /// Delete a file (prevents deletion of critical game files)
@@ -147,4 +157,102 @@ pub fn delete_file(file_path: String) -> Result<(), String> {
     std::fs::remove_file(&path).map_err(|e| format!("Failed to delete file: {}", e))?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use tempfile::tempdir;
+
+    #[test]
+    fn resolve_filename_adds_gpc_when_no_extension() {
+        assert_eq!(resolve_filename("myfile".into()), "myfile.gpc");
+    }
+
+    #[test]
+    fn resolve_filename_preserves_gpc_extension() {
+        assert_eq!(resolve_filename("myfile.gpc".into()), "myfile.gpc");
+    }
+
+    #[test]
+    fn resolve_filename_preserves_other_extensions() {
+        assert_eq!(resolve_filename("readme.txt".into()), "readme.txt");
+        assert_eq!(resolve_filename("data.json".into()), "data.json");
+        assert_eq!(resolve_filename("script.js".into()), "script.js");
+    }
+
+    #[test]
+    fn resolve_filename_preserves_double_extensions() {
+        assert_eq!(resolve_filename("project.oled.json".into()), "project.oled.json");
+    }
+
+    #[test]
+    fn create_file_without_extension_gets_gpc() {
+        let dir = tempdir().unwrap();
+        let result = create_standalone_file(
+            dir.path().to_string_lossy().to_string(),
+            "myfile".into(),
+        );
+        assert!(result.is_ok());
+        let path = PathBuf::from(result.unwrap());
+        assert_eq!(path.file_name().unwrap().to_str().unwrap(), "myfile.gpc");
+        assert!(path.exists());
+        let content = fs::read_to_string(&path).unwrap();
+        assert!(content.contains("// myfile.gpc"));
+    }
+
+    #[test]
+    fn create_file_with_custom_extension_preserves_it() {
+        let dir = tempdir().unwrap();
+        let result = create_standalone_file(
+            dir.path().to_string_lossy().to_string(),
+            "notes.txt".into(),
+        );
+        assert!(result.is_ok());
+        let path = PathBuf::from(result.unwrap());
+        assert_eq!(path.file_name().unwrap().to_str().unwrap(), "notes.txt");
+        assert!(path.exists());
+        let content = fs::read_to_string(&path).unwrap();
+        assert!(content.is_empty());
+    }
+
+    #[test]
+    fn create_file_with_gpc_extension_gets_boilerplate() {
+        let dir = tempdir().unwrap();
+        let result = create_standalone_file(
+            dir.path().to_string_lossy().to_string(),
+            "custom.gpc".into(),
+        );
+        assert!(result.is_ok());
+        let path = PathBuf::from(result.unwrap());
+        let content = fs::read_to_string(&path).unwrap();
+        assert!(content.contains("// custom.gpc"));
+    }
+
+    #[test]
+    fn create_file_rejects_slashes() {
+        let dir = tempdir().unwrap();
+        let result = create_standalone_file(
+            dir.path().to_string_lossy().to_string(),
+            "sub/file.gpc".into(),
+        );
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("slashes"));
+    }
+
+    #[test]
+    fn create_file_rejects_duplicates() {
+        let dir = tempdir().unwrap();
+        let _ = create_standalone_file(
+            dir.path().to_string_lossy().to_string(),
+            "existing.gpc".into(),
+        );
+        let result = create_standalone_file(
+            dir.path().to_string_lossy().to_string(),
+            "existing.gpc".into(),
+        );
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("already exists"));
+    }
 }
