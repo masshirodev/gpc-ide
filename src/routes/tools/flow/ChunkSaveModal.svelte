@@ -26,7 +26,7 @@
 		if (open && node) {
 			name = node.label;
 			description = '';
-			category = node.type === 'intro' ? 'intro' : node.type === 'screensaver' ? 'screensaver' : node.type === 'home' ? 'home' : 'menu';
+			category = node.type === 'intro' ? 'intro' : node.type === 'screensaver' ? 'screensaver' : node.type === 'home' ? 'home' : node.type === 'debug' ? 'debug' : 'menu';
 			tags = '';
 		}
 	});

@@ -122,6 +122,7 @@
 		screensaver: 'Screensaver',
 		code: 'Code Snippets',
 		utility: 'Utility',
+		debug: 'Debug Tools',
 		uncategorized: 'Other',
 	};
 </script>

@@ -96,40 +96,51 @@ export const toggleItemDef: SubNodeDef = {
 		const offText = (config.offText as string) || 'OFF';
 		const valueAlign = (config.valueAlign as string) || 'right';
 		const font = 'OLED_FONT_SMALL';
-		const label = (config as Record<string, unknown>).label as string || 'Toggle';
+		const label = (config as Record<string, unknown>).label as string || '';
 		const boundVar = ctx.boundVariable || '_toggle_var';
-		const labelIdx = addString(ctx, label);
 		const onIdx = addString(ctx, onText);
 		const offIdx = addString(ctx, offText);
-		const labelRef = `${ctx.stringArrayName}[${labelIdx}]`;
 		const onRef = `${ctx.stringArrayName}[${onIdx}]`;
 		const offRef = `${ctx.stringArrayName}[${offIdx}]`;
 		const lines: string[] = [];
 
-		lines.push(`    // Toggle: ${label} (index ${ctx.cursorIndex})`);
-
 		const valueMargin = (config.valueMargin as number) ?? 0;
 		const prefixOffset = (prefix.length + spacing) * 6;
 		const labelX = style === 'prefix' ? ctx.x + prefixOffset : ctx.x + 2;
-		const valX = valueAlign === 'right' ? 128 - Math.max(onText.length, offText.length) * 6 - valueMargin : labelX + (label.length + 1) * 6;
+		const valX = valueAlign === 'right' ? 128 - Math.max(onText.length, offText.length) * 6 - valueMargin : labelX + ((label || 'Toggle').length + 1) * 6;
+
+		// Non-interactive: just print label (if any) + value
+		if (ctx.cursorIndex < 0) {
+			if (label) {
+				const labelIdx = addString(ctx, label);
+				lines.push(`    print(${ctx.x + 2}, ${ctx.y}, ${font}, OLED_WHITE, ${ctx.stringArrayName}[${labelIdx}]);`);
+			}
+			lines.push(`    if(${boundVar}) print(${label ? valX : ctx.x + 2}, ${ctx.y}, ${font}, OLED_WHITE, ${onRef});`);
+			lines.push(`    else print(${label ? valX : ctx.x + 2}, ${ctx.y}, ${font}, OLED_WHITE, ${offRef});`);
+			return lines.join('\n');
+		}
+
+		const labelIdx = addString(ctx, label || 'Toggle');
+		const labelRef = `${ctx.stringArrayName}[${labelIdx}]`;
+
+		lines.push(`    // Toggle: ${label || 'Toggle'} (index ${ctx.cursorIndex})`);
 
 		if (style === 'invert') {
 			lines.push(`    if(${ctx.cursorVar} == ${ctx.cursorIndex}) {`);
 			lines.push(`        rect_oled(${ctx.x}, ${ctx.y}, ${128 - ctx.x}, 8, 1, OLED_WHITE);`);
-			lines.push(`        print(${ctx.x + 2}, ${ctx.y}, ${font}, OLED_BLACK, ${labelRef});`);
+			if (label) lines.push(`        print(${ctx.x + 2}, ${ctx.y}, ${font}, OLED_BLACK, ${labelRef});`);
 			lines.push(`        if(${boundVar}) print(${valX}, ${ctx.y}, ${font}, OLED_BLACK, ${onRef});`);
 			lines.push(`        else print(${valX}, ${ctx.y}, ${font}, OLED_BLACK, ${offRef});`);
 			lines.push(`    } else {`);
-			lines.push(`        print(${ctx.x + 2}, ${ctx.y}, ${font}, OLED_WHITE, ${labelRef});`);
+			if (label) lines.push(`        print(${ctx.x + 2}, ${ctx.y}, ${font}, OLED_WHITE, ${labelRef});`);
 			lines.push(`        if(${boundVar}) print(${valX}, ${ctx.y}, ${font}, OLED_WHITE, ${onRef});`);
 			lines.push(`        else print(${valX}, ${ctx.y}, ${font}, OLED_WHITE, ${offRef});`);
 			lines.push(`    }`);
 		} else {
-			// prefix style
 			const prefixIdx = addString(ctx, prefix);
 			const prefixRef = `${ctx.stringArrayName}[${prefixIdx}]`;
 			lines.push(`    if(${ctx.cursorVar} == ${ctx.cursorIndex}) print(${ctx.x}, ${ctx.y}, ${font}, OLED_WHITE, ${prefixRef});`);
-			lines.push(`    print(${labelX}, ${ctx.y}, ${font}, OLED_WHITE, ${labelRef});`);
+			if (label) lines.push(`    print(${labelX}, ${ctx.y}, ${font}, OLED_WHITE, ${labelRef});`);
 			lines.push(`    if(${boundVar}) print(${valX}, ${ctx.y}, ${font}, OLED_WHITE, ${onRef});`);
 			lines.push(`    else print(${valX}, ${ctx.y}, ${font}, OLED_WHITE, ${offRef});`);
 		}

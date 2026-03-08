@@ -202,12 +202,34 @@ function compositePixelArts(
 		}
 	}
 
-	// Pack into GPC const image format (row-major MSB-first, width-aligned)
+	// Tight-crop to actual pixel content to minimize image size and draw time
+	let contentMinX = w, contentMinY = h, contentMaxX = 0, contentMaxY = 0;
+	for (let py = 0; py < h; py++) {
+		for (let px = 0; px < w; px++) {
+			const byteIdx = py * rowBytes + Math.floor(px / 8);
+			const bitIdx = 7 - (px % 8);
+			if (buffer[byteIdx] & (1 << bitIdx)) {
+				contentMinX = Math.min(contentMinX, px);
+				contentMinY = Math.min(contentMinY, py);
+				contentMaxX = Math.max(contentMaxX, px + 1);
+				contentMaxY = Math.max(contentMaxY, py + 1);
+			}
+		}
+	}
+
+	if (contentMaxX <= contentMinX || contentMaxY <= contentMinY) return null;
+
+	const cropX = minX + contentMinX;
+	const cropY = minY + contentMinY;
+	const cropW = contentMaxX - contentMinX;
+	const cropH = contentMaxY - contentMinY;
+
+	// Pack cropped region into GPC const image format (row-major MSB-first, width-aligned)
 	const packed: number[] = [];
 	let currentByte = 0;
 	let bit = 0;
-	for (let py = 0; py < h; py++) {
-		for (let px = 0; px < w; px++) {
+	for (let py = contentMinY; py < contentMaxY; py++) {
+		for (let px = contentMinX; px < contentMaxX; px++) {
 			currentByte <<= 1;
 			const byteIdx = py * rowBytes + Math.floor(px / 8);
 			const bitIdx = 7 - (px % 8);
@@ -236,7 +258,7 @@ function compositePixelArts(
 		hexRows.push(`    ${row}`);
 	}
 
-	return { x: minX, y: minY, w, h, hexRows };
+	return { x: cropX, y: cropY, w: cropW, h: cropH, hexRows };
 }
 
 export function generateFlowGpc(
@@ -286,6 +308,7 @@ export function generateFlowGpc(
 	const bm = graph.settings.buttonMapping;
 
 	const hasBackButton = nodes.some((n) => n.backButton);
+	const hasAnyBack = nodes.some((n) => n.backButton === '_ANY_BUTTON');
 
 	// Variables
 	lines.push(`// ===== VARIABLES =====`);
@@ -297,6 +320,10 @@ export function generateFlowGpc(
 	if (hasBackButton) {
 		lines.push(`int FlowStateStack[8];`);
 		lines.push(`int FlowStackTop = 0;`);
+	}
+	if (hasAnyBack) {
+		lines.push(`int FlowAnyPressed;`);
+		lines.push(`int FlowAnyIdx;`);
 	}
 	lines.push(``);
 
@@ -382,6 +409,7 @@ export function generateFlowGpc(
 	const nodeSubNodeInputCode = new Map<string, string[]>();
 	const nodeStrings = new Map<string, string[]>();
 	const nodeImages = new Map<string, string[]>();
+	const nodesWithConditionalSubs = new Map<string, string[]>();
 
 	for (const node of sorted) {
 		if (node.subNodes.length === 0) continue;
@@ -395,18 +423,24 @@ export function generateFlowGpc(
 		let cursorIndex = 0;
 
 		// Collect pixel-art sub-nodes to merge into a single const image
-		const pixelArtSubs: { sub: SubNode; x: number; y: number }[] = [];
+		// Conditional pixel-arts need separate images since they can't be statically composited
+		const unconditionalPixelArts: { sub: SubNode; x: number; y: number }[] = [];
+		const conditionalPixelArts: { sub: SubNode; x: number; y: number }[] = [];
 		for (const sub of sortedSubs) {
 			if (sub.type === 'pixel-art') {
 				const pixelY = computeSubNodePixelY(node, sub);
 				const pixelX = sub.position === 'absolute' ? (sub.x ?? 0) : node.stackOffsetX;
-				pixelArtSubs.push({ sub, x: pixelX, y: pixelY });
+				if (sub.condition?.variable) {
+					conditionalPixelArts.push({ sub, x: pixelX, y: pixelY });
+				} else {
+					unconditionalPixelArts.push({ sub, x: pixelX, y: pixelY });
+				}
 			}
 		}
 
-		// Merge pixel-art sub-nodes into one composite image
-		if (pixelArtSubs.length > 0) {
-			const composited = compositePixelArts(pixelArtSubs);
+		// Merge unconditional pixel-art sub-nodes into one composite image
+		if (unconditionalPixelArts.length > 0) {
+			const composited = compositePixelArts(unconditionalPixelArts);
 			if (composited) {
 				const imageName = `Flow_${safeName}_img${images.length}`;
 				images.push(
@@ -418,7 +452,23 @@ export function generateFlowGpc(
 			}
 		}
 
-		const pixelArtIds = new Set(pixelArtSubs.map((p) => p.sub.id));
+		// Emit conditional pixel-art sub-nodes as separate images with if() guards
+		for (const { sub, x, y } of conditionalPixelArts) {
+			const composited = compositePixelArts([{ sub, x, y }]);
+			if (composited) {
+				const imageName = `Flow_${safeName}_img${images.length}`;
+				images.push(
+					`const image ${imageName} = {${composited.w}, ${composited.h},\n${composited.hexRows.join(',\n')}\n};`
+				);
+				const cond = sub.condition!;
+				const condVar = profileVar(cond.variable);
+				codeLines.push(
+					`    // Pixel Art: ${sub.label} (conditional)\n    if(${condVar} ${cond.comparison} ${cond.value}) { image_oled(${composited.x}, ${composited.y}, TRUE, TRUE, ${imageName}[0]); }`
+				);
+			}
+		}
+
+		const pixelArtIds = new Set([...unconditionalPixelArts, ...conditionalPixelArts].map((p) => p.sub.id));
 
 		for (const sub of sortedSubs) {
 			if (pixelArtIds.has(sub.id)) continue; // already handled above
@@ -442,17 +492,34 @@ export function generateFlowGpc(
 				images,
 			};
 
-			const configWithLabel = { ...sub.config, label: sub.label };
+			const configWithLabel = { ...sub.config, label: sub.displayText ?? sub.label };
 			const code = def.generateGpc(configWithLabel, ctx);
 			if (code.trim()) {
-				codeLines.push(code);
+				// Wrap in condition guard if subnode has a condition
+				if (sub.condition?.variable) {
+					const cond = sub.condition;
+					const condVar = profileVar(cond.variable);
+					codeLines.push(`    if(${condVar} ${cond.comparison} ${cond.value}) {`);
+					codeLines.push(code.replace(/^/gm, '    '));
+					codeLines.push(`    }`);
+				} else {
+					codeLines.push(code);
+				}
 			}
 
 			// Collect input-handling code (runs every cycle, separate from rendering)
 			if (def.generateGpcInput) {
 				const inputCode = def.generateGpcInput(configWithLabel, ctx);
 				if (inputCode.trim()) {
-					inputLines.push(inputCode);
+					if (sub.condition?.variable) {
+						const cond = sub.condition;
+						const condVar = profileVar(cond.variable);
+						inputLines.push(`    if(${condVar} ${cond.comparison} ${cond.value}) {`);
+						inputLines.push(inputCode.replace(/^/gm, '    '));
+						inputLines.push(`    }`);
+					} else {
+						inputLines.push(inputCode);
+					}
 				}
 			}
 
@@ -463,6 +530,27 @@ export function generateFlowGpc(
 		nodeSubNodeInputCode.set(node.id, inputLines);
 		nodeStrings.set(node.id, strings);
 		nodeImages.set(node.id, images);
+		const condVars = new Set<string>();
+		for (const s of sortedSubs) {
+			if (s.condition?.variable) condVars.add(profileVar(s.condition.variable));
+		}
+		if (condVars.size > 0) {
+			nodesWithConditionalSubs.set(node.id, [...condVars]);
+		}
+	}
+
+	// Emit shadow variables for conditional sub-node change detection
+	const allCondVarNames = new Set<string>();
+	for (const vars of nodesWithConditionalSubs.values()) {
+		for (const cv of vars) allCondVarNames.add(cv);
+	}
+	if (allCondVarNames.size > 0) {
+		lines.push(`// Conditional sub-node tracking`);
+		for (const cv of allCondVarNames) {
+			const prevVar = `_prev_${cv.replace(/\[.*\]/, '')}`;
+			lines.push(`int ${prevVar};`);
+		}
+		lines.push(``);
 	}
 
 	// Emit const string[] declarations for each node that has text
@@ -597,14 +685,24 @@ export function generateFlowGpc(
 				}
 			}
 
+			// Detect condition variable changes → set FlowRedraw
+			const condVars = nodesWithConditionalSubs.get(node.id);
+			if (condVars && condVars.length > 0) {
+				lines.push(``);
+				lines.push(`    // Check if conditional variables changed`);
+				for (const cv of condVars) {
+					const prevVar = `_prev_${cv.replace(/\[.*\]/, '')}`;
+					lines.push(`    if(${cv} != ${prevVar}) { ${prevVar} = ${cv}; FlowRedraw = TRUE; }`);
+				}
+			}
+
 			// Rendering (only when dirty)
 			lines.push(``);
-			lines.push(`    // Render (only when state changes or input received)`);
+			lines.push(`    // Render`);
 			lines.push(`    if(FlowRedraw) {`);
 			lines.push(`        FlowRedraw = FALSE;`);
 			lines.push(`        cls_oled(OLED_BLACK);`);
 
-			// Use pre-generated sub-node code (collected during string pass)
 			const subCode = nodeSubNodeCode.get(node.id);
 			if (subCode) {
 				for (const code of subCode) {
@@ -643,8 +741,18 @@ export function generateFlowGpc(
 		// Back button: pop state stack to return to caller
 		if (node.backButton) {
 			lines.push(``);
-			lines.push(`    // Back button`);
-			lines.push(`    if(event_press(${node.backButton}) && FlowStackTop > 0) {`);
+			if (node.backButton === '_ANY_BUTTON') {
+				// Any button press triggers back navigation
+				lines.push(`    // Back (any button)`);
+				lines.push(`    FlowAnyPressed = FALSE;`);
+				lines.push(`    for(FlowAnyIdx = 0; FlowAnyIdx <= 24; FlowAnyIdx++) {`);
+				lines.push(`        if(event_press(FlowAnyIdx)) { FlowAnyPressed = TRUE; }`);
+				lines.push(`    }`);
+				lines.push(`    if(FlowAnyPressed && FlowStackTop > 0) {`);
+			} else {
+				lines.push(`    // Back button`);
+				lines.push(`    if(event_press(${node.backButton}) && FlowStackTop > 0) {`);
+			}
 			if (node.onExit.trim()) {
 				for (const line of node.onExit.trim().split('\n')) {
 					lines.push(`        ${line.trim()}`);

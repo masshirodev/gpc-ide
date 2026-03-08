@@ -1,5 +1,6 @@
 import type { FlowGraph, FlowProject, SubNode } from '$lib/types/flow';
 import { createEmptyFlowGraph } from '$lib/types/flow';
+import { parseKeyboardMappings } from '$lib/utils/keyboard-parser';
 
 /**
  * Maps v1 widget IDs to v2 sub-node types and style configs.
@@ -130,4 +131,22 @@ export function migrateFlowGraphV1toV2(graph: FlowGraph): FlowGraph {
 	}
 
 	return migrated;
+}
+
+/**
+ * Migrates keyboard module nodes from comboCode-based mappings to structured keyboardMappings.
+ * Parses the ApplyKeyboard() function from comboCode and stores the result as keyboardMappings[].
+ * Clears comboCode after migration so code is generated from data at build time.
+ */
+export function migrateKeyboardMappings(graph: FlowGraph): FlowGraph {
+	for (const node of graph.nodes) {
+		const md = node.moduleData;
+		if (!md || md.moduleId !== 'keyboard') continue;
+		if (md.keyboardMappings !== undefined) continue; // already migrated
+
+		const mappings = parseKeyboardMappings(md.comboCode);
+		md.keyboardMappings = mappings;
+		md.comboCode = '';
+	}
+	return graph;
 }

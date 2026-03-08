@@ -13,7 +13,8 @@ export type FlowNodeType =
 	| 'submenu'
 	| 'custom'
 	| 'screensaver'
-	| 'module';
+	| 'module'
+	| 'debug';
 
 export type FlowVariableType = 'int' | 'int8' | 'int16' | 'int32' | 'string';
 
@@ -34,6 +35,12 @@ export type SubNodeType =
 	| 'blank'
 	| 'custom';
 
+export interface SubNodeCondition {
+	variable: string;
+	comparison: '==' | '!=' | '>' | '<' | '>=' | '<=';
+	value: number;
+}
+
 export interface SubNode {
 	id: string;
 	type: SubNodeType;
@@ -47,6 +54,10 @@ export interface SubNode {
 	renderCode?: string;
 	interactCode?: string;
 	boundVariable?: string;
+	/** When set, this sub-node only renders when the condition is met */
+	condition?: SubNodeCondition;
+	/** Text rendered on the OLED. When empty, falls back to label. */
+	displayText?: string;
 }
 
 export interface SubNodeParam {
@@ -158,8 +169,37 @@ export interface ModuleNodeData {
 	needsWeapondata: boolean;
 	/** Weapon names for weapondata modules — generates Weapons[] array and WEAPON_COUNT */
 	weaponNames?: string[];
+	/** Per-weapon recoil values — flat array [V0, H0, V1, H1, ...] indexed by weapon order */
+	weaponRecoilValues?: number[];
+	/** Per-weapon ADT profiles for ADP (Weapon Detection) module */
+	adpProfiles?: WeaponADTProfile[];
 	/** When true, mainCode runs without enable variable guard and no Status toggle is created */
 	alwaysActive?: boolean;
+	/** Structured keyboard mappings for keyboard module — converted to GPC code at build time */
+	keyboardMappings?: import('$lib/utils/keyboard-parser').KeyMapping[];
+}
+
+/** ADT signature for a single weapon used by the ADP weapon detection module.
+ *  Maps to ADP_Values[][] row: Mode, Start, F1, F2, StrLow, StrMid, StrHigh, 0, 0, Freq, 0 */
+export interface WeaponADTProfile {
+	/** Index into the Weapons[] array (1-based, 0 = auto/none) */
+	weaponIndex: number;
+	/** PS5_ADT_MODE value */
+	mode: number;
+	/** PS5_ADT_START value */
+	start: number;
+	/** PS5_ADT_FORCE1 value */
+	force1: number;
+	/** PS5_ADT_FORCE2 value */
+	force2: number;
+	/** PS5_ADT_STR_LOW value */
+	strLow: number;
+	/** PS5_ADT_STR_MID value */
+	strMid: number;
+	/** PS5_ADT_STR_HIGH value */
+	strHigh: number;
+	/** PS5_ADT_FREQ value */
+	freq: number;
 }
 
 export interface FlowVariable {
@@ -466,7 +506,7 @@ export function createFlowNode(
 		stackOffsetY: 0,
 	};
 	// Menu-like nodes default to PS5_CIRCLE as back button
-	if (type === 'menu' || type === 'submenu' || type === 'home' || type === 'intro') {
+	if (type === 'menu' || type === 'submenu' || type === 'home' || type === 'intro' || type === 'debug') {
 		node.backButton = 'PS5_CIRCLE';
 	}
 	return node;
@@ -516,6 +556,7 @@ export const NODE_COLORS: Record<FlowNodeType, string> = {
 	custom: '#6b7280',
 	screensaver: '#06b6d4',
 	module: '#ef4444',
+	debug: '#f59e0b',
 };
 
 export const NODE_LABELS: Record<FlowNodeType, string> = {
@@ -526,4 +567,5 @@ export const NODE_LABELS: Record<FlowNodeType, string> = {
 	custom: 'Custom',
 	screensaver: 'Screensaver',
 	module: 'Module',
+	debug: 'Debug',
 };

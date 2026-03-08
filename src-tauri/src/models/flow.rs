@@ -42,7 +42,7 @@ pub struct FlowGraph {
 #[serde(rename_all = "camelCase")]
 pub struct FlowNode {
     pub id: String,
-    pub r#type: String, // intro, home, menu, submenu, custom, screensaver
+    pub r#type: String, // intro, home, menu, submenu, custom, screensaver, debug
     pub label: String,
     pub position: Position,
     #[serde(default)]
@@ -122,9 +122,61 @@ pub struct ModuleNodeData {
     pub needs_weapondata: bool,
     #[serde(default)]
     pub weapon_names: Option<Vec<String>>,
+    /// Per-weapon recoil values — flat array [V0, H0, V1, H1, ...] indexed by weapon order
+    #[serde(default)]
+    pub weapon_recoil_values: Option<Vec<i32>>,
+    /// Per-weapon ADT profiles for ADP (Weapon Detection) module
+    #[serde(default)]
+    pub adp_profiles: Option<Vec<WeaponADTProfile>>,
     /// When true, mainCode runs without enable variable guard
     #[serde(default)]
     pub always_active: Option<bool>,
+    /// Structured keyboard mappings for keyboard module — converted to GPC code at build time
+    #[serde(default)]
+    pub keyboard_mappings: Option<Vec<KeyMapping>>,
+}
+
+/// ADT signature for a single weapon used by the ADP weapon detection module.
+/// Maps to ADP_Values[][] row: Mode, Start, F1, F2, StrLow, StrMid, StrHigh, 0, 0, Freq, 0
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WeaponADTProfile {
+    pub weapon_index: i32,
+    #[serde(default)]
+    pub mode: i32,
+    #[serde(default)]
+    pub start: i32,
+    #[serde(default)]
+    pub force1: i32,
+    #[serde(default)]
+    pub force2: i32,
+    #[serde(default)]
+    pub str_low: i32,
+    #[serde(default)]
+    pub str_mid: i32,
+    #[serde(default)]
+    pub str_high: i32,
+    #[serde(default)]
+    pub freq: i32,
+}
+
+/// A keyboard-to-controller mapping entry
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct KeyMapping {
+    pub source: String,
+    #[serde(default)]
+    pub source_combo: Option<String>,
+    pub target: String,
+    #[serde(default = "default_mapping_value")]
+    pub value: i32,
+    pub r#type: String, // "keyboard" | "controller"
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+}
+
+fn default_mapping_value() -> i32 {
+    100
 }
 
 /// A configurable option on a module node
@@ -238,6 +290,15 @@ pub struct WidgetPlacement {
     pub bound_variable: Option<String>,
 }
 
+/// Condition for conditional sub-node rendering
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SubNodeCondition {
+    pub variable: String,
+    pub comparison: String, // "==" | "!=" | ">" | "<" | ">=" | "<="
+    pub value: i32,
+}
+
 /// A sub-node within a flow node (v2)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -264,6 +325,12 @@ pub struct SubNode {
     pub interact_code: Option<String>,
     #[serde(default)]
     pub bound_variable: Option<String>,
+    /// When set, this sub-node only renders when the condition is met
+    #[serde(default)]
+    pub condition: Option<SubNodeCondition>,
+    /// Text rendered on the OLED. When empty, falls back to label.
+    #[serde(default)]
+    pub display_text: Option<String>,
 }
 
 fn default_stack() -> String {

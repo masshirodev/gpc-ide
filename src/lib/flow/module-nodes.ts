@@ -65,6 +65,7 @@ export function createModuleNode(
 		options,
 		extraVars: { ...moduleDef.extra_vars },
 		params: Object.keys(params).length > 0 ? params : undefined,
+		keyboardMappings: moduleDef.id === 'keyboard' ? [] : undefined,
 		quickToggle:
 			moduleDef.quick_toggle && moduleDef.quick_toggle.length > 0
 				? [...moduleDef.quick_toggle]

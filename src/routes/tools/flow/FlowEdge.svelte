@@ -9,10 +9,20 @@
 		selected: boolean;
 		sourceExpanded: boolean;
 		targetExpanded: boolean;
+		/** Index among sibling node-level edges from the same source (for vertical spread) */
+		sourceEdgeIndex?: number;
+		/** Total sibling node-level edges from the same source */
+		sourceEdgeCount?: number;
+		/** Index among sibling edges arriving at the same target (for vertical spread) */
+		targetEdgeIndex?: number;
+		/** Total sibling edges arriving at the same target */
+		targetEdgeCount?: number;
 		onSelect: (edgeId: string) => void;
 	}
 
-	let { edge, sourceNode, targetNode, selected, sourceExpanded, targetExpanded, onSelect }: Props = $props();
+	const EDGE_SPREAD = 8; // pixels between spread edges
+
+	let { edge, sourceNode, targetNode, selected, sourceExpanded, targetExpanded, sourceEdgeIndex = 0, sourceEdgeCount = 1, targetEdgeIndex = 0, targetEdgeCount = 1, onSelect }: Props = $props();
 
 	// Source: right side (output port), possibly on a sub-node row
 	let sourcePos = $derived(
@@ -24,9 +34,19 @@
 	);
 
 	let sx = $derived(sourcePos.x);
-	let sy = $derived(sourcePos.y);
+	// Spread node-level output edges vertically so they don't overlap
+	let sy = $derived(
+		sourcePos.y + (!edge.sourceSubNodeId && sourceEdgeCount > 1
+			? (sourceEdgeIndex - (sourceEdgeCount - 1) / 2) * EDGE_SPREAD
+			: 0)
+	);
 	let tx = $derived(targetPos.x);
-	let ty = $derived(targetPos.y);
+	// Spread incoming edges vertically so they don't overlap
+	let ty = $derived(
+		targetPos.y + (targetEdgeCount > 1
+			? (targetEdgeIndex - (targetEdgeCount - 1) / 2) * EDGE_SPREAD
+			: 0)
+	);
 
 	// Control points for cubic bezier
 	let dx = $derived(Math.abs(tx - sx));

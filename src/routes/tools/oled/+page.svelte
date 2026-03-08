@@ -25,6 +25,11 @@
 	const flowTransfer = getFlowOledTransfer();
 	let isFlowMode = $state(!!flowTransfer);
 
+	// Decode overlay pixels from sibling pixel-art subnodes
+	const overlayPixelBuffers: Uint8Array[] = (flowTransfer?.overlayPixels ?? [])
+		.map((b64) => { try { return base64ToPixels(b64); } catch { return null; } })
+		.filter((p): p is Uint8Array => p !== null);
+
 	// --- State ---
 	const initialId: string = flowTransfer?.scene?.id || (crypto.randomUUID() as string);
 	const initialPixels: Uint8Array = flowTransfer?.scene?.pixels
@@ -531,6 +536,7 @@
 					version={pixelVersion}
 					{textState}
 					{stampData}
+					overlayPixels={overlayPixelBuffers}
 					onBeforeDraw={handleBeforeDraw}
 					onDraw={handleDraw}
 					onTextOriginSet={handleTextOriginSet}

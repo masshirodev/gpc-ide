@@ -19,7 +19,7 @@ import {
 	createFlowEdge,
 	createSubNode,
 } from '$lib/types/flow';
-import { migrateFlowGraphV1toV2, ensureFlowProjectFlows } from '$lib/flow/migration';
+import { migrateFlowGraphV1toV2, ensureFlowProjectFlows, migrateKeyboardMappings } from '$lib/flow/migration';
 import { syncModuleMenus } from '$lib/flow/auto-link';
 import { getSubNodeDef } from '$lib/flow/subnodes/registry';
 
@@ -188,8 +188,8 @@ export function loadGraph(graph: FlowGraph, gamePath: string) {
 
 export function loadProject(project: FlowProject, gamePath: string) {
 	const ensured = ensureFlowProjectFlows(project);
-	// Migrate each flow graph to v2
-	ensured.flows = ensured.flows.map((f) => migrateFlowGraphV1toV2(f));
+	// Migrate each flow graph to v2, then migrate keyboard module data
+	ensured.flows = ensured.flows.map((f) => migrateKeyboardMappings(migrateFlowGraphV1toV2(f)));
 	state.project = ensured;
 	state.activeFlowType = 'menu';
 	state.gamePath = gamePath;

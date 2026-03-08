@@ -271,6 +271,8 @@ describe('codegen FlowRedraw', () => {
 		const g = oneNodeGraph((n) => {
 			// Legacy node with oledScene but no sub-nodes
 			n.oledScene = {
+				id: 'test',
+				name: 'test',
 				pixels: btoa(String.fromCharCode(...new Uint8Array(1024))),
 			};
 		});

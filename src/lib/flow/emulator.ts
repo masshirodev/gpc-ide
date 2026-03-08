@@ -62,6 +62,7 @@ export class FlowEmulator {
 				stateTimer: 0,
 				variables: new Map(),
 				cursorPositions: new Map(),
+				scrollOffsets: new Map(),
 				statePath: [],
 				inputLog: [],
 				frameCount: 0,
@@ -386,6 +387,26 @@ export class FlowEmulator {
 			const def = getSubNodeDef(sub.type);
 			if (!def) continue;
 
+			// Check condition — skip rendering if condition is not met
+			if (sub.condition?.variable) {
+				const rawVal = this.state.variables.get(sub.condition.variable) ?? 0;
+				const val = typeof rawVal === 'number' ? rawVal : 0;
+				const target = sub.condition.value;
+				let condMet = false;
+				switch (sub.condition.comparison) {
+					case '==': condMet = val === target; break;
+					case '!=': condMet = val !== target; break;
+					case '>': condMet = val > target; break;
+					case '<': condMet = val < target; break;
+					case '>=': condMet = val >= target; break;
+					case '<=': condMet = val <= target; break;
+				}
+				if (!condMet) {
+					if (sub.interactive) cursorIndex++;
+					continue;
+				}
+			}
+
 			// In window mode, skip interactive items outside the visible window
 			if (node.scrollMode === 'window' && sub.interactive) {
 				if (cursorIndex < scrollOffset || cursorIndex >= scrollOffset + visCount) {
@@ -419,7 +440,7 @@ export class FlowEmulator {
 			};
 
 			// Merge label into config for render
-			const configWithLabel = { ...sub.config, label: sub.label };
+			const configWithLabel = { ...sub.config, label: sub.displayText ?? sub.label };
 			def.render(configWithLabel, ctx);
 
 			if (sub.interactive) cursorIndex++;

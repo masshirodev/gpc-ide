@@ -21,13 +21,15 @@
 		version: number;
 		textState: TextState;
 		stampData?: StampData | null;
+		/** Other pixel-art subnodes from the same node, shown as a dim overlay */
+		overlayPixels?: Uint8Array[];
 		onBeforeDraw: () => void;
 		onDraw: (pixels: Uint8Array) => void;
 		onTextOriginSet: (x: number, y: number) => void;
 		onStampPlaced?: () => void;
 	}
 
-	let { pixels, tool, brush, filled, version, textState, stampData = null, onBeforeDraw, onDraw, onTextOriginSet, onStampPlaced }: Props = $props();
+	let { pixels, tool, brush, filled, version, textState, stampData = null, overlayPixels = [], onBeforeDraw, onDraw, onTextOriginSet, onStampPlaced }: Props = $props();
 
 	let canvas: HTMLCanvasElement;
 	let container: HTMLDivElement;
@@ -78,6 +80,20 @@
 		if (cellSize <= 0) return;
 
 		const displayPixels = previewPixels || pixels;
+
+		// Draw overlay pixels from sibling pixel-art subnodes (dim)
+		if (overlayPixels.length > 0) {
+			ctx.fillStyle = 'rgba(0, 180, 120, 0.2)';
+			for (const ovl of overlayPixels) {
+				for (let y = 0; y < OLED_HEIGHT; y++) {
+					for (let x = 0; x < OLED_WIDTH; x++) {
+						if (getPixel(ovl, x, y)) {
+							ctx.fillRect(offsetX + x * cellSize, offsetY + y * cellSize, cellSize, cellSize);
+						}
+					}
+				}
+			}
+		}
 
 		// Draw pixels
 		for (let y = 0; y < OLED_HEIGHT; y++) {

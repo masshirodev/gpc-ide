@@ -86,7 +86,7 @@
 	import { generateMergedFlowGpc } from '$lib/flow/codegen-merged';
 	import { mergeRecoilTable, parseWeaponNames } from '$lib/utils/recoil-parser';
 	import { parseDiffToLineChanges } from '$lib/utils/diff-parser';
-	import type { GitLineChange } from '$lib/components/editor/MonacoEditor.svelte';
+	import type { GitLineChange } from '$lib/utils/diff-parser';
 
 	// Extracted components
 	import DashboardView from '$lib/components/editor/DashboardView.svelte';
@@ -98,7 +98,7 @@
 	import HistoryPanel from '$lib/components/editor/HistoryPanel.svelte';
 	import GitPanel from '$lib/components/editor/GitPanel.svelte';
 	import { getDiagnosticsStore, getFileSeverityMap } from '$lib/stores/diagnostics.svelte';
-	import { getFlowStore } from '$lib/stores/flow.svelte';
+	import { getFlowStore, closeGraph } from '$lib/stores/flow.svelte';
 	import { getKeyCombo, matchesCombo } from '$lib/stores/keybindings.svelte';
 	import CommandPalette from '$lib/components/layout/CommandPalette.svelte';
 	import type { Command } from '$lib/components/layout/CommandPalette.svelte';
@@ -729,6 +729,10 @@
 		}
 		try {
 			await deleteGame(game.path);
+			const flowStore = getFlowStore();
+			if (flowStore.gamePath === game.path) {
+				closeGraph();
+			}
 			if (store.selectedGame?.path === game.path) {
 				clearSelection();
 			}
@@ -806,8 +810,8 @@
 			});
 		}
 
-		// Handle return from OLED editor with flow data — switch to flow tab
-		if (getFlowOledTransfer()) {
+		// Handle return from OLED editor or keyboard mapper with flow data — switch to flow tab
+		if (getFlowOledTransfer() || getKeyboardTransfer()?.nodeId) {
 			activeTab = 'flow';
 		}
 

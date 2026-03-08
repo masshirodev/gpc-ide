@@ -55,7 +55,7 @@
 
 	let showAddMenu = $state(false);
 
-	const menuNodeTypes: FlowNodeType[] = ['intro', 'home', 'menu', 'submenu', 'custom', 'screensaver'];
+	const menuNodeTypes: FlowNodeType[] = ['intro', 'home', 'menu', 'submenu', 'custom', 'screensaver', 'debug'];
 </script>
 
 <div class="flex items-center gap-1 border-b border-zinc-800 bg-zinc-900 px-3 py-1.5">

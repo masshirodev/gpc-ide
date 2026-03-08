@@ -5,6 +5,8 @@
 	import ProfilePanel from './ProfilePanel.svelte';
 	import ChunkLibrary from './ChunkLibrary.svelte';
 	import ChunkSaveModal from './ChunkSaveModal.svelte';
+	import WeaponDataModal from './WeaponDataModal.svelte';
+	import WeaponDetectionModal from './WeaponDetectionModal.svelte';
 	import FlowEmulator from './FlowEmulator.svelte';
 	import { addToast } from '$lib/stores/toast.svelte';
 	import { getSettings } from '$lib/stores/settings.svelte';
@@ -68,11 +70,10 @@
 	import { createModuleNode } from '$lib/flow/module-nodes';
 	import { getFlowOledTransfer, setFlowOledTransfer, clearFlowOledTransfer } from '$lib/stores/flow-transfer.svelte';
 	import { getKeyboardTransfer, clearKeyboardTransfer } from '$lib/stores/keyboard-transfer.svelte';
-	import { serializeKeyboardMappings } from '$lib/utils/keyboard-parser';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { onMount, untrack } from 'svelte';
-	import type { FlowNodeType, FlowChunk, FlowType } from '$lib/types/flow';
+	import type { FlowNodeType, FlowChunk, FlowType, ModuleNodeData } from '$lib/types/flow';
 	import { createFlowNode } from '$lib/types/flow';
 	import type { ModuleSummary } from '$lib/types/module';
 
@@ -115,6 +116,20 @@
 	let chunkRefreshKey = $state(0);
 	let showEmulator = $state(false);
 	let showProfiles = $state(false);
+	let weaponDataModalOpen = $state(false);
+	let weaponDetectionModalOpen = $state(false);
+
+	function handleModuleDataSave(updates: Partial<ModuleNodeData>) {
+		if (!selectedNode?.moduleData) return;
+		const md = { ...selectedNode.moduleData, ...updates };
+		updateNode(selectedNode.id, { moduleData: md });
+	}
+
+	let weaponNamesFromData = $derived.by(() => {
+		const gameplayNodes = flowStore.project?.flows.find((f) => f.flowType === 'gameplay')?.nodes ?? [];
+		const wdNode = gameplayNodes.find((n) => n.moduleData?.moduleId === 'weapondata');
+		return wdNode?.moduleData?.weaponNames ?? [];
+	});
 	let availableModules = $state<ModuleSummary[]>([]);
 	let building = $state(false);
 
@@ -185,10 +200,8 @@
 			if (kbTransfer?.nodeId) {
 				const node = graph.nodes.find((n) => n.id === kbTransfer.nodeId);
 				if (node?.moduleData) {
-					const skeleton = `function ApplyKeyboard() {\n    // No mappings configured\n}`;
-					const newComboCode = serializeKeyboardMappings(skeleton, kbTransfer.mappings);
 					updateNode(node.id, {
-						moduleData: { ...node.moduleData, comboCode: newComboCode }
+						moduleData: { ...node.moduleData, keyboardMappings: [...kbTransfer.mappings] }
 					});
 					addToast(`Keyboard mappings updated (${kbTransfer.mappings.length} mappings)`, 'success');
 				}
@@ -421,6 +434,17 @@
 			? (pixelSubNode.config.scene as { id?: string; name?: string; pixels: string } | null)
 			: null;
 
+		// Collect other pixel-art subnodes' pixels for overlay preview
+		const overlayPixels: string[] = [];
+		if (pixelSubNode) {
+			for (const sub of node.subNodes) {
+				if (sub.type === 'pixel-art' && sub.id !== pixelSubNode.id) {
+					const scene = sub.config.scene as { pixels?: string } | null;
+					if (scene?.pixels) overlayPixels.push(scene.pixels);
+				}
+			}
+		}
+
 		setFlowOledTransfer({
 			nodeId,
 			subNodeId: pixelSubNode?.id,
@@ -433,6 +457,7 @@
 					},
 			returnTo: flowStore.gamePath,
 			returnPath: page.url.pathname,
+			overlayPixels: overlayPixels.length > 0 ? overlayPixels : undefined,
 		});
 		goto('/tools/oled');
 	}
@@ -662,6 +687,8 @@
 						onUpdateSubNode={updateSubNode}
 						onReorderSubNodes={reorderSubNodes}
 						onSelectSubNode={selectSubNode}
+						onOpenWeaponData={() => { weaponDataModalOpen = true; }}
+						onOpenWeaponDetection={() => { weaponDetectionModalOpen = true; }}
 					/>
 				{/if}
 			</div>
@@ -691,6 +718,21 @@
 </div>
 
 <ChunkSaveModal open={showChunkSave} node={selectedNode} onclose={() => (showChunkSave = false)} onsaved={() => chunkRefreshKey++} />
+
+<WeaponDataModal
+	open={weaponDataModalOpen}
+	moduleData={selectedNode?.moduleData ?? null}
+	onclose={() => { weaponDataModalOpen = false; }}
+	onsave={handleModuleDataSave}
+/>
+
+<WeaponDetectionModal
+	open={weaponDetectionModalOpen}
+	moduleData={selectedNode?.moduleData ?? null}
+	weaponNames={weaponNamesFromData}
+	onclose={() => { weaponDetectionModalOpen = false; }}
+	onsave={handleModuleDataSave}
+/>
 
 {#if flowStore.graph}
 	<FlowEmulator graph={flowStore.graph} open={showEmulator} onclose={() => (showEmulator = false)} />

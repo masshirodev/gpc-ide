@@ -75,6 +75,38 @@
 		return ids;
 	});
 
+	// Compute edge spread indices: for each edge, its index among siblings at the same source/target
+	let edgeSpread = $derived.by(() => {
+		const sourceGroups = new Map<string, string[]>(); // sourceKey -> edgeIds
+		const targetGroups = new Map<string, string[]>(); // targetNodeId -> edgeIds
+		for (const edge of graph.edges) {
+			// Source grouping: node-level edges (no sub-node) from same source
+			const srcKey = edge.sourceSubNodeId
+				? `${edge.sourceNodeId}:${edge.sourceSubNodeId}`
+				: edge.sourceNodeId;
+			if (!sourceGroups.has(srcKey)) sourceGroups.set(srcKey, []);
+			sourceGroups.get(srcKey)!.push(edge.id);
+			// Target grouping: all edges to same target
+			if (!targetGroups.has(edge.targetNodeId)) targetGroups.set(edge.targetNodeId, []);
+			targetGroups.get(edge.targetNodeId)!.push(edge.id);
+		}
+		const result = new Map<string, { srcIdx: number; srcCount: number; tgtIdx: number; tgtCount: number }>();
+		for (const edge of graph.edges) {
+			const srcKey = edge.sourceSubNodeId
+				? `${edge.sourceNodeId}:${edge.sourceSubNodeId}`
+				: edge.sourceNodeId;
+			const srcGroup = sourceGroups.get(srcKey)!;
+			const tgtGroup = targetGroups.get(edge.targetNodeId)!;
+			result.set(edge.id, {
+				srcIdx: srcGroup.indexOf(edge.id),
+				srcCount: srcGroup.length,
+				tgtIdx: tgtGroup.indexOf(edge.id),
+				tgtCount: tgtGroup.length,
+			});
+		}
+		return result;
+	});
+
 	let svgEl: SVGSVGElement | undefined = $state();
 	let containerEl: HTMLDivElement | undefined = $state();
 	let containerWidth = $state(800);
@@ -337,6 +369,7 @@
 		{#each graph.edges as edge (edge.id)}
 			{@const sourceNode = graph.nodes.find((n) => n.id === edge.sourceNodeId)}
 			{@const targetNode = graph.nodes.find((n) => n.id === edge.targetNodeId)}
+			{@const spread = edgeSpread.get(edge.id)}
 			{#if sourceNode && targetNode}
 				<FlowEdge
 					{edge}
@@ -345,6 +378,10 @@
 					selected={selectedEdgeId === edge.id}
 					sourceExpanded={expandedNodes.has(sourceNode.id)}
 					targetExpanded={expandedNodes.has(targetNode.id)}
+					sourceEdgeIndex={spread?.srcIdx ?? 0}
+					sourceEdgeCount={spread?.srcCount ?? 1}
+					targetEdgeIndex={spread?.tgtIdx ?? 0}
+					targetEdgeCount={spread?.tgtCount ?? 1}
 					onSelect={(id) => onSelectEdge(id)}
 				/>
 			{/if}

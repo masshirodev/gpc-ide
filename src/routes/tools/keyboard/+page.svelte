@@ -42,8 +42,13 @@
 	let mode = $state<'idle' | 'select_target' | 'select_source'>('idle');
 	let pendingTarget = $state<string | null>(null);
 
-	let sourceTab = $state<'keyboard' | 'controller'>('keyboard');
+	let sourceTab = $state<'keyboard' | 'controller' | 'combo'>('keyboard');
 	let sourceFilter = $state('');
+
+	// Combo mapping state
+	let comboName = $state('');
+	let comboKeyTrigger = $state('');
+	let comboModeSelect = $state<'hold' | 'press'>('hold');
 
 	let hasTransfer = $derived(returnTo !== null || returnPath !== undefined);
 
@@ -74,10 +79,14 @@
 		goto(returnPath ?? '/');
 	}
 
+	let searchInputEl = $state<HTMLInputElement | null>(null);
+
 	function handleTargetClick(buttonName: string) {
 		pendingTarget = buttonName;
 		mode = 'select_source';
 		sourceFilter = '';
+		// Auto-focus the search input after state update
+		requestAnimationFrame(() => searchInputEl?.focus());
 	}
 
 	function handleSourceClick(sourceId: string, type: 'keyboard' | 'controller') {
@@ -97,6 +106,7 @@
 		mappings = [...mappings, newMapping];
 		pendingTarget = null;
 		mode = 'idle';
+		sourceFilter = '';
 	}
 
 	function handleRemove(idx: number) {
@@ -116,28 +126,56 @@
 		mode = 'idle';
 	}
 
+	function handleAddCombo() {
+		const trigger = comboKeyTrigger || pendingTarget;
+		if (!comboName.trim() || !trigger) return;
+
+		const newMapping: KeyMapping = {
+			source: trigger,
+			target: comboName.trim(),
+			value: 0,
+			type: 'combo',
+			enabled: true,
+			comboMode: comboModeSelect
+		};
+
+		mappings = [...mappings, newMapping];
+		comboName = '';
+		comboKeyTrigger = '';
+		pendingTarget = null;
+		mode = 'idle';
+	}
+
 	function getMappingsForButton(buttonName: string): KeyMapping[] {
-		return mappings.filter((m) => m.target === buttonName);
+		return mappings.filter(
+			(m) => m.target === buttonName || (m.type === 'combo' && m.source === buttonName)
+		);
 	}
 
 	function getButtonColor(buttonName: string): string {
 		const btnMappings = getMappingsForButton(buttonName);
 		if (selectedTarget === buttonName) return 'bg-blue-600 text-white border-blue-400';
 		if (btnMappings.length === 0) return 'bg-zinc-700/80 text-zinc-400 border-zinc-600';
+		if (btnMappings.some((m) => m.type === 'combo'))
+			return 'bg-purple-900/60 text-purple-300 border-purple-600';
 		return 'bg-emerald-900/60 text-emerald-300 border-emerald-600';
 	}
 
 	let selectedTarget = $derived(pendingTarget);
 
 	let currentSourceList = $derived.by(() => {
+		if (sourceTab === 'combo') return [];
 		let list =
 			sourceTab === 'keyboard' ? KEYBOARD_KEYS : getControllerButtons(inputConsole);
 
 		if (sourceFilter.trim()) {
 			const q = sourceFilter.toLowerCase();
-			list = list.filter(
-				(s) => s.label.toLowerCase().includes(q) || s.id.toLowerCase().includes(q)
-			);
+			list = list.filter((s) => {
+				if (s.label.toLowerCase().includes(q)) return true;
+				// Strip common prefixes (KEY_, PS5_, XB1_, etc.) so single chars don't match everything
+				const stripped = s.id.replace(/^[A-Z0-9]+_/, '').toLowerCase();
+				return stripped.includes(q);
+			});
 		}
 		return list;
 	});
@@ -212,7 +250,7 @@
 					class="rounded bg-emerald-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-emerald-500"
 					onclick={handleReturnToEditor}
 				>
-					{returnPath === '/tools/flow' ? 'Return to Flow' : 'Return to Editor'}
+					{returnPath?.includes('flow') ? 'Return to Flow' : 'Return to Editor'}
 				</button>
 			{/if}
 		</div>
@@ -233,14 +271,16 @@
 				</div>
 				<!-- Tabs -->
 				<div class="mb-2 flex gap-1">
-					{#each ['keyboard', 'controller'] as tab}
+					{#each ['keyboard', 'controller', 'combo'] as tab}
 						<button
 							class="flex-1 rounded px-2 py-1 text-xs font-medium {sourceTab === tab
-								? 'bg-zinc-700 text-zinc-200'
+								? tab === 'combo'
+									? 'bg-purple-700 text-purple-100'
+									: 'bg-zinc-700 text-zinc-200'
 								: 'text-zinc-500 hover:text-zinc-300'}"
 							onclick={() => (sourceTab = tab as typeof sourceTab)}
 						>
-							{tab === 'keyboard' ? 'Keys' : 'Controller'}
+							{tab === 'keyboard' ? 'Keys' : tab === 'controller' ? 'Controller' : 'Combo'}
 						</button>
 					{/each}
 				</div>
@@ -256,29 +296,87 @@
 						</select>
 					</div>
 				{/if}
-				<input
-					type="text"
-					placeholder="Filter..."
-					bind:value={sourceFilter}
-					class="w-full rounded border border-zinc-700 bg-zinc-800 px-2 py-1 text-xs text-zinc-200 placeholder-zinc-500 focus:border-emerald-500 focus:outline-none"
-				/>
+				{#if sourceTab !== 'combo'}
+					<input
+						type="text"
+						placeholder="Filter..."
+						bind:value={sourceFilter}
+						bind:this={searchInputEl}
+						class="w-full rounded border border-zinc-700 bg-zinc-800 px-2 py-1 text-xs text-zinc-200 placeholder-zinc-500 focus:border-emerald-500 focus:outline-none"
+					/>
+				{/if}
 			</div>
 			<div class="flex-1 overflow-y-auto p-2">
-				<div class="grid grid-cols-4 gap-1">
-					{#each currentSourceList as source}
+				{#if sourceTab === 'combo'}
+					<!-- Combo mapping form -->
+					<div class="space-y-3 p-1">
+						<div>
+							<label class="mb-1 block text-[10px] font-medium uppercase tracking-wider text-zinc-500">Combo Name</label>
+							<input
+								type="text"
+								placeholder="e.g. ExecuteUltimate"
+								bind:value={comboName}
+								class="w-full rounded border border-zinc-700 bg-zinc-800 px-2 py-1.5 text-xs text-zinc-200 placeholder-zinc-500 focus:border-purple-500 focus:outline-none"
+							/>
+						</div>
+						<div>
+							<label class="mb-1 block text-[10px] font-medium uppercase tracking-wider text-zinc-500">Trigger</label>
+							{#if pendingTarget}
+								<div class="flex items-center gap-1.5 rounded border border-zinc-700 bg-zinc-800 px-2 py-1.5 text-xs text-zinc-300">
+									<span class="rounded bg-amber-900/50 px-1 py-0.5 text-amber-400">{getButtonLabel(pendingTarget)}</span>
+									<button class="ml-auto text-[10px] text-zinc-500 hover:text-zinc-300" onclick={() => (pendingTarget = null)}>Clear</button>
+								</div>
+							{:else}
+								<p class="text-[10px] text-zinc-500">Click a controller button on the diagram</p>
+							{/if}
+						</div>
+						<div>
+							<label class="mb-1 block text-[10px] font-medium uppercase tracking-wider text-zinc-500">Or Keyboard Key</label>
+							<select
+								class="w-full rounded border border-zinc-700 bg-zinc-800 px-2 py-1.5 text-xs text-zinc-300 focus:border-purple-500 focus:outline-none"
+								bind:value={comboKeyTrigger}
+							>
+								<option value="">-- None --</option>
+								{#each KEYBOARD_KEYS as key}
+									<option value={key.id}>{key.label}</option>
+								{/each}
+							</select>
+						</div>
+						<div>
+							<label class="mb-1 block text-[10px] font-medium uppercase tracking-wider text-zinc-500">Mode</label>
+							<select
+								class="w-full rounded border border-zinc-700 bg-zinc-800 px-2 py-1.5 text-xs text-zinc-300 focus:border-purple-500 focus:outline-none"
+								bind:value={comboModeSelect}
+							>
+								<option value="hold">Hold (combo_run + combo_stop)</option>
+								<option value="press">Press (combo_run only)</option>
+							</select>
+						</div>
 						<button
-							class="rounded border px-1 py-1.5 text-[10px] font-medium transition-colors {mode ===
-							'select_source'
-								? 'border-zinc-600 bg-zinc-800 text-zinc-300 hover:border-blue-400 hover:bg-blue-900/30'
-								: 'border-zinc-700 bg-zinc-800/50 text-zinc-500'}"
-							disabled={mode !== 'select_source'}
-							onclick={() => handleSourceClick(source.id, sourceTab)}
-							title={source.id}
+							class="w-full rounded bg-purple-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-purple-500 disabled:cursor-not-allowed disabled:opacity-40"
+							disabled={!comboName.trim() || (!pendingTarget && !comboKeyTrigger)}
+							onclick={handleAddCombo}
 						>
-							{source.label}
+							Add Combo Mapping
 						</button>
-					{/each}
-				</div>
+					</div>
+				{:else}
+					<div class="grid grid-cols-4 gap-1">
+						{#each currentSourceList as source (source.id)}
+							<button
+								class="rounded border px-1 py-1.5 text-[10px] font-medium transition-colors {mode ===
+								'select_source'
+									? 'border-zinc-600 bg-zinc-800 text-zinc-300 hover:border-blue-400 hover:bg-blue-900/30'
+									: 'border-zinc-700 bg-zinc-800/50 text-zinc-500'}"
+								disabled={mode !== 'select_source'}
+								onclick={() => handleSourceClick(source.id, sourceTab as 'keyboard' | 'controller')}
+								title={source.id}
+							>
+								{source.label}
+							</button>
+						{/each}
+					</div>
+				{/if}
 			</div>
 		</div>
 
@@ -334,7 +432,7 @@
 						<span>{getButtonLabel(btnName)}</span>
 						{#if btnMappings.length > 0}
 							<span class="text-[9px] opacity-75">
-								{btnMappings.map((m) => m.sourceCombo ? `${getButtonLabel(m.sourceCombo)}+${getButtonLabel(m.source)}` : getButtonLabel(m.source)).join(', ')}
+								{btnMappings.map((m) => m.type === 'combo' ? m.target : m.sourceCombo ? `${getButtonLabel(m.sourceCombo)}+${getButtonLabel(m.source)}` : getButtonLabel(m.source)).join(', ')}
 							</span>
 						{/if}
 					</button>
@@ -360,21 +458,32 @@
 								class:opacity-40={!mapping.enabled}
 							>
 								<div class="flex items-center gap-1.5 text-xs">
-									{#if mapping.sourceCombo}
-										<span class="rounded bg-purple-900/50 px-1 py-0.5 text-purple-400">
-											{getButtonLabel(mapping.sourceCombo)}
+									{#if mapping.type === 'combo'}
+										<span class="rounded bg-blue-900/50 px-1 py-0.5 {mapping.source.startsWith('KEY_') ? 'text-blue-400' : 'text-amber-400'}">
+											{getButtonLabel(mapping.source)}
 										</span>
-										<span class="text-zinc-600">+</span>
+										<span class="text-zinc-600">&rarr;</span>
+										<span class="rounded bg-purple-900/50 px-1 py-0.5 text-purple-400">
+											{mapping.target}
+										</span>
+										<span class="text-[9px] text-zinc-600">({mapping.comboMode})</span>
+									{:else}
+										{#if mapping.sourceCombo}
+											<span class="rounded bg-purple-900/50 px-1 py-0.5 text-purple-400">
+												{getButtonLabel(mapping.sourceCombo)}
+											</span>
+											<span class="text-zinc-600">+</span>
+										{/if}
+										<span
+											class="rounded px-1 py-0.5 {mapping.type === 'keyboard'
+												? 'bg-blue-900/50 text-blue-400'
+												: 'bg-amber-900/50 text-amber-400'}"
+										>
+											{getButtonLabel(mapping.source)}
+										</span>
+										<span class="text-zinc-600">&rarr;</span>
+										<span class="text-zinc-300">{getButtonLabel(mapping.target)}</span>
 									{/if}
-									<span
-										class="rounded px-1 py-0.5 {mapping.type === 'keyboard'
-											? 'bg-blue-900/50 text-blue-400'
-											: 'bg-amber-900/50 text-amber-400'}"
-									>
-										{getButtonLabel(mapping.source)}
-									</span>
-									<span class="text-zinc-600">&rarr;</span>
-									<span class="text-zinc-300">{getButtonLabel(mapping.target)}</span>
 									<div class="ml-auto flex gap-1 opacity-0 group-hover:opacity-100">
 										{#if mapping.type === 'controller'}
 											{#if mapping.sourceCombo}

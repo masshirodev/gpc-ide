@@ -3,12 +3,7 @@
 	import type * as Monaco from 'monaco-editor';
 	import { consumePendingJump } from '$lib/stores/editor.svelte';
 	import { getSettings } from '$lib/stores/settings.svelte';
-
-	export interface GitLineChange {
-		type: 'added' | 'modified' | 'deleted';
-		startLine: number;
-		endLine: number;
-	}
+	import type { GitLineChange } from '$lib/utils/diff-parser';
 
 	interface Props {
 		value: string;

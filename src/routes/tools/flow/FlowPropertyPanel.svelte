@@ -26,8 +26,9 @@
 	import { renderNodePreview, pixelsToDataUrl } from '$lib/flow/oled-preview';
 	import MenuLayoutBuilder from '$lib/components/editor/MenuLayoutBuilder.svelte';
 	import { goto } from '$app/navigation';
+	import { page } from '$app/state';
 	import { setKeyboardTransfer } from '$lib/stores/keyboard-transfer.svelte';
-	import { parseKeyboardMappings } from '$lib/utils/keyboard-parser';
+	import type { ModuleNodeData } from '$lib/types/flow';
 
 	interface Props {
 		selectedNode: FlowNode | null;
@@ -48,6 +49,8 @@
 		onUpdateSubNode: (nodeId: string, subNodeId: string, updates: Partial<SubNode>) => void;
 		onReorderSubNodes: (nodeId: string, fromIndex: number, toIndex: number) => void;
 		onSelectSubNode: (nodeId: string, subNodeId: string | null) => void;
+		onOpenWeaponData?: () => void;
+		onOpenWeaponDetection?: () => void;
 	}
 
 	let {
@@ -69,6 +72,8 @@
 		onUpdateSubNode,
 		onReorderSubNodes,
 		onSelectSubNode,
+		onOpenWeaponData,
+		onOpenWeaponDetection,
 	}: Props = $props();
 
 	// Derive active conflicts for the selected module node
@@ -88,7 +93,7 @@
 		return conflicts;
 	});
 
-	const nodeTypes: FlowNodeType[] = ['intro', 'home', 'menu', 'submenu', 'custom', 'screensaver'];
+	const nodeTypes: FlowNodeType[] = ['intro', 'home', 'menu', 'submenu', 'custom', 'screensaver', 'debug'];
 	const conditionTypes: { value: FlowConditionType; label: string }[] = [
 		{ value: 'button_press', label: 'Button Press' },
 		{ value: 'button_hold', label: 'Button Hold' },
@@ -241,7 +246,8 @@
 	let showLayoutBuilder = $state(false);
 	let isMenuNode = $derived(
 		selectedNode?.type === 'menu' || selectedNode?.type === 'submenu' ||
-		selectedNode?.type === 'home' || selectedNode?.type === 'intro'
+		selectedNode?.type === 'home' || selectedNode?.type === 'intro' ||
+		selectedNode?.type === 'debug'
 	);
 
 	// OLED Preview for nodes with sub-nodes
@@ -327,29 +333,13 @@
 		onUpdateNode(selectedNode.id, { moduleData: md });
 	}
 
-	// Weapon names for weapondata module
-	let newWeaponName = $state('');
+	// Weapon data modal state removed — modals rendered in FlowEditor
 
-	function addWeaponName() {
-		const name = newWeaponName.trim();
-		if (!name || !selectedNode?.moduleData) return;
-		const md = { ...selectedNode.moduleData };
-		const existing = md.weaponNames ?? [];
-		if (existing.includes(name)) {
-			newWeaponName = '';
-			return;
-		}
-		md.weaponNames = [...existing, name];
-		onUpdateNode(selectedNode.id, { moduleData: md });
-		newWeaponName = '';
-	}
-
-	function removeWeaponName(name: string) {
-		if (!selectedNode?.moduleData) return;
-		const md = { ...selectedNode.moduleData };
-		md.weaponNames = (md.weaponNames ?? []).filter((w) => w !== name);
-		onUpdateNode(selectedNode.id, { moduleData: md });
-	}
+	// Get weapon names from the weapondata module node in the gameplay flow
+	let weaponNamesFromData = $derived.by(() => {
+		const wdNode = gameplayModuleNodes.find((n) => n.moduleData?.moduleId === 'weapondata');
+		return wdNode?.moduleData?.weaponNames ?? [];
+	});
 
 	function updateModuleParam(key: string, value: string) {
 		if (!selectedNode?.moduleData) return;
@@ -369,12 +359,15 @@
 
 	// Local editing state for sub-node
 	let editSubLabel = $state('');
+	let editSubDisplayText = $state('');
 	let lastSyncedSubNodeId = '';
 	let lastSyncedSubNodeParentId = '';
 
 	function flushSubNodeEdits(parentId: string, subNodeId: string) {
 		if (!parentId || !subNodeId) return;
-		onUpdateSubNode(parentId, subNodeId, { label: editSubLabel });
+		const updates: Partial<SubNode> = { label: editSubLabel };
+		if (isTextSubNode) updates.displayText = editSubDisplayText || undefined;
+		onUpdateSubNode(parentId, subNodeId, updates);
 	}
 
 	$effect(() => {
@@ -383,6 +376,7 @@
 			lastSyncedSubNodeId = selectedSubNode.id;
 			lastSyncedSubNodeParentId = selectedNode?.id ?? '';
 			editSubLabel = selectedSubNode.label;
+			editSubDisplayText = selectedSubNode.displayText || '';
 		} else if (!selectedSubNode && lastSyncedSubNodeId) {
 			flushSubNodeEdits(lastSyncedSubNodeParentId, lastSyncedSubNodeId);
 			lastSyncedSubNodeId = '';
@@ -424,7 +418,9 @@
 		if (selectedEdge) {
 			const key = `${selectedEdge.id}:${selectedEdge.condition.type}`;
 			if (key !== lastSyncedEdgeKey) {
-				if (lastSyncedEdgeId) flushEdgeEdits(lastSyncedEdgeId);
+				// Only flush when switching to a different edge, not when condition type
+				// changes on the same edge (the dropdown onchange already saved via onUpdateEdge)
+				if (lastSyncedEdgeId && lastSyncedEdgeId !== selectedEdge.id) flushEdgeEdits(lastSyncedEdgeId);
 				lastSyncedEdgeKey = key;
 				lastSyncedEdgeId = selectedEdge.id;
 				editEdgeLabel = selectedEdge.label;
@@ -511,8 +507,14 @@
 	}
 
 	function commitSubNodeLabel() {
-		if (selectedNode && selectedSubNode && editSubLabel !== selectedSubNode.label) {
-			onUpdateSubNode(selectedNode.id, selectedSubNode.id, { label: editSubLabel });
+		if (!selectedNode || !selectedSubNode) return;
+		const updates: Partial<SubNode> = {};
+		if (editSubLabel !== selectedSubNode.label) updates.label = editSubLabel;
+		if (isTextSubNode && (editSubDisplayText || '') !== (selectedSubNode.displayText || '')) {
+			updates.displayText = editSubDisplayText || undefined;
+		}
+		if (Object.keys(updates).length > 0) {
+			onUpdateSubNode(selectedNode.id, selectedSubNode.id, updates);
 		}
 	}
 
@@ -651,11 +653,9 @@
 			</div>
 		</div>
 		<div class="flex-1 overflow-y-auto px-3 py-2">
-			<!-- Label / Display Text -->
+			<!-- Name -->
 			<div class="mb-3">
-				<label class="mb-1 block text-xs text-zinc-400" for="subnode-label">
-					{isTextSubNode ? 'Display Text' : 'Label'}
-				</label>
+				<label class="mb-1 block text-xs text-zinc-400" for="subnode-label">Name</label>
 				<input
 					id="subnode-label"
 					type="text"
@@ -663,12 +663,42 @@
 					bind:value={editSubLabel}
 					onblur={commitSubNodeLabel}
 					onkeydown={(e) => { if (e.key === 'Enter') commitSubNodeLabel(); }}
-					placeholder={isTextSubNode ? 'Text shown on OLED...' : 'Sub-node label...'}
+					placeholder="Sub-node name..."
 				/>
-				{#if isTextSubNode}
-					<p class="mt-0.5 text-[10px] text-zinc-600">This text is rendered on the OLED screen</p>
-				{/if}
 			</div>
+
+			<!-- Display Text (for text/interactive subnodes) -->
+			{#if isTextSubNode}
+				<div class="mb-3">
+					<label class="mb-1 block text-xs text-zinc-400" for="subnode-display-text">Display Text</label>
+					<input
+						id="subnode-display-text"
+						type="text"
+						class="w-full rounded border border-zinc-700 bg-zinc-800 px-2 py-1 text-sm text-zinc-200 focus:border-emerald-500 focus:outline-none"
+						bind:value={editSubDisplayText}
+						onblur={commitSubNodeLabel}
+						onkeydown={(e) => { if (e.key === 'Enter') commitSubNodeLabel(); }}
+						placeholder="Text on OLED (empty = value only)"
+					/>
+					<p class="mt-0.5 text-[10px] text-zinc-600">Text rendered on the OLED. Leave empty for value-only display.</p>
+				</div>
+			{/if}
+
+			<!-- Interactive toggle (for naturally interactive subnode types) -->
+			{#if ['menu-item', 'toggle-item', 'value-item', 'array-item'].includes(selectedSubNode.type)}
+				<div class="mb-3">
+					<label class="flex items-center gap-2 text-xs text-zinc-400">
+						<input
+							type="checkbox"
+							class="accent-emerald-600"
+							checked={selectedSubNode.interactive}
+							onchange={(e) => onUpdateSubNode(selectedNode!.id, selectedSubNode!.id, { interactive: (e.target as HTMLInputElement).checked })}
+						/>
+						Selectable
+					</label>
+					<p class="mt-0.5 text-[10px] text-zinc-600">When off, displays as text only (no cursor, no input)</p>
+				</div>
+			{/if}
 
 			<!-- Pixel Art: Edit button + Browse Sprites -->
 			{#if selectedSubNode.type === 'pixel-art'}
@@ -838,6 +868,72 @@
 				</div>
 			{/if}
 
+			<!-- Conditional rendering -->
+			<div class="mb-3">
+				<label class="mb-1 flex items-center gap-2 text-xs text-zinc-400">
+					<input
+						type="checkbox"
+						class="accent-emerald-600"
+						checked={!!selectedSubNode.condition}
+						onchange={(e) => {
+							if ((e.target as HTMLInputElement).checked) {
+								onUpdateSubNode(selectedNode!.id, selectedSubNode!.id, {
+									condition: { variable: '', comparison: '!=', value: 0 }
+								});
+							} else {
+								onUpdateSubNode(selectedNode!.id, selectedSubNode!.id, { condition: undefined });
+							}
+						}}
+					/>
+					Conditional Rendering
+				</label>
+				{#if selectedSubNode.condition}
+					<div class="mt-1.5 flex gap-1.5">
+						<div class="flex-1">
+							<VariableSelect
+								value={selectedSubNode.condition.variable}
+								options={availableVariables}
+								placeholder="Variable..."
+								onchange={(val) => {
+									onUpdateSubNode(selectedNode!.id, selectedSubNode!.id, {
+										condition: { ...selectedSubNode!.condition!, variable: val || '' }
+									});
+								}}
+							/>
+						</div>
+						<select
+							class="w-14 rounded border border-zinc-700 bg-zinc-800 px-1 py-1 text-xs text-zinc-200 focus:border-emerald-500 focus:outline-none"
+							value={selectedSubNode.condition.comparison}
+							onchange={(e) => {
+								onUpdateSubNode(selectedNode!.id, selectedSubNode!.id, {
+									condition: { ...selectedSubNode!.condition!, comparison: (e.target as HTMLSelectElement).value as '==' | '!=' | '>' | '<' | '>=' | '<=' }
+								});
+							}}
+						>
+							<option value="==">=</option>
+							<option value="!=">!=</option>
+							<option value=">">&gt;</option>
+							<option value="<">&lt;</option>
+							<option value=">=">&gt;=</option>
+							<option value="<=">&lt;=</option>
+						</select>
+						<input
+							type="number"
+							class="w-14 rounded border border-zinc-700 bg-zinc-800 px-1.5 py-1 text-xs text-zinc-200 focus:border-emerald-500 focus:outline-none"
+							value={selectedSubNode.condition.value}
+							onchange={(e) => {
+								onUpdateSubNode(selectedNode!.id, selectedSubNode!.id, {
+									condition: { ...selectedSubNode!.condition!, value: parseInt((e.target as HTMLInputElement).value) || 0 }
+								});
+							}}
+						/>
+					</div>
+					<p class="mt-1 text-[10px] text-zinc-600">
+						Only renders when {selectedSubNode.condition.variable || '?'} {selectedSubNode.condition.comparison} {selectedSubNode.condition.value}
+					</p>
+				{/if}
+			</div>
+
 			<!-- Delete sub-node -->
 			<button
 				class="mt-4 w-full rounded border border-red-800 bg-red-950 px-2 py-1.5 text-xs text-red-300 hover:bg-red-900"
@@ -999,68 +1095,87 @@
 			<!-- Send to Keyboard Mapper (keyboard module only) -->
 			{#if selectedNode.moduleData?.moduleId === 'keyboard'}
 				<div class="mb-3">
+					<div class="mb-1.5 flex items-center justify-between">
+						<span class="text-xs text-zinc-400">Mappings</span>
+						<span class="text-[10px] text-zinc-600">
+							{selectedNode.moduleData.keyboardMappings?.length ?? 0} configured
+						</span>
+					</div>
+					{#if (selectedNode.moduleData.keyboardMappings?.length ?? 0) > 0}
+						<div class="mb-1.5 max-h-24 overflow-y-auto rounded border border-zinc-800 bg-zinc-900/50">
+							{#each selectedNode.moduleData.keyboardMappings ?? [] as mapping}
+								<div class="flex items-center gap-1.5 border-b border-zinc-800/50 px-2 py-1 text-[10px] last:border-0"
+									class:opacity-40={!mapping.enabled}
+								>
+									<span class="text-amber-400">{mapping.source}</span>
+									{#if mapping.sourceCombo}
+										<span class="text-zinc-600">+</span>
+										<span class="text-amber-400">{mapping.sourceCombo}</span>
+									{/if}
+									<span class="text-zinc-600">&rarr;</span>
+									<span class="text-emerald-400">{mapping.target}</span>
+									{#if mapping.value !== 0 && mapping.value !== 100}
+										<span class="text-zinc-500">({mapping.value})</span>
+									{/if}
+								</div>
+							{/each}
+						</div>
+					{/if}
 					<button
 						class="w-full rounded bg-blue-600 px-2 py-1.5 text-xs font-medium text-white hover:bg-blue-500"
 						onclick={() => {
 							if (!selectedNode?.moduleData) return;
-							const mappings = parseKeyboardMappings(selectedNode.moduleData.comboCode);
 							setKeyboardTransfer({
-								mappings,
+								mappings: [...(selectedNode.moduleData.keyboardMappings ?? [])],
 								returnTo: null,
 								outputConsole: 'ps5',
 								inputConsole: 'ps5',
-								returnPath: '/tools/flow',
+								returnPath: page.url.pathname,
 								nodeId: selectedNode.id
 							});
 							goto('/tools/keyboard');
 						}}
 					>
-						Send to Mapper
+						{(selectedNode.moduleData.keyboardMappings?.length ?? 0) > 0 ? 'Edit in Mapper' : 'Open Mapper'}
 					</button>
 					<p class="mt-0.5 text-[10px] text-zinc-600">Edit mappings visually in the Keyboard Mapper tool</p>
 				</div>
 			{/if}
 
-			<!-- Weapon Names (weapondata module only) -->
+			<!-- Weapon Data (weapondata module only) -->
 			{#if selectedNode.moduleData?.moduleId === 'weapondata'}
 				<div class="mb-3">
-					<label class="mb-1 block text-xs text-zinc-400" for="weapon-name-input">Weapon Names</label>
-					<div class="flex flex-wrap items-center gap-1.5">
-						{#each selectedNode.moduleData.weaponNames ?? [] as weapon}
-							<span class="group flex items-center gap-1 rounded-full bg-zinc-800 px-2 py-0.5 text-xs text-zinc-300">
-								{weapon}
-								<button
-									class="text-zinc-500 opacity-0 group-hover:opacity-100 hover:text-red-400"
-									title="Remove {weapon}"
-									onclick={() => removeWeaponName(weapon)}
-								>
-									<svg class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
-										<path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
-									</svg>
-								</button>
-							</span>
-						{/each}
-						<form
-							class="flex items-center gap-1"
-							onsubmit={(e) => { e.preventDefault(); addWeaponName(); }}
-						>
-							<input
-								id="weapon-name-input"
-								class="w-24 rounded border border-zinc-700 bg-zinc-800 px-2 py-0.5 text-xs text-zinc-200 placeholder-zinc-600 focus:border-emerald-500 focus:outline-none"
-								placeholder="Add weapon..."
-								bind:value={newWeaponName}
-							/>
-							<button
-								type="submit"
-								class="rounded bg-zinc-700 px-1.5 py-0.5 text-xs text-zinc-300 hover:bg-zinc-600"
-								disabled={!newWeaponName.trim()}
-							>
-								+
-							</button>
-						</form>
-					</div>
-					<p class="mt-1 text-[10px] text-zinc-600">
-						{(selectedNode.moduleData.weaponNames ?? []).length} weapons — generates Weapons[] array, WEAPON_COUNT, WEAPON_MAX_INDEX
+					<label class="mb-1 block text-xs text-zinc-400">Weapon Data</label>
+					<button
+						class="w-full rounded bg-blue-600 px-2 py-1.5 text-xs font-medium text-white hover:bg-blue-500"
+						onclick={() => { onOpenWeaponData?.(); }}
+					>
+						{(selectedNode.moduleData.weaponNames ?? []).length > 0
+							? `Edit Weapons (${(selectedNode.moduleData.weaponNames ?? []).length})`
+							: 'Configure Weapons'}
+					</button>
+					<p class="mt-0.5 text-[10px] text-zinc-600">
+						Manage weapon names and per-weapon recoil values
+					</p>
+				</div>
+			{/if}
+
+			<!-- Weapon Detection (adp module only) -->
+			{#if selectedNode.moduleData?.moduleId === 'adp'}
+				<div class="mb-3">
+					<label class="mb-1 block text-xs text-zinc-400">Weapon Detection</label>
+					<button
+						class="w-full rounded bg-blue-600 px-2 py-1.5 text-xs font-medium text-white hover:bg-blue-500"
+						onclick={() => { onOpenWeaponDetection?.(); }}
+					>
+						{(selectedNode.moduleData.adpProfiles ?? []).length > 0
+							? `Edit ADT Profiles (${(selectedNode.moduleData.adpProfiles ?? []).length})`
+							: 'Configure ADT Profiles'}
+					</button>
+					<p class="mt-0.5 text-[10px] text-zinc-600">
+						{weaponNamesFromData.length > 0
+							? `${weaponNamesFromData.length} weapons from Weapon Data module`
+							: 'Add a Weapon Data module first to define weapons'}
 					</p>
 				</div>
 			{/if}
@@ -1073,7 +1188,7 @@
 						{ key: 'init', label: 'Init' },
 						{ key: 'main', label: 'Main' },
 						{ key: 'functions', label: 'Funcs' },
-						{ key: 'combos', label: 'Combos' },
+						...(selectedNode?.moduleData?.moduleId === 'keyboard' ? [] : [{ key: 'combos', label: 'Combos' }]),
 					] as tab}
 						<button
 							class="flex-1 rounded px-1 py-1 text-xs {moduleCodeTab === tab.key ? 'bg-zinc-700 text-zinc-200' : 'text-zinc-500 hover:text-zinc-300'}"
@@ -1512,13 +1627,26 @@
 				<label class="mb-1 block text-xs text-zinc-400">Back Button</label>
 				<div class="flex items-center gap-1">
 					<div class="flex-1">
-						<ButtonSelect
-							value={selectedNode.backButton || ''}
-							onchange={(v) => onUpdateNode(selectedNode!.id, { backButton: v || undefined })}
-							placeholder="None (no back navigation)"
-						/>
+						{#if selectedNode.backButton === '_ANY_BUTTON'}
+							<div class="flex h-[38px] items-center rounded-md border border-emerald-700 bg-emerald-950/40 px-3 text-sm text-emerald-400">
+								Any Button
+							</div>
+						{:else}
+							<ButtonSelect
+								value={selectedNode.backButton || ''}
+								onchange={(v) => onUpdateNode(selectedNode!.id, { backButton: v || undefined })}
+								placeholder="None (no back navigation)"
+							/>
+						{/if}
 					</div>
-					{#if selectedNode.backButton}
+					<button
+						class="rounded px-1.5 py-1 text-xs {selectedNode.backButton === '_ANY_BUTTON' ? 'bg-emerald-900/40 text-emerald-400' : 'text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300'}"
+						title="Any button (e.g. for screensavers)"
+						onclick={() => onUpdateNode(selectedNode!.id, { backButton: selectedNode!.backButton === '_ANY_BUTTON' ? undefined : '_ANY_BUTTON' })}
+					>
+						Any
+					</button>
+					{#if selectedNode.backButton && selectedNode.backButton !== '_ANY_BUTTON'}
 						<button
 							class="rounded px-1.5 py-1 text-xs text-zinc-500 hover:text-zinc-300"
 							title="Clear back button"
@@ -1530,7 +1658,9 @@
 						</button>
 					{/if}
 				</div>
-				<p class="mt-0.5 text-[10px] text-zinc-600">Returns to the previous state when pressed</p>
+				<p class="mt-0.5 text-[10px] text-zinc-600">
+					{selectedNode.backButton === '_ANY_BUTTON' ? 'Any button press returns to previous state' : 'Returns to the previous state when pressed'}
+				</p>
 			</div>
 
 			<!-- Block Inputs -->
@@ -1915,3 +2045,4 @@
 		onclose={() => (showLayoutBuilder = false)}
 	/>
 {/if}
+

@@ -1,4 +1,5 @@
-import type { FlowGraph, FlowNode, FlowVariable } from '$lib/types/flow';
+import type { FlowGraph, FlowNode, FlowVariable, WeaponADTProfile } from '$lib/types/flow';
+import type { KeyMapping } from '$lib/utils/keyboard-parser';
 import {
 	collectPersistVars,
 	flowVarsToPersistVars,
@@ -81,11 +82,15 @@ export function generateGameplayGpc(graph: FlowGraph): GameplayCodegenResult {
 					// Generate separate recoiltable.gpc file content
 					const rtLines: string[] = [];
 					rtLines.push(`// Weapon recoil table (10 phases x 2 axes per weapon)`);
-					rtLines.push(`// Edit values in the Recoil tab or Spray Pattern tool`);
-					const zeros = Array(20).fill(' 0').join(',');
-					const rows = names.map(
-						(w, i) => `    {${zeros}} ${i < count - 1 ? ',' : ' '} /* ${String(i).padStart(4)} ${w} */`
-					);
+					rtLines.push(`// Edit values in the Flow Editor Weapon Data panel`);
+					const rv = md.weaponRecoilValues ?? [];
+					const rows = names.map((w, i) => {
+						// Use stored V/H as base for phase 0, zeros for rest
+						const v = rv[i * 2] ?? 0;
+						const h = rv[i * 2 + 1] ?? 0;
+						const vals = [` ${v}`, ` ${h}`, ...Array(18).fill(' 0')].join(',');
+						return `    {${vals}} ${i < count - 1 ? ',' : ' '} /* ${String(i).padStart(4)} ${w} */`;
+					});
 					rtLines.push(`const int8 WeaponRecoilTable[][] = {`);
 					rtLines.push(`//  V0  H0  V1  H1  V2  H2  V3  H3  V4  H4  V5  H5  V6  H6  V7  H7  V8  H8  V9  H9`);
 					rtLines.push(...rows);
@@ -136,10 +141,24 @@ export function generateGameplayGpc(graph: FlowGraph): GameplayCodegenResult {
 			result.functions.push('');
 		}
 
-		// Combo code
-		if (md.comboCode.trim()) {
+		// Combo code — for keyboard modules, generate from structured mappings;
+		// for ADP modules, generate ADP_Values table and inject adt_cmp checks
+		let generatedCombo: string;
+		if (Array.isArray(md.keyboardMappings)) {
+			generatedCombo = generateApplyKeyboard(md.keyboardMappings);
+		} else if (md.moduleId === 'adp' && md.adpProfiles?.length) {
+			const weaponNames = moduleNodes
+				.find((n) => n.moduleData?.moduleId === 'weapondata')
+				?.moduleData?.weaponNames ?? [];
+			result.functions.push(generateAdpValuesTable(md.adpProfiles, weaponNames));
+			result.functions.push('');
+			generatedCombo = injectAdpChecks(md.comboCode.trim(), md.adpProfiles, weaponNames);
+		} else {
+			generatedCombo = md.comboCode.trim();
+		}
+		if (generatedCombo) {
 			result.combos.push(`// Combo: ${md.moduleName}`);
-			result.combos.push(md.comboCode.trim());
+			result.combos.push(generatedCombo);
 			result.combos.push('');
 		}
 
@@ -155,14 +174,14 @@ export function generateGameplayGpc(graph: FlowGraph): GameplayCodegenResult {
 					result.variables.push(`int ${delayVar};`);
 					declaredVars.add(delayVar);
 				}
-				result.mainLoopCode.push(`    if(GetKeyboardKey(${qt[0]}) && ${delayVar} <= 0) { ${md.enableVariable} = !${md.enableVariable}; ${delayVar} = 30; }`);
+				result.mainLoopCode.push(`    if(GetKeyboardKey(${qt[0]}) && ${delayVar} <= 0) { ${md.enableVariable} = !${md.enableVariable}; ${delayVar} = 30; FlowRedraw = TRUE; }`);
 				result.mainLoopCode.push(`    if(${delayVar} > 0) { ${delayVar}--; }`);
 			} else {
 				const toggleExpr =
 					qt.length === 1
 						? `event_press(${qt[0]})`
 						: `get_val(${qt[0]}) && event_press(${qt[1]})`;
-				result.mainLoopCode.push(`    if(${toggleExpr}) { ${md.enableVariable} = !${md.enableVariable}; }`);
+				result.mainLoopCode.push(`    if(${toggleExpr}) { ${md.enableVariable} = !${md.enableVariable}; FlowRedraw = TRUE; }`);
 			}
 		}
 
@@ -372,5 +391,106 @@ function formatExtraVar(name: string, type: string): string {
 function extractComboName(comboCode: string): string | null {
 	const match = comboCode.match(/combo\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\{/);
 	return match ? match[1] : null;
+}
+
+/**
+ * Generate an ApplyKeyboard() function from structured KeyMapping[] data.
+ * Called at build time — the keyboard module stores mappings as data, not code.
+ */
+function generateApplyKeyboard(mappings: KeyMapping[]): string {
+	const lines: string[] = ['function ApplyKeyboard() {'];
+	const enabled = mappings.filter((m) => m.enabled);
+
+	if (enabled.length === 0) {
+		lines.push('    // No mappings configured');
+	} else {
+		const kb = enabled.filter((m) => m.type === 'keyboard');
+		const singleCtrl = enabled.filter((m) => m.type === 'controller' && !m.sourceCombo);
+		const comboCtrl = enabled.filter((m) => m.type === 'controller' && m.sourceCombo);
+
+		if (kb.length > 0) {
+			for (const m of kb) {
+				lines.push(`    if (GetKeyboardKey(${m.source})) { set_val(${m.target}, ${m.value}); }`);
+			}
+		}
+		if (singleCtrl.length > 0) {
+			for (const m of singleCtrl) {
+				if (m.value === 0) {
+					lines.push(`    set_val(${m.target}, get_val(${m.source}));`);
+				} else {
+					lines.push(`    if (get_val(${m.source})) { set_val(${m.target}, ${m.value}); }`);
+				}
+			}
+		}
+		if (comboCtrl.length > 0) {
+			for (const m of comboCtrl) {
+				lines.push(`    if (get_val(${m.sourceCombo}) && event_press(${m.source})) { set_val(${m.target}, ${m.value}); }`);
+			}
+		}
+	}
+
+	lines.push('}');
+	return lines.join('\n');
+}
+
+/** Format a number as 0x hex string */
+function toHex(v: number): string {
+	return '0x' + ((v & 0xff).toString(16).toUpperCase().padStart(2, '0'));
+}
+
+/**
+ * Generate the ADP_Values[][] const table from stored ADT profiles.
+ * Format: Mode, Start, F1, F2, StrLow, StrMid, StrHigh, 0, 0, Freq, 0
+ */
+function generateAdpValuesTable(profiles: WeaponADTProfile[], weaponNames: string[]): string {
+	const lines: string[] = [];
+	lines.push('// Adaptive trigger signatures per weapon');
+	lines.push('// Format: Mode, Start, F1, F2, StrLow, StrMid, StrHigh, 0, 0, Freq, 0');
+	lines.push('const uint8 ADP_Values[][] = {');
+	lines.push('//   Mode  Start  F1    F2   StrL  StrM  StrH   0  0  Freq  0');
+
+	// Row 0: Automatic (no match)
+	lines.push('    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0, 0, 0x00, 0 },  // 0: Automatic');
+
+	const totalWeapons = weaponNames.length;
+	for (let i = 0; i < totalWeapons; i++) {
+		const idx = i + 1;
+		const p = profiles.find((pr) => pr.weaponIndex === idx);
+		const m = p?.mode ?? 0;
+		const s = p?.start ?? 0;
+		const f1 = p?.force1 ?? 0;
+		const f2 = p?.force2 ?? 0;
+		const sl = p?.strLow ?? 0;
+		const sm = p?.strMid ?? 0;
+		const sh = p?.strHigh ?? 0;
+		const fr = p?.freq ?? 0;
+		const comma = i < totalWeapons - 1 ? ',' : ' ';
+		const name = weaponNames[i] ?? `Weapon ${idx}`;
+		lines.push(`    { ${toHex(m)}, ${toHex(s)}, ${toHex(f1)}, ${toHex(f2)}, ${toHex(sl)}, ${toHex(sm)}, ${toHex(sh)}, 0, 0, ${toHex(fr)}, 0 }${comma}  // ${idx}: ${name}`);
+	}
+
+	lines.push('};');
+	return lines.join('\n');
+}
+
+/**
+ * Replace the // INJECT_ADP_CHECKS_HERE marker in the ADP combo code
+ * with adt_cmp() checks referencing the ADP_Values table.
+ */
+function injectAdpChecks(comboCode: string, profiles: WeaponADTProfile[], weaponNames: string[]): string {
+	const checks: string[] = [];
+
+	for (const p of profiles) {
+		const isEmpty = p.mode === 0 && p.start === 0 && p.force1 === 0 && p.force2 === 0
+			&& (p.strLow ?? 0) === 0 && (p.strMid ?? 0) === 0 && (p.strHigh ?? 0) === 0 && p.freq === 0;
+		if (isEmpty) continue;
+
+		const name = weaponNames[p.weaponIndex - 1] ?? `Weapon ${p.weaponIndex}`;
+		const keyword = checks.length === 0 ? 'if' : 'else if';
+		checks.push(`    ${keyword} (adt_cmp(PS5_R2, addr(ADP_Values[${p.weaponIndex}][0]))) { detected = ${p.weaponIndex}; }  // ${name}`);
+	}
+
+	if (checks.length === 0) return comboCode;
+	return comboCode.replace('// INJECT_ADP_CHECKS_HERE', checks.join('\n'));
 }
 

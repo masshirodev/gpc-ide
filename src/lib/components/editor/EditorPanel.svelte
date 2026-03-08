@@ -12,7 +12,7 @@
 	} from '$lib/stores/editor.svelte';
 	import { getLanguageForFile } from '$lib/utils/editor-helpers';
 	import type { ConsoleType } from '$lib/utils/console-buttons';
-	import type { GitLineChange } from './MonacoEditor.svelte';
+	import type { GitLineChange } from '$lib/utils/diff-parser';
 	import type * as Monaco from 'monaco-editor';
 	import * as m from '$lib/paraglide/messages.js';
 

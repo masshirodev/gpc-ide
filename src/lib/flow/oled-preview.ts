@@ -32,7 +32,7 @@ export function renderNodePreview(node: FlowNode): Uint8Array {
 			boundValue: undefined
 		};
 
-		const configWithLabel = { ...sub.config, label: sub.label };
+		const configWithLabel = { ...sub.config, label: sub.displayText ?? sub.label };
 		def.render(configWithLabel, ctx);
 	}
 

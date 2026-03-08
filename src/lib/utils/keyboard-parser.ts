@@ -3,8 +3,9 @@ export interface KeyMapping {
 	sourceCombo?: string; // Held button for combos: get_val(sourceCombo) && event_press(source)
 	target: string;
 	value: number;
-	type: 'keyboard' | 'controller';
+	type: 'keyboard' | 'controller' | 'combo';
 	enabled: boolean;
+	comboMode?: 'hold' | 'press'; // Only for type === 'combo'
 }
 
 /**
@@ -96,6 +97,70 @@ export function parseKeyboardMappings(content: string): KeyMapping[] {
 			});
 			continue;
 		}
+
+		// Pattern 5: Combo hold (keyboard): if (GetKeyboardKey(KEY_X)) { combo_run(Name); } else { combo_stop(Name); }
+		const kbComboHoldMatch = uncommented.match(
+			/if\s*\(\s*GetKeyboardKey\((\w+)\)\s*\)\s*\{\s*combo_run\((\w+)\)\s*;\s*\}\s*else\s*\{\s*combo_stop\(\2\)\s*;\s*\}/
+		);
+		if (kbComboHoldMatch) {
+			mappings.push({
+				source: kbComboHoldMatch[1],
+				target: kbComboHoldMatch[2],
+				value: 0,
+				type: 'combo',
+				comboMode: 'hold',
+				enabled: !isCommented
+			});
+			continue;
+		}
+
+		// Pattern 6: Combo press (keyboard): if (event_press_keyboard(KEY_X)) { combo_run(Name); }
+		const kbComboPressMatch = uncommented.match(
+			/if\s*\(\s*GetKeyboardKey\((\w+)\)\s*\)\s*\{\s*combo_run\((\w+)\)\s*;\s*\}/
+		);
+		if (kbComboPressMatch) {
+			mappings.push({
+				source: kbComboPressMatch[1],
+				target: kbComboPressMatch[2],
+				value: 0,
+				type: 'combo',
+				comboMode: 'press',
+				enabled: !isCommented
+			});
+			continue;
+		}
+
+		// Pattern 7: Combo hold (controller): if (get_val(BTN)) { combo_run(Name); } else { combo_stop(Name); }
+		const ctrlComboHoldMatch = uncommented.match(
+			/if\s*\(\s*get_val\((\w+)\)\s*\)\s*\{\s*combo_run\((\w+)\)\s*;\s*\}\s*else\s*\{\s*combo_stop\(\2\)\s*;\s*\}/
+		);
+		if (ctrlComboHoldMatch) {
+			mappings.push({
+				source: ctrlComboHoldMatch[1],
+				target: ctrlComboHoldMatch[2],
+				value: 0,
+				type: 'combo',
+				comboMode: 'hold',
+				enabled: !isCommented
+			});
+			continue;
+		}
+
+		// Pattern 8: Combo press (controller): if (event_press(BTN)) { combo_run(Name); }
+		const ctrlComboPressMatch = uncommented.match(
+			/if\s*\(\s*event_press\((\w+)\)\s*\)\s*\{\s*combo_run\((\w+)\)\s*;\s*\}/
+		);
+		if (ctrlComboPressMatch) {
+			mappings.push({
+				source: ctrlComboPressMatch[1],
+				target: ctrlComboPressMatch[2],
+				value: 0,
+				type: 'combo',
+				comboMode: 'press',
+				enabled: !isCommented
+			});
+			continue;
+		}
 	}
 
 	return mappings;
@@ -133,6 +198,7 @@ export function serializeKeyboardMappings(
 	// Group mappings by type for readability
 	const kbMappings = mappings.filter((m) => m.type === 'keyboard');
 	const ctrlMappings = mappings.filter((m) => m.type === 'controller');
+	const comboMappings = mappings.filter((m) => m.type === 'combo');
 
 	if (kbMappings.length > 0) {
 		lines.push('    // Keyboard mappings');
@@ -165,6 +231,30 @@ export function serializeKeyboardMappings(
 		lines.push('    // Button combo mappings');
 		for (const m of comboCtrl) {
 			const code = `    if (get_val(${m.sourceCombo}) && event_press(${m.source})) { set_val(${m.target}, ${m.value}); }`;
+			lines.push(m.enabled ? code : `    // ${code.trim()}`);
+		}
+	}
+
+	if (comboMappings.length > 0) {
+		if (lines.length > 0) lines.push('');
+		lines.push('    // Named combo mappings');
+		for (const m of comboMappings) {
+			const isKeyboard = m.source.startsWith('KEY_');
+			let code: string;
+			if (m.comboMode === 'press') {
+				if (isKeyboard) {
+					code = `    if (GetKeyboardKey(${m.source})) { combo_run(${m.target}); }`;
+				} else {
+					code = `    if (event_press(${m.source})) { combo_run(${m.target}); }`;
+				}
+			} else {
+				// hold mode (default)
+				if (isKeyboard) {
+					code = `    if (GetKeyboardKey(${m.source})) { combo_run(${m.target}); } else { combo_stop(${m.target}); }`;
+				} else {
+					code = `    if (get_val(${m.source})) { combo_run(${m.target}); } else { combo_stop(${m.target}); }`;
+				}
+			}
 			lines.push(m.enabled ? code : `    // ${code.trim()}`);
 		}
 	}

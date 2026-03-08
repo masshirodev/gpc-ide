@@ -100,40 +100,52 @@ export const valueItemDef: SubNodeDef = {
 		const step = (config.step as number) || 1;
 		const valueAlign = (config.valueAlign as string) || 'right';
 		const font = 'OLED_FONT_SMALL';
-		const label = (config as Record<string, unknown>).label as string || 'Value';
+		const label = (config as Record<string, unknown>).label as string || '';
 		const boundVar = ctx.boundVariable || '_value_var';
-		const labelIdx = addString(ctx, label);
-		const labelRef = `${ctx.stringArrayName}[${labelIdx}]`;
 		const lines: string[] = [];
-
-		lines.push(`    // Value: ${label} (index ${ctx.cursorIndex})`);
 
 		const valueMargin = (config.valueMargin as number) ?? 0;
 		const prefixOffset = (prefix.length + spacing) * 6;
 		const labelX = style === 'prefix' ? ctx.x + prefixOffset : ctx.x + 2;
-		const valX = valueAlign === 'right' ? 104 - valueMargin : labelX + (label.length + 1) * 6;
+		const valX = valueAlign === 'right' ? 104 - valueMargin : labelX + ((label || 'Value').length + 1) * 6;
+
+		// Non-interactive: just print label (if any) + value
+		if (ctx.cursorIndex < 0) {
+			if (label) {
+				const labelIdx = addString(ctx, label);
+				lines.push(`    print(${ctx.x + 2}, ${ctx.y}, ${font}, OLED_WHITE, ${ctx.stringArrayName}[${labelIdx}]);`);
+			}
+			lines.push(`    PrintNumber(${boundVar}, find_digits(${boundVar}), ${label ? valX : ctx.x + 2}, ${ctx.y}, ${font});`);
+			return lines.join('\n');
+		}
+
+		const labelIdx = addString(ctx, label || 'Value');
+		const labelRef = `${ctx.stringArrayName}[${labelIdx}]`;
+
+		lines.push(`    // Value: ${label || 'Value'} (index ${ctx.cursorIndex})`);
 
 		// Cursor rendering
 		if (style === 'invert') {
 			lines.push(`    if(${ctx.cursorVar} == ${ctx.cursorIndex}) {`);
 			lines.push(`        rect_oled(${ctx.x}, ${ctx.y}, ${128 - ctx.x}, 8, 1, OLED_WHITE);`);
-			lines.push(`        print(${ctx.x + 2}, ${ctx.y}, ${font}, OLED_BLACK, ${labelRef});`);
+			if (label) lines.push(`        print(${ctx.x + 2}, ${ctx.y}, ${font}, OLED_BLACK, ${labelRef});`);
 			lines.push(`        PrintNumber(${boundVar}, find_digits(${boundVar}), ${valX}, ${ctx.y}, ${font});`);
 			lines.push(`    } else {`);
-			lines.push(`        print(${ctx.x + 2}, ${ctx.y}, ${font}, OLED_WHITE, ${labelRef});`);
+			if (label) lines.push(`        print(${ctx.x + 2}, ${ctx.y}, ${font}, OLED_WHITE, ${labelRef});`);
 			lines.push(`        PrintNumber(${boundVar}, find_digits(${boundVar}), ${valX}, ${ctx.y}, ${font});`);
 			lines.push(`    }`);
 		} else {
 			const prefixIdx = addString(ctx, prefix);
 			const prefixRef = `${ctx.stringArrayName}[${prefixIdx}]`;
 			lines.push(`    if(${ctx.cursorVar} == ${ctx.cursorIndex}) print(${ctx.x}, ${ctx.y}, ${font}, OLED_WHITE, ${prefixRef});`);
-			lines.push(`    print(${labelX}, ${ctx.y}, ${font}, OLED_WHITE, ${labelRef});`);
+			if (label) lines.push(`    print(${labelX}, ${ctx.y}, ${font}, OLED_WHITE, ${labelRef});`);
 			lines.push(`    PrintNumber(${boundVar}, find_digits(${boundVar}), ${valX}, ${ctx.y}, ${font});`);
 		}
 
 		return lines.join('\n');
 	},
 	generateGpcInput(config, ctx) {
+		if (ctx.cursorIndex < 0) return '';
 		const min = (config.min as number) ?? 0;
 		const max = (config.max as number) ?? 100;
 		const step = (config.step as number) || 1;

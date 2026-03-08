@@ -86,13 +86,24 @@ export const arrayItemDef: SubNodeDef = {
 		const useCountVar = !!config.useCountVar;
 		const countVar = (config.countVar as string) || '';
 		const font = 'OLED_FONT_SMALL';
-		const label = (config as Record<string, unknown>).label as string || 'Array';
+		const label = (config as Record<string, unknown>).label as string || '';
 		const boundVar = ctx.boundVariable || '_array_idx';
-		const labelIdx = addString(ctx, label);
-		const labelRef = `${ctx.stringArrayName}[${labelIdx}]`;
 		const lines: string[] = [];
 
-		lines.push(`    // Array: ${label} (index ${ctx.cursorIndex})`);
+		// Non-interactive: just print label (if any) + array value
+		if (ctx.cursorIndex < 0) {
+			if (label) {
+				const labelIdx = addString(ctx, label);
+				lines.push(`    print(${ctx.x + 2}, ${ctx.y}, ${font}, OLED_WHITE, ${ctx.stringArrayName}[${labelIdx}]);`);
+			}
+			lines.push(`    print(${label ? 80 : ctx.x + 2}, ${ctx.y}, ${font}, OLED_WHITE, ${arrayName}[${boundVar}]);`);
+			return lines.join('\n');
+		}
+
+		const labelIdx = addString(ctx, label || 'Array');
+		const labelRef = `${ctx.stringArrayName}[${labelIdx}]`;
+
+		lines.push(`    // Array: ${label || 'Array'} (index ${ctx.cursorIndex})`);
 
 		const prefixOffset = (prefix.length + spacing) * 6;
 		const labelX = style === 'prefix' ? ctx.x + prefixOffset : ctx.x + 2;
@@ -101,23 +112,24 @@ export const arrayItemDef: SubNodeDef = {
 		if (style === 'invert') {
 			lines.push(`    if(${ctx.cursorVar} == ${ctx.cursorIndex}) {`);
 			lines.push(`        rect_oled(${ctx.x}, ${ctx.y}, ${128 - ctx.x}, 8, 1, OLED_WHITE);`);
-			lines.push(`        print(${ctx.x + 2}, ${ctx.y}, ${font}, OLED_BLACK, ${labelRef});`);
-			lines.push(`        print(80, ${ctx.y}, ${font}, OLED_BLACK, ${arrayName}[${boundVar}]);`);
+			if (label) lines.push(`        print(${ctx.x + 2}, ${ctx.y}, ${font}, OLED_BLACK, ${labelRef});`);
+			lines.push(`        print(${label ? 80 : ctx.x + 2}, ${ctx.y}, ${font}, OLED_BLACK, ${arrayName}[${boundVar}]);`);
 			lines.push(`    } else {`);
-			lines.push(`        print(${ctx.x + 2}, ${ctx.y}, ${font}, OLED_WHITE, ${labelRef});`);
-			lines.push(`        print(80, ${ctx.y}, ${font}, OLED_WHITE, ${arrayName}[${boundVar}]);`);
+			if (label) lines.push(`        print(${ctx.x + 2}, ${ctx.y}, ${font}, OLED_WHITE, ${labelRef});`);
+			lines.push(`        print(${label ? 80 : ctx.x + 2}, ${ctx.y}, ${font}, OLED_WHITE, ${arrayName}[${boundVar}]);`);
 			lines.push(`    }`);
 		} else {
 			const prefixIdx = addString(ctx, prefix);
 			const prefixRef = `${ctx.stringArrayName}[${prefixIdx}]`;
 			lines.push(`    if(${ctx.cursorVar} == ${ctx.cursorIndex}) print(${ctx.x}, ${ctx.y}, ${font}, OLED_WHITE, ${prefixRef});`);
-			lines.push(`    print(${labelX}, ${ctx.y}, ${font}, OLED_WHITE, ${labelRef});`);
-			lines.push(`    print(80, ${ctx.y}, ${font}, OLED_WHITE, ${arrayName}[${boundVar}]);`);
+			if (label) lines.push(`    print(${labelX}, ${ctx.y}, ${font}, OLED_WHITE, ${labelRef});`);
+			lines.push(`    print(${label ? 80 : labelX}, ${ctx.y}, ${font}, OLED_WHITE, ${arrayName}[${boundVar}]);`);
 		}
 
 		return lines.join('\n');
 	},
 	generateGpcInput(config, ctx) {
+		if (ctx.cursorIndex < 0) return '';
 		const arraySize = (config.arraySize as number) || 10;
 		const useCountVar = !!config.useCountVar;
 		const countVar = (config.countVar as string) || '';

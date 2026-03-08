@@ -1,4 +1,8 @@
-import type { GitLineChange } from '$lib/components/editor/MonacoEditor.svelte';
+export interface GitLineChange {
+	type: 'added' | 'modified' | 'deleted';
+	startLine: number;
+	endLine: number;
+}
 
 /**
  * Parse unified diff output into GitLineChange[] for Monaco gutter decorations.
