@@ -153,11 +153,5 @@ export function exportComboData(
 }
 
 function sanitizeName(name: string): string {
-	// PascalCase, remove non-alphanumeric
-	return name
-		.replace(/[^a-zA-Z0-9\s]/g, '')
-		.split(/\s+/)
-		.filter(Boolean)
-		.map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
-		.join('') || 'MyCombo';
+	return name.replace(/[^a-zA-Z0-9_]/g, '') || 'MyCombo';
 }

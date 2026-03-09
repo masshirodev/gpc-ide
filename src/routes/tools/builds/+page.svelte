@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { afterNavigate } from '$app/navigation';
 	import ToolHeader from '$lib/components/layout/ToolHeader.svelte';
+	import { onFileChange } from '$lib/tauri/events';
 	import {
 		readFileTree,
 		readFile,
@@ -155,9 +157,20 @@
 		return files.filter((f) => f.name.toLowerCase().includes(q));
 	});
 
-	onMount(() => {
+	afterNavigate(() => {
 		loadBuilds();
 		loadAllGames();
+	});
+
+	onMount(() => {
+		let unlisten: (() => void) | undefined;
+		onFileChange((event) => {
+			if (event.paths.some((p) => p.includes('/dist/') && p.endsWith('.gpc'))) {
+				loadBuilds();
+			}
+		}).then((fn) => (unlisten = fn));
+
+		return () => unlisten?.();
 	});
 
 	async function loadBuilds() {

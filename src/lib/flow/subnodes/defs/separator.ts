@@ -51,7 +51,7 @@ export const separatorDef: SubNodeDef = {
 		const style = (config.style as string) || 'line';
 		const thickness = (config.thickness as number) || 1;
 		const margin = (config.margin as number) ?? 2;
-		const lineY = ctx.y + margin;
+		const lineY = (ctx.y as number) + margin;
 
 		if (style === 'space') return `    // Separator (space)`;
 

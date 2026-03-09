@@ -301,12 +301,25 @@
                 </table>
             </div>
 
-            <!-- GPC Preview -->
+            <!-- GPC Row (editable) -->
             <div class="mt-4 rounded border border-zinc-800 bg-zinc-950 p-3">
                 <div class="mb-1 text-xs text-zinc-500">GPC Row</div>
-                <code class="block select-all font-mono text-xs text-emerald-400">
-                    {`{${selectedEntry.values.map((v) => String(v).padStart(3, ' ')).join(',')}}`}
-                </code>
+                <input
+                    type="text"
+                    class="w-full rounded border border-zinc-700 bg-zinc-900 px-2 py-1.5 font-mono text-xs text-emerald-400 focus:border-emerald-600 focus:outline-none"
+                    value={`{${selectedEntry.values.map((v) => String(v).padStart(3, ' ')).join(',')}}`}
+                    onchange={(e) => {
+                        const raw = (e.target as HTMLInputElement).value;
+                        const nums = raw.replace(/[{}]/g, '').split(',').map((s) => {
+                            const n = parseInt(s.trim());
+                            return isNaN(n) ? 0 : Math.max(-100, Math.min(100, n));
+                        });
+                        if (nums.length === 20 && selectedEntry) {
+                            entries = updateWeaponValues(entries, selectedWeaponIdx, nums);
+                            onchange(serializeRecoilTable(content, entries));
+                        }
+                    }}
+                />
             </div>
         {/if}
     {/if}

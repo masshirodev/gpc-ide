@@ -69,20 +69,21 @@ export const headerDef: SubNodeDef = {
 		const label = (config as Record<string, unknown>).label as string || 'Header';
 		const idx = addString(ctx, label);
 		const ref = `${ctx.stringArrayName}[${idx}]`;
+		const y = ctx.y as number;
 
 		const lines: string[] = [];
 		lines.push(`    // Header: ${label}`);
 
 		if (align === 'center') {
-			lines.push(`    print(${ctx.x + Math.floor(64 - (label.length * 3))}, ${ctx.y}, ${font}, OLED_WHITE, ${ref});`);
+			lines.push(`    print(${ctx.x + Math.floor(64 - (label.length * 3))}, ${y}, ${font}, OLED_WHITE, ${ref});`);
 		} else if (align === 'right') {
-			lines.push(`    print(${ctx.x + 128 - label.length * 6}, ${ctx.y}, ${font}, OLED_WHITE, ${ref});`);
+			lines.push(`    print(${ctx.x + 128 - label.length * 6}, ${y}, ${font}, OLED_WHITE, ${ref});`);
 		} else {
-			lines.push(`    print(${ctx.x}, ${ctx.y}, ${font}, OLED_WHITE, ${ref});`);
+			lines.push(`    print(${ctx.x}, ${y}, ${font}, OLED_WHITE, ${ref});`);
 		}
 
 		if (separator) {
-			lines.push(`    line_oled(${ctx.x}, ${ctx.y + 8}, ${ctx.x + 127}, ${ctx.y + 8}, 1, OLED_WHITE);`);
+			lines.push(`    line_oled(${ctx.x}, ${y + 8}, ${ctx.x + 127}, ${y + 8}, 1, OLED_WHITE);`);
 		}
 
 		return lines.join('\n');

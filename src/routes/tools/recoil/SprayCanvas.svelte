@@ -210,15 +210,31 @@
         return closest;
     }
 
+    function snapToAxis(mx: number, my: number): { x: number; y: number } {
+        const lastPt = points.length > 0 ? points[points.length - 1] : canvasCenter;
+        const dx = Math.abs(mx - lastPt.x);
+        const dy = Math.abs(my - lastPt.y);
+        if (dx >= dy) {
+            return { x: mx, y: lastPt.y };
+        } else {
+            return { x: lastPt.x, y: my };
+        }
+    }
+
     function handleClick(e: MouseEvent) {
         const rect = canvas.getBoundingClientRect();
-        const mx = e.clientX - rect.left;
-        const my = e.clientY - rect.top;
+        let mx = e.clientX - rect.left;
+        let my = e.clientY - rect.top;
 
         if (mode === 'manual' && drawPhase === 'phase') {
             const idx = findClosestPoint(mx, my);
             if (idx >= 0) onAssignPhase(idx);
         } else {
+            if (e.shiftKey) {
+                const snapped = snapToAxis(mx, my);
+                mx = snapped.x;
+                my = snapped.y;
+            }
             onAddPoint(mx, my);
         }
     }

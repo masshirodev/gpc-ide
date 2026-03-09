@@ -284,6 +284,8 @@ export function generateFlowGpc(
 	const stateIds = new Map<string, number>();
 	sorted.forEach((node, i) => stateIds.set(node.id, i));
 
+	const hasWindowMode = sorted.some((n) => n.scrollMode === 'window');
+
 	// Header
 	lines.push(`// ====================================================`);
 	lines.push(`// Flow: ${graph.name}`);
@@ -305,6 +307,18 @@ export function generateFlowGpc(
 	}
 	lines.push(``);
 
+	// Window mode scroll defines (for scroll-bar sub-node auto-source)
+	if (hasWindowMode) {
+		for (const node of sorted) {
+			if (node.scrollMode !== 'window') continue;
+			const safeName = sanitizeName(node.label);
+			const interactiveSubs = getInteractiveSubNodes(node);
+			lines.push(`define Flow_${safeName}_total_items = ${interactiveSubs.length};`);
+			lines.push(`define Flow_${safeName}_visible = ${node.visibleCount ?? interactiveSubs.length};`);
+		}
+		lines.push(``);
+	}
+
 	const bm = graph.settings.buttonMapping;
 
 	const hasBackButton = nodes.some((n) => n.backButton);
@@ -324,6 +338,9 @@ export function generateFlowGpc(
 	if (hasAnyBack) {
 		lines.push(`int FlowAnyPressed;`);
 		lines.push(`int FlowAnyIdx;`);
+	}
+	if (hasWindowMode) {
+		lines.push(`int _oled_y_off;`);
 	}
 	lines.push(``);
 
@@ -422,6 +439,11 @@ export function generateFlowGpc(
 		const inputLines: string[] = [];
 		let cursorIndex = 0;
 
+		// Window mode info
+		const isWindowMode = node.scrollMode === 'window';
+		const windowScrollVar = isWindowMode ? `Flow_${safeName}_scroll` : '';
+		const windowVisCount = isWindowMode ? (node.visibleCount ?? getInteractiveSubNodes(node).length) : 0;
+
 		// Collect pixel-art sub-nodes to merge into a single const image
 		// Conditional pixel-arts need separate images since they can't be statically composited
 		const unconditionalPixelArts: { sub: SubNode; x: number; y: number }[] = [];
@@ -479,12 +501,18 @@ export function generateFlowGpc(
 			const pixelY = computeSubNodePixelY(node, sub);
 			const pixelX = sub.position === 'absolute' ? (sub.x ?? 0) : node.stackOffsetX;
 
+			// In window mode, interactive items get a runtime Y expression
+			const effectiveY: number | string =
+				isWindowMode && sub.interactive && sub.position !== 'absolute'
+					? `(${pixelY} - _oled_y_off)`
+					: pixelY;
+
 			const ctx: SubNodeCodegenContext = {
 				varPrefix: `Flow_${safeName}`,
 				cursorVar: `Flow_${safeName}_cursor`,
 				cursorIndex: sub.interactive ? cursorIndex : -1,
 				x: pixelX,
-				y: pixelY,
+				y: effectiveY,
 				boundVariable: sub.boundVariable ? profileVar(sub.boundVariable) : undefined,
 				buttons: bm,
 				stringArrayName,
@@ -495,15 +523,27 @@ export function generateFlowGpc(
 			const configWithLabel = { ...sub.config, label: sub.displayText ?? sub.label };
 			const code = def.generateGpc(configWithLabel, ctx);
 			if (code.trim()) {
-				// Wrap in condition guard if subnode has a condition
+				// Build code with optional condition guard
+				const wrappedLines: string[] = [];
 				if (sub.condition?.variable) {
 					const cond = sub.condition;
 					const condVar = profileVar(cond.variable);
-					codeLines.push(`    if(${condVar} ${cond.comparison} ${cond.value}) {`);
-					codeLines.push(code.replace(/^/gm, '    '));
+					wrappedLines.push(`    if(${condVar} ${cond.comparison} ${cond.value}) {`);
+					wrappedLines.push(code.replace(/^/gm, '    '));
+					wrappedLines.push(`    }`);
+				} else {
+					wrappedLines.push(code);
+				}
+
+				// Wrap in window bounds check for interactive items in window mode
+				if (isWindowMode && sub.interactive) {
+					codeLines.push(`    if(${cursorIndex} >= ${windowScrollVar} && ${cursorIndex} < ${windowScrollVar} + ${windowVisCount}) {`);
+					for (const line of wrappedLines) {
+						codeLines.push(line.replace(/^/gm, '    '));
+					}
 					codeLines.push(`    }`);
 				} else {
-					codeLines.push(code);
+					codeLines.push(...wrappedLines);
 				}
 			}
 
@@ -702,6 +742,13 @@ export function generateFlowGpc(
 			lines.push(`    if(FlowRedraw) {`);
 			lines.push(`        FlowRedraw = FALSE;`);
 			lines.push(`        cls_oled(OLED_BLACK);`);
+
+			// Compute scroll Y offset for window mode
+			if (node.scrollMode === 'window') {
+				const margin = node.lineMargin ?? 0;
+				const itemStep = 8 + margin;
+				lines.push(`        _oled_y_off = Flow_${safeName}_scroll * ${itemStep};`);
+			}
 
 			const subCode = nodeSubNodeCode.get(node.id);
 			if (subCode) {

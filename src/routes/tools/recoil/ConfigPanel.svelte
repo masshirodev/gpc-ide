@@ -11,7 +11,7 @@
         assignMode = $bindable('auto'),
         bulletCount = $bindable(30),
         fireRate = $bindable(600),
-        scale = $bindable(3),
+        scale = $bindable(10),
         onClear
     }: Props = $props();
 

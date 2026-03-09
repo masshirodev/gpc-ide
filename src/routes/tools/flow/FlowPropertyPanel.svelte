@@ -28,6 +28,7 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { setKeyboardTransfer } from '$lib/stores/keyboard-transfer.svelte';
+	import { setRecoilTransfer } from '$lib/stores/recoil-transfer.svelte';
 	import type { ModuleNodeData } from '$lib/types/flow';
 
 	interface Props {
@@ -51,6 +52,7 @@
 		onSelectSubNode: (nodeId: string, subNodeId: string | null) => void;
 		onOpenWeaponData?: () => void;
 		onOpenWeaponDetection?: () => void;
+		gamePath?: string | null;
 	}
 
 	let {
@@ -74,6 +76,7 @@
 		onSelectSubNode,
 		onOpenWeaponData,
 		onOpenWeaponDetection,
+		gamePath = null,
 	}: Props = $props();
 
 	// Derive active conflicts for the selected module node
@@ -242,6 +245,7 @@
 	let editModuleComboCode = $state('');
 	let editEnableVariable = $state('');
 	let moduleCodeTab = $state<'init' | 'main' | 'functions' | 'combos'>('main');
+	let recoilToolWeaponIdx = $state(0);
 	let isModuleNode = $derived(selectedNode?.type === 'module');
 	let showLayoutBuilder = $state(false);
 	let isMenuNode = $derived(
@@ -1177,6 +1181,39 @@
 							? `${weaponNamesFromData.length} weapons from Weapon Data module`
 							: 'Add a Weapon Data module first to define weapons'}
 					</p>
+				</div>
+			{/if}
+
+			<!-- Send to Recoil Tool (antirecoil_timeline module only) -->
+			{#if selectedNode.moduleData?.moduleId === 'antirecoil_timeline'}
+				<div class="mb-3">
+					<label class="mb-1 block text-xs text-zinc-400">Recoil Timeline</label>
+					{#if weaponNamesFromData.length > 0}
+						<select
+							class="mb-1.5 w-full rounded border border-zinc-700 bg-zinc-800 px-2 py-1.5 text-xs text-zinc-200"
+							value={recoilToolWeaponIdx}
+							onchange={(e) => { recoilToolWeaponIdx = parseInt((e.target as HTMLSelectElement).value); }}
+						>
+							{#each weaponNamesFromData as name, i}
+								<option value={i}>{i}. {name}</option>
+							{/each}
+						</select>
+					{/if}
+					<button
+						class="w-full rounded bg-blue-600 px-2 py-1.5 text-xs font-medium text-white hover:bg-blue-500"
+						onclick={() => {
+							setRecoilTransfer({
+								weaponName: weaponNamesFromData[recoilToolWeaponIdx] ?? '',
+								weaponIndex: recoilToolWeaponIdx,
+								values: [],
+								returnTo: gamePath ? gamePath + '/recoiltable.gpc' : null
+							});
+							goto('/tools/recoil');
+						}}
+					>
+						Open Spray Tool
+					</button>
+					<p class="mt-0.5 text-[10px] text-zinc-600">Draw spray patterns to generate recoil phase values</p>
 				</div>
 			{/if}
 

@@ -372,8 +372,8 @@ function generateVarDecl(v: FlowVariable): string {
  */
 /**
  * Format an extra_vars entry into a valid GPC declaration.
- * Handles: "int", "int [profile]", "int [216]"
- * Produces: "int Name;", "int Name [profile];", "int Name[216];"
+ * Handles: "int", "int [profile]", "int [216]", "int = -1"
+ * Produces: "int Name;", "int Name [profile];", "int Name[216];", "int Name = -1;"
  */
 function formatExtraVar(name: string, type: string): string {
 	const arrayMatch = type.match(/^(\w+)\s*\[(.+)\]$/);
@@ -384,6 +384,10 @@ function formatExtraVar(name: string, type: string): string {
 			return `${baseType} ${name} [profile];`;
 		}
 		return `${baseType} ${name}[${size}];`;
+	}
+	const defaultMatch = type.match(/^(\w+)\s*=\s*(.+)$/);
+	if (defaultMatch) {
+		return `${defaultMatch[1]} ${name} = ${defaultMatch[2].trim()};`;
 	}
 	return `${type} ${name};`;
 }
@@ -407,6 +411,7 @@ function generateApplyKeyboard(mappings: KeyMapping[]): string {
 		const kb = enabled.filter((m) => m.type === 'keyboard');
 		const singleCtrl = enabled.filter((m) => m.type === 'controller' && !m.sourceCombo);
 		const comboCtrl = enabled.filter((m) => m.type === 'controller' && m.sourceCombo);
+		const comboMappings = enabled.filter((m) => m.type === 'combo');
 
 		if (kb.length > 0) {
 			for (const m of kb) {
@@ -425,6 +430,15 @@ function generateApplyKeyboard(mappings: KeyMapping[]): string {
 		if (comboCtrl.length > 0) {
 			for (const m of comboCtrl) {
 				lines.push(`    if (get_val(${m.sourceCombo}) && event_press(${m.source})) { set_val(${m.target}, ${m.value}); }`);
+			}
+		}
+		if (comboMappings.length > 0) {
+			for (const m of comboMappings) {
+				if (m.comboMode === 'hold') {
+					lines.push(`    if (GetKeyboardKey(${m.source})) { combo_run(${m.target}); } else { combo_stop(${m.target}); }`);
+				} else {
+					lines.push(`    if (GetKeyboardKey(${m.source})) { combo_run(${m.target}); }`);
+				}
 			}
 		}
 	}

@@ -16,8 +16,8 @@ function find_digits(fNumber) {
     fNumber = abs(fNumber);
     if(fNumber >= 10000) return 5;
     else if (fNumber >= 1000) return 4;
-    else if (fNumber >= 10) return 2;
     else if (fNumber >= 100) return 3;
+    else if (fNumber >= 10) return 2;
     return 1;
 }
 

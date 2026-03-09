@@ -15,7 +15,6 @@
     import { onMount } from 'svelte';
 
     // --- Constants ---
-    const PHASE_ENDS_CYCLES = [8, 16, 28, 42, 60, 80, 105, 135, 175, 999];
     const PHASE_BOUNDARIES_MS = [80, 160, 280, 420, 600, 800, 1050, 1350, 1750, Infinity];
     const PHASE_LABELS = [
         '~80ms', '~160ms', '~280ms', '~420ms', '~600ms',
@@ -130,14 +129,8 @@
             dy = endPt.y - startPt.y;
         }
 
-        const phaseStart = phaseIdx === 0 ? 0 : PHASE_ENDS_CYCLES[phaseIdx - 1];
-        const phaseEnd = PHASE_ENDS_CYCLES[phaseIdx];
-        const phaseCycles = Math.min(phaseEnd, 200) - phaseStart;
-
-        const rawV = -dy / scaleVal;
-        const rawH = dx / scaleVal;
-        const v = Math.round((rawV / phaseCycles) * (phaseEnd - phaseStart));
-        const h = Math.round((rawH / phaseCycles) * (phaseEnd - phaseStart));
+        const v = Math.round(-dy / scaleVal);
+        const h = Math.round(dx / scaleVal);
 
         return {
             v: Math.max(-100, Math.min(100, v)),
@@ -186,14 +179,8 @@
             dy = pts[lastIdx].y - prevPt.y;
         }
 
-        const phaseStart = phaseIdx === 0 ? 0 : PHASE_ENDS_CYCLES[phaseIdx - 1];
-        const phaseEnd = PHASE_ENDS_CYCLES[phaseIdx];
-        const phaseCycles = Math.min(phaseEnd, 200) - phaseStart;
-
-        const rawV = -dy / scaleVal;
-        const rawH = dx / scaleVal;
-        const v = Math.round((rawV / phaseCycles) * (phaseEnd - phaseStart));
-        const h = Math.round((rawH / phaseCycles) * (phaseEnd - phaseStart));
+        const v = Math.round(-dy / scaleVal);
+        const h = Math.round(dx / scaleVal);
 
         return {
             v: Math.max(-100, Math.min(100, v)),

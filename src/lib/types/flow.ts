@@ -87,7 +87,7 @@ export interface SubNodeCodegenContext {
 	cursorVar: string;
 	cursorIndex: number;
 	x: number;
-	y: number;
+	y: number | string;
 	boundVariable?: string;
 	buttons: {
 		confirm: string;

@@ -689,6 +689,7 @@
 						onSelectSubNode={selectSubNode}
 						onOpenWeaponData={() => { weaponDataModalOpen = true; }}
 						onOpenWeaponDetection={() => { weaponDetectionModalOpen = true; }}
+						gamePath={flowStore.gamePath}
 					/>
 				{/if}
 			</div>

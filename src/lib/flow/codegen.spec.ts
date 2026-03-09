@@ -345,6 +345,83 @@ describe('codegen FlowRedraw', () => {
 		expect(downLine).toContain('FlowRedraw = TRUE');
 	});
 
+	it('window-mode declares _oled_y_off and total/visible defines', () => {
+		const g = oneNodeGraph((n) => {
+			n.scrollMode = 'window';
+			n.visibleCount = 2;
+			addToggle(n, 'A', 'opt_a');
+			addToggle(n, 'B', 'opt_b');
+			addToggle(n, 'C', 'opt_c');
+		});
+		const code = generateFlowGpc(g);
+		expect(code).toContain('int _oled_y_off;');
+		expect(code).toContain('define Flow_Main_total_items = 3;');
+		expect(code).toContain('define Flow_Main_visible = 2;');
+	});
+
+	it('window-mode wraps interactive items in scroll bounds check', () => {
+		const g = oneNodeGraph((n) => {
+			n.scrollMode = 'window';
+			n.visibleCount = 2;
+			addToggle(n, 'A', 'opt_a');
+			addToggle(n, 'B', 'opt_b');
+			addToggle(n, 'C', 'opt_c');
+		});
+		const code = generateFlowGpc(g);
+		const renderBlock = code.slice(
+			code.indexOf('if(FlowRedraw)'),
+			code.indexOf('}', code.indexOf('if(FlowRedraw)') + code.slice(code.indexOf('if(FlowRedraw)')).lastIndexOf('}'))
+		);
+		// Each interactive item should have a scroll bounds check
+		expect(renderBlock).toContain('if(0 >= Flow_Main_scroll && 0 < Flow_Main_scroll + 2)');
+		expect(renderBlock).toContain('if(1 >= Flow_Main_scroll && 1 < Flow_Main_scroll + 2)');
+		expect(renderBlock).toContain('if(2 >= Flow_Main_scroll && 2 < Flow_Main_scroll + 2)');
+	});
+
+	it('window-mode computes _oled_y_off in render block', () => {
+		const g = oneNodeGraph((n) => {
+			n.scrollMode = 'window';
+			n.visibleCount = 2;
+			n.lineMargin = 1;
+			addToggle(n, 'A', 'opt_a');
+			addToggle(n, 'B', 'opt_b');
+			addToggle(n, 'C', 'opt_c');
+		});
+		const code = generateFlowGpc(g);
+		// itemStep = 8 (stackHeight) + 1 (margin) = 9
+		expect(code).toContain('_oled_y_off = Flow_Main_scroll * 9;');
+	});
+
+	it('window-mode uses Y expression with _oled_y_off for interactive items', () => {
+		const g = oneNodeGraph((n) => {
+			n.scrollMode = 'window';
+			n.visibleCount = 2;
+			addToggle(n, 'A', 'opt_a');
+			addToggle(n, 'B', 'opt_b');
+			addToggle(n, 'C', 'opt_c');
+		});
+		const code = generateFlowGpc(g);
+		// Interactive items should reference _oled_y_off in their Y coordinate
+		expect(code).toContain('- _oled_y_off)');
+	});
+
+	it('window-mode does not wrap non-interactive items in bounds check', () => {
+		const g = oneNodeGraph((n) => {
+			n.scrollMode = 'window';
+			n.visibleCount = 2;
+			addHeader(n, 'Title');
+			addToggle(n, 'A', 'opt_a');
+			addToggle(n, 'B', 'opt_b');
+			addToggle(n, 'C', 'opt_c');
+		});
+		const code = generateFlowGpc(g);
+		// Header should render without bounds check (always visible)
+		const renderBlock = code.slice(code.indexOf('if(FlowRedraw)'));
+		// Only 3 bounds checks (one per interactive item), not 4
+		const boundsChecks = renderBlock.match(/if\(\d+ >= Flow_Main_scroll/g);
+		expect(boundsChecks).toHaveLength(3);
+	});
+
 	it('back button still works (state change triggers FlowRedraw via main loop)', () => {
 		const g = oneNodeGraph((n) => {
 			n.backButton = 'PS5_CIRCLE';
