@@ -27,35 +27,38 @@ export interface MergedFlowResult {
 export function generateMergedFlowGpc(project: FlowProject): MergedFlowResult {
 	const menuFlow = project.flows.find((f) => f.flowType === 'menu');
 	const gameplayFlow = project.flows.find((f) => f.flowType === 'gameplay');
+	const dataFlow = project.flows.find((f) => f.flowType === 'data');
 
 	const hasMenu = menuFlow && menuFlow.nodes.length > 0;
 	const hasGameplay = gameplayFlow && gameplayFlow.nodes.some((n) => n.type === 'module' || n.type === 'custom');
+	const hasData = dataFlow && dataFlow.nodes.some((n) => n.type === 'module' || n.type === 'custom');
 
 	const profiles = project.profiles ?? [];
 	const profileCount = profiles.length;
 
 	// If only one flow has content, just generate that one
-	if (hasMenu && !hasGameplay) {
+	if (hasMenu && !hasGameplay && !hasData) {
 		return { code: generateFlowGpc(menuFlow, profileCount), extraFiles: {} };
 	}
-	if (!hasMenu && hasGameplay) {
+	if (!hasMenu && hasGameplay && !hasData) {
 		const gameplayResult = generateGameplayGpc(gameplayFlow!);
 		return {
 			code: generateGameplayGpcStandalone(gameplayFlow!),
 			extraFiles: gameplayResult.extraFiles,
 		};
 	}
-	if (!hasMenu && !hasGameplay) {
+	if (!hasMenu && !hasGameplay && !hasData) {
 		return { code: '// Empty flow project — add nodes to generate code\n', extraFiles: {} };
 	}
 
 	// Both flows have content — merge them
 	// Skip persistence in menu codegen — we generate combined persistence below
+	const dataResult = hasData ? generateGameplayGpc(dataFlow!) : null;
 	const gameplayResult = generateGameplayGpc(gameplayFlow!);
 	const menuCode = generateFlowGpc(menuFlow!, profileCount, { skipPersistence: true });
 
 	// Collect combined persist vars from all sources
-	const combinedPersistVars = collectCombinedPersistVars(project, menuFlow!, gameplayFlow!, profileCount);
+	const combinedPersistVars = collectCombinedPersistVars(project, menuFlow!, gameplayFlow!, profileCount, dataFlow);
 
 	const lines: string[] = [];
 
@@ -83,11 +86,17 @@ export function generateMergedFlowGpc(project: FlowProject): MergedFlowResult {
 
 	const sharedVarNames = new Set(project.sharedVariables.map((v) => v.name));
 
-	// Collect gameplay variable names to avoid re-declaration in menu code
+	// Collect gameplay + data variable names to avoid re-declaration in menu code
 	const gameplayVarNames = new Set<string>();
 	for (const decl of gameplayResult.variables) {
 		const match = decl.match(/(?:int|int8|int16|int32)\s+(\w+)/);
 		if (match) gameplayVarNames.add(match[1]);
+	}
+	if (dataResult) {
+		for (const decl of dataResult.variables) {
+			const match = decl.match(/(?:int|int8|int16|int32)\s+(\w+)/);
+			if (match) gameplayVarNames.add(match[1]);
+		}
 	}
 
 	// Everything before init is declarations/functions
@@ -132,6 +141,34 @@ export function generateMergedFlowGpc(project: FlowProject): MergedFlowResult {
 		lines.push(`// ===== PROFILE SYSTEM =====`);
 		lines.push(`define FLOW_PROFILE_COUNT = ${profileCount};`);
 		lines.push(`int Flow_CurrentProfile = 0;`);
+
+		// ProfileData module: emit labels array if the module exists in data/gameplay flow
+		const hasProfileData = [...(dataFlow?.nodes ?? []), ...gameplayFlow!.nodes].some(
+			(n) => n.moduleData?.moduleId === 'profiledata'
+		);
+		if (hasProfileData && profiles.length > 0) {
+			const quoted = profiles.map((p) => `"${p.name}"`).join(', ');
+			lines.push(`define PROFILE_COUNT = ${profileCount};`);
+			lines.push(`const string ProfileLabels[] = { ${quoted} };`);
+		}
+
+		lines.push('');
+	}
+
+	// Array Builder: emit custom arrays from arraybuilder module nodes
+	const arrayBuilderNodes = [...(dataFlow?.nodes ?? []), ...gameplayFlow!.nodes].filter(
+		(n) => n.moduleData?.moduleId === 'arraybuilder' && n.moduleData.customArrays?.length
+	);
+	if (arrayBuilderNodes.length > 0) {
+		lines.push(`// ===== CUSTOM ARRAYS =====`);
+		for (const node of arrayBuilderNodes) {
+			for (const arr of node.moduleData!.customArrays!) {
+				if (arr.values.length === 0) continue;
+				lines.push(`define ${arr.countDefine} = ${arr.values.length};`);
+				const quoted = arr.values.map((v) => `"${v}"`).join(', ');
+				lines.push(`const string ${arr.name}[] = { ${quoted} };`);
+			}
+		}
 		lines.push('');
 	}
 
@@ -156,6 +193,25 @@ export function generateMergedFlowGpc(project: FlowProject): MergedFlowResult {
 		const match = decl.match(/(?:int|int8|int16|int32)\s+(\w+)/);
 		return match ? !sharedVarNames.has(match[1]) : true;
 	});
+
+	// Data defines and variables (emitted first — gameplay may reference them)
+	if (dataResult) {
+		const dataDefines = dataResult.defines;
+		const dataVars = dataResult.variables.filter((decl) => {
+			const match = decl.match(/(?:int|int8|int16|int32)\s+(\w+)/);
+			return match ? !sharedVarNames.has(match[1]) : true;
+		});
+		if (dataDefines.length > 0) {
+			lines.push(`// ===== DATA DEFINES =====`);
+			lines.push(...dataDefines);
+			lines.push('');
+		}
+		if (dataVars.length > 0) {
+			lines.push(`// ===== DATA VARIABLES =====`);
+			lines.push(...dataVars);
+			lines.push('');
+		}
+	}
 
 	// Gameplay defines (button params, weapon counts, etc.)
 	if (gameplayResult.defines.length > 0) {
@@ -188,6 +244,19 @@ export function generateMergedFlowGpc(project: FlowProject): MergedFlowResult {
 	lines.push(`// ===== MENU FLOW =====`);
 	lines.push(...nonConstLines);
 
+	// Data combos and functions (before gameplay — gameplay may reference them)
+	if (dataResult) {
+		if (dataResult.combos.length > 0) {
+			lines.push(`// ===== DATA COMBOS =====`);
+			lines.push(...dataResult.combos);
+		}
+		if (dataResult.functions.length > 0) {
+			lines.push(`// ===== DATA FUNCTIONS =====`);
+			lines.push(...dataResult.functions);
+			lines.push('');
+		}
+	}
+
 	// Gameplay combos
 	if (gameplayResult.combos.length > 0) {
 		lines.push(`// ===== GAMEPLAY COMBOS =====`);
@@ -209,8 +278,9 @@ export function generateMergedFlowGpc(project: FlowProject): MergedFlowResult {
 	}
 
 	// Merged init block
+	const hasDataInit = dataResult && dataResult.initCode.length > 0;
 	const hasGameplayInit = gameplayResult.initCode.length > 0;
-	const needsInit = initStartIdx >= 0 || hasGameplayInit || combinedPersistVars.length > 0;
+	const needsInit = initStartIdx >= 0 || hasDataInit || hasGameplayInit || combinedPersistVars.length > 0;
 
 	if (needsInit) {
 		lines.push(`// ===== INIT =====`);
@@ -225,8 +295,14 @@ export function generateMergedFlowGpc(project: FlowProject): MergedFlowResult {
 			lines.push(...menuInitBody);
 		}
 
-		if (hasGameplayInit) {
+		if (hasDataInit) {
 			if (initStartIdx >= 0) lines.push('');
+			lines.push(`    // --- Data Init ---`);
+			lines.push(...dataResult!.initCode);
+		}
+
+		if (hasGameplayInit) {
+			if (initStartIdx >= 0 || hasDataInit) lines.push('');
 			lines.push(`    // --- Gameplay Init ---`);
 			lines.push(...gameplayResult.initCode);
 		}
@@ -258,6 +334,13 @@ export function generateMergedFlowGpc(project: FlowProject): MergedFlowResult {
 		lines.push(...menuMainBody);
 	}
 
+	// Data flow main loop (if any)
+	if (dataResult && dataResult.mainLoopCode.length > 0) {
+		lines.push('');
+		lines.push(`    // --- Data Flow ---`);
+		lines.push(...dataResult.mainLoopCode);
+	}
+
 	// Gameplay triggers
 	if (gameplayResult.mainLoopCode.length > 0) {
 		lines.push('');
@@ -267,7 +350,8 @@ export function generateMergedFlowGpc(project: FlowProject): MergedFlowResult {
 
 	lines.push(`}`);
 
-	return { code: lines.join('\n'), extraFiles: gameplayResult.extraFiles };
+	const extraFiles = { ...gameplayResult.extraFiles, ...(dataResult?.extraFiles ?? {}) };
+	return { code: lines.join('\n'), extraFiles };
 }
 
 // ==================== Persistence Collection ====================
@@ -281,7 +365,8 @@ function collectCombinedPersistVars(
 	project: FlowProject,
 	menuFlow: FlowGraph,
 	gameplayFlow: FlowGraph,
-	profileCount: number
+	profileCount: number,
+	dataFlow?: FlowGraph
 ): PersistVar[] {
 	const result: PersistVar[] = [];
 	const seen = new Set<string>();
@@ -300,6 +385,11 @@ function collectCombinedPersistVars(
 	const sharedPersist = project.sharedVariables.filter((v) => v.persist);
 	addVars(sharedPersist);
 
+	// Data flow persist vars
+	if (dataFlow) {
+		addVars(collectPersistVars(dataFlow));
+	}
+
 	// Menu flow persist vars
 	if (menuFlow.settings.persistenceEnabled) {
 		addVars(collectPersistVars(menuFlow));
@@ -310,8 +400,9 @@ function collectCombinedPersistVars(
 
 	// Special: Weapons_RecoilValues array persistence
 	// When weapondata module exists and a recoil module uses it (not timeline which is hardcoded)
-	const hasWeapondata = gameplayFlow.nodes.some((n) => n.moduleData?.moduleId === 'weapondata');
-	const hasRecoilModule = gameplayFlow.nodes.some(
+	const allModuleNodes = [...gameplayFlow.nodes, ...(dataFlow?.nodes ?? [])];
+	const hasWeapondata = allModuleNodes.some((n) => n.moduleData?.moduleId === 'weapondata');
+	const hasRecoilModule = allModuleNodes.some(
 		(n) =>
 			n.moduleData?.needsWeapondata &&
 			n.moduleData.moduleId !== 'weapondata' &&

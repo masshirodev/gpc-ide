@@ -4,14 +4,17 @@
 	import { getSettings } from '$lib/stores/settings.svelte';
 	import { addToast } from '$lib/stores/toast.svelte';
 
+	import type { FlowType } from '$lib/types/flow';
+
 	interface Props {
 		open: boolean;
 		node: FlowNode | null;
+		flowType?: FlowType;
 		onclose: () => void;
 		onsaved?: () => void;
 	}
 
-	let { open, node, onclose, onsaved }: Props = $props();
+	let { open, node, flowType = 'menu', onclose, onsaved }: Props = $props();
 
 	let settingsStore = getSettings();
 	let settings = $derived($settingsStore);
@@ -26,7 +29,13 @@
 		if (open && node) {
 			name = node.label;
 			description = '';
-			category = node.type === 'intro' ? 'intro' : node.type === 'screensaver' ? 'screensaver' : node.type === 'home' ? 'home' : node.type === 'debug' ? 'debug' : 'menu';
+			if (flowType === 'data') {
+				category = 'data';
+			} else if (flowType === 'gameplay') {
+				category = 'gameplay';
+			} else {
+				category = node.type === 'intro' ? 'intro' : node.type === 'screensaver' ? 'screensaver' : node.type === 'home' ? 'home' : node.type === 'debug' ? 'debug' : 'menu';
+			}
 			tags = '';
 		}
 	});
@@ -48,6 +57,7 @@
 				name: name.trim(),
 				description: description.trim(),
 				category,
+				flowType,
 				tags: tags
 					.split(',')
 					.map((t) => t.trim())
@@ -66,6 +76,7 @@
 					subNodes: plain.subNodes,
 					stackOffsetX: plain.stackOffsetX,
 					stackOffsetY: plain.stackOffsetY,
+					moduleData: plain.moduleData,
 				},
 				edgeTemplates: [],
 				parameters: [],
@@ -127,6 +138,8 @@
 						<option value="home">Home / Status</option>
 						<option value="screensaver">Screensaver</option>
 						<option value="utility">Utility</option>
+						<option value="gameplay">Gameplay</option>
+						<option value="data">Data</option>
 					</select>
 				</div>
 

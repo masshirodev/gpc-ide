@@ -28,7 +28,7 @@ export function migrateFlowJsonToProject(graph: FlowGraph): FlowProject {
 	}
 	return {
 		version: 1,
-		flows: [migrated, createEmptyFlowGraph('Gameplay Flow', 'gameplay')],
+		flows: [migrated, createEmptyFlowGraph('Gameplay Flow', 'gameplay'), createEmptyFlowGraph('Data', 'data')],
 		sharedVariables: [],
 		sharedCode: '',
 		updatedAt: Date.now(),
@@ -42,8 +42,9 @@ export function migrateFlowJsonToProject(graph: FlowGraph): FlowProject {
 export function ensureFlowProjectFlows(project: FlowProject): FlowProject {
 	const hasMenu = project.flows.some((f) => f.flowType === 'menu');
 	const hasGameplay = project.flows.some((f) => f.flowType === 'gameplay');
+	const hasData = project.flows.some((f) => f.flowType === 'data');
 
-	if (hasMenu && hasGameplay) return project;
+	if (hasMenu && hasGameplay && hasData) return project;
 
 	const result = structuredClone(project);
 	if (!hasMenu) {
@@ -51,6 +52,9 @@ export function ensureFlowProjectFlows(project: FlowProject): FlowProject {
 	}
 	if (!hasGameplay) {
 		result.flows.push(createEmptyFlowGraph('Gameplay Flow', 'gameplay'));
+	}
+	if (!hasData) {
+		result.flows.push(createEmptyFlowGraph('Data', 'data'));
 	}
 	return result;
 }

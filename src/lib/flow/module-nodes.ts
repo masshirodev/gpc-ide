@@ -72,25 +72,35 @@ export function createModuleNode(
 				: undefined,
 		conflicts: moduleDef.conflicts ?? [],
 		needsWeapondata: moduleDef.needs_weapondata ?? false,
+		flowTarget: moduleDef.flow_target,
 	};
 
 	const node = createFlowNode('module', moduleDef.display_name, position);
 	node.moduleData = moduleData;
 
+	// Data modules: mark as alwaysActive since they define data, not gameplay logic.
+	// No enable variable guard or Status toggle needed.
+	const isDataModule = moduleDef.flow_target === 'data';
+	if (isDataModule) {
+		moduleData.alwaysActive = true;
+	}
+
 	// Create node variables — enable variable + option variables (deduplicated)
 	const vars: FlowNode['variables'] = [];
 	const seenVars = new Set<string>();
 
-	// Enable variable first (auto-persist toggles as 0/1)
-	vars.push({
-		name: enableVar,
-		type: 'int',
-		defaultValue: statusOption ? statusOption.defaultValue : 0,
-		persist: true,
-		min: 0,
-		max: 1,
-	});
-	seenVars.add(enableVar);
+	// Enable variable first (auto-persist toggles as 0/1) — skip for data modules
+	if (!isDataModule) {
+		vars.push({
+			name: enableVar,
+			type: 'int',
+			defaultValue: statusOption ? statusOption.defaultValue : 0,
+			persist: true,
+			min: 0,
+			max: 1,
+		});
+		seenVars.add(enableVar);
+	}
 
 	// Add option variables (skip if already added as enable var)
 	// Module options are auto-persisted so user settings survive reboot
@@ -107,6 +117,7 @@ export function createModuleNode(
 			seenVars.add(opt.variable);
 		}
 	}
+
 	// Weapondata: add CurrentWeapon as a node variable so it's
 	// available for binding to array-item sub-nodes
 	if (moduleDef.id === 'weapondata' && !seenVars.has('CurrentWeapon')) {

@@ -62,11 +62,12 @@ interface UndoEntry {
 	description: string;
 }
 
-let undoStacks = $state<Record<FlowType, UndoEntry[]>>({ menu: [], gameplay: [] });
-let redoStacks = $state<Record<FlowType, UndoEntry[]>>({ menu: [], gameplay: [] });
+let undoStacks = $state<Record<FlowType, UndoEntry[]>>({ menu: [], gameplay: [], data: [] });
+let redoStacks = $state<Record<FlowType, UndoEntry[]>>({ menu: [], gameplay: [], data: [] });
 let canvasStates = $state<Record<FlowType, CanvasState>>({
 	menu: { panX: 0, panY: 0, zoom: 1 },
 	gameplay: { panX: 0, panY: 0, zoom: 1 },
+	data: { panX: 0, panY: 0, zoom: 1 },
 });
 
 const MAX_UNDO = 50;
@@ -147,11 +148,12 @@ function loadActiveFlow() {
 }
 
 function resetAllStacks() {
-	undoStacks = { menu: [], gameplay: [] };
-	redoStacks = { menu: [], gameplay: [] };
+	undoStacks = { menu: [], gameplay: [], data: [] };
+	redoStacks = { menu: [], gameplay: [], data: [] };
 	canvasStates = {
 		menu: { panX: 0, panY: 0, zoom: 1 },
 		gameplay: { panX: 0, panY: 0, zoom: 1 },
+		data: { panX: 0, panY: 0, zoom: 1 },
 	};
 }
 

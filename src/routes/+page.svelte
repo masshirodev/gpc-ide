@@ -253,11 +253,13 @@
 	// Detect antirecoil_timeline module in flow project
 	let hasAntirecoilTimeline = $derived.by(() => {
 		if (!flowStore.project) return false;
-		const gameplayFlow = flowStore.project.flows.find((f) => f.flowType === 'gameplay');
-		if (!gameplayFlow) return false;
-		return gameplayFlow.nodes.some(
-			(n) => n.type === 'module' && n.moduleData?.moduleId === 'antirecoil_timeline'
-		);
+		return flowStore.project.flows
+			.filter((f) => f.flowType === 'gameplay' || f.flowType === 'data')
+			.some((flow) =>
+				flow.nodes.some(
+					(n) => n.type === 'module' && n.moduleData?.moduleId === 'antirecoil_timeline'
+				)
+			);
 	});
 
 	let gameTabs = $derived((() => {

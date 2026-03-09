@@ -18,6 +18,7 @@
 	import KeySelect from '$lib/components/inputs/KeySelect.svelte';
 	import VariableSelect from '$lib/components/inputs/VariableSelect.svelte';
 	import { getSettings } from '$lib/stores/settings.svelte';
+	import { getProfiles } from '$lib/stores/flow.svelte';
 	import { listSpriteCollections, readSpriteCollection } from '$lib/tauri/commands';
 	import { base64ToSprite, bytesPerRow } from '$lib/utils/sprite-pixels';
 	import { pixelsToBase64 } from '../../tools/oled/pixels';
@@ -972,8 +973,9 @@
 
 			<!-- Module ID badge -->
 			{#if selectedNode.moduleData}
+				{@const isData = selectedNode.moduleData.flowTarget === 'data'}
 				<div class="mb-3 flex items-center gap-2">
-					<span class="rounded bg-red-950 px-2 py-0.5 text-xs text-red-300">
+					<span class="rounded px-2 py-0.5 text-xs {isData ? 'bg-emerald-950 text-emerald-300' : 'bg-red-950 text-red-300'}">
 						{selectedNode.moduleData.moduleId}
 					</span>
 					<span class="text-xs text-zinc-500">{selectedNode.moduleData.moduleName}</span>
@@ -1181,6 +1183,149 @@
 							? `${weaponNamesFromData.length} weapons from Weapon Data module`
 							: 'Add a Weapon Data module first to define weapons'}
 					</p>
+				</div>
+			{/if}
+
+			<!-- ProfileData exposed variables -->
+			{#if selectedNode.moduleData?.moduleId === 'profiledata'}
+				<div class="mb-3 rounded border border-emerald-900 bg-emerald-950/30 px-2 py-2">
+					<p class="mb-1.5 text-xs font-medium text-emerald-400">Exposed Variables</p>
+					<div class="space-y-1 text-[10px]">
+						<div class="flex items-center justify-between">
+							<span class="font-mono text-emerald-300">PROFILE_COUNT</span>
+							<span class="text-zinc-500">define</span>
+						</div>
+						<div class="flex items-center justify-between">
+							<span class="font-mono text-emerald-300">ProfileLabels[]</span>
+							<span class="text-zinc-500">const string[]</span>
+						</div>
+						<div class="flex items-center justify-between">
+							<span class="font-mono text-emerald-300">FLOW_PROFILE_COUNT</span>
+							<span class="text-zinc-500">define</span>
+						</div>
+						<div class="flex items-center justify-between">
+							<span class="font-mono text-emerald-300">Flow_CurrentProfile</span>
+							<span class="text-zinc-500">int variable</span>
+						</div>
+					</div>
+					<p class="mt-1.5 text-[10px] text-zinc-600">Auto-populated from the project's Profile panel</p>
+				</div>
+			{/if}
+
+			<!-- Array Builder UI -->
+			{#if selectedNode.moduleData?.moduleId === 'arraybuilder'}
+				{@const arrays = selectedNode.moduleData.customArrays ?? []}
+				<div class="mb-3">
+					<div class="mb-1 flex items-center justify-between">
+						<label class="text-xs text-zinc-400">Arrays</label>
+						<button
+							class="rounded px-1.5 py-0.5 text-xs text-emerald-400 hover:bg-zinc-800"
+							onclick={() => {
+								if (!selectedNode?.moduleData) return;
+								const existing = selectedNode.moduleData.customArrays ?? [];
+								const idx = existing.length + 1;
+								const name = `Array${idx}`;
+								onUpdateNode(selectedNode.id, {
+									moduleData: {
+										...selectedNode.moduleData,
+										customArrays: [...existing, { name, countDefine: `${name.toUpperCase()}_COUNT`, values: ['Item 1'] }]
+									}
+								});
+							}}
+						>
+							+ Add Array
+						</button>
+					</div>
+					{#if arrays.length > 0}
+						<div class="space-y-2">
+							{#each arrays as arr, ai}
+								<div class="rounded border border-zinc-700 bg-zinc-800/50 px-2 py-1.5">
+									<div class="mb-1 flex items-center gap-1">
+										<input
+											type="text"
+											class="flex-1 rounded border border-zinc-700 bg-zinc-900 px-1.5 py-0.5 text-xs font-medium text-emerald-300 focus:border-emerald-500 focus:outline-none"
+											value={arr.name}
+											placeholder="Array Name"
+											onchange={(e) => {
+												if (!selectedNode?.moduleData) return;
+												const updated = [...(selectedNode.moduleData.customArrays ?? [])];
+												const newName = (e.target as HTMLInputElement).value;
+												updated[ai] = { ...updated[ai], name: newName, countDefine: `${newName.toUpperCase()}_COUNT` };
+												onUpdateNode(selectedNode.id, { moduleData: { ...selectedNode.moduleData, customArrays: updated } });
+											}}
+										/>
+										<button
+											class="text-zinc-600 hover:text-red-400"
+											onclick={() => {
+												if (!selectedNode?.moduleData) return;
+												const updated = [...(selectedNode.moduleData.customArrays ?? [])];
+												updated.splice(ai, 1);
+												onUpdateNode(selectedNode.id, { moduleData: { ...selectedNode.moduleData, customArrays: updated } });
+											}}
+										>
+											<svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+												<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+											</svg>
+										</button>
+									</div>
+									<p class="mb-1 text-[10px] text-zinc-600">
+										<span class="font-mono text-zinc-500">{arr.countDefine}</span> = {arr.values.length}
+									</p>
+									<div class="space-y-0.5">
+										{#each arr.values as val, vi}
+											<div class="flex items-center gap-1">
+												<span class="w-4 text-right text-[9px] text-zinc-600">{vi}</span>
+												<input
+													type="text"
+													class="flex-1 rounded border border-zinc-700 bg-zinc-900 px-1.5 py-0.5 text-xs text-zinc-200 focus:border-emerald-500 focus:outline-none"
+													value={val}
+													onchange={(e) => {
+														if (!selectedNode?.moduleData) return;
+														const updated = [...(selectedNode.moduleData.customArrays ?? [])];
+														const newValues = [...updated[ai].values];
+														newValues[vi] = (e.target as HTMLInputElement).value;
+														updated[ai] = { ...updated[ai], values: newValues };
+														onUpdateNode(selectedNode.id, { moduleData: { ...selectedNode.moduleData, customArrays: updated } });
+													}}
+												/>
+												<button
+													class="text-zinc-600 hover:text-red-400"
+													onclick={() => {
+														if (!selectedNode?.moduleData) return;
+														const updated = [...(selectedNode.moduleData.customArrays ?? [])];
+														const newValues = [...updated[ai].values];
+														newValues.splice(vi, 1);
+														updated[ai] = { ...updated[ai], values: newValues };
+														onUpdateNode(selectedNode.id, { moduleData: { ...selectedNode.moduleData, customArrays: updated } });
+													}}
+												>
+													<svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+														<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+													</svg>
+												</button>
+											</div>
+										{/each}
+									</div>
+									<button
+										class="mt-1 w-full rounded border border-dashed border-zinc-700 py-0.5 text-[10px] text-zinc-500 hover:border-zinc-600 hover:text-zinc-400"
+										onclick={() => {
+											if (!selectedNode?.moduleData) return;
+											const updated = [...(selectedNode.moduleData.customArrays ?? [])];
+											updated[ai] = { ...updated[ai], values: [...updated[ai].values, ''] };
+											onUpdateNode(selectedNode.id, { moduleData: { ...selectedNode.moduleData, customArrays: updated } });
+										}}
+									>
+										+ Add Item
+									</button>
+								</div>
+							{/each}
+						</div>
+					{:else}
+						<div class="rounded border border-dashed border-zinc-700 px-2 py-2 text-center text-xs text-zinc-600">
+							No arrays defined
+						</div>
+					{/if}
+					<p class="mt-1 text-[10px] text-zinc-600">Arrays are generated as <span class="font-mono">const string[]</span> with count defines</p>
 				</div>
 			{/if}
 
@@ -1426,6 +1571,28 @@
 								placeholder="—"
 								onchange={(e) => { const v = (e.target as HTMLInputElement).value; updateVariable(i, { max: v === '' ? undefined : parseInt(v) }); }}
 							/>
+						</div>
+						<div class="mb-1 ml-1 flex items-center gap-2">
+							<label class="flex items-center gap-1 text-[10px] text-zinc-500">
+								<input
+									type="checkbox"
+									class="accent-emerald-500"
+									checked={variable.persist}
+									onchange={(e) => updateVariable(i, { persist: (e.target as HTMLInputElement).checked })}
+								/>
+								Persist
+							</label>
+							{#if getProfiles().length > 1}
+								<label class="flex items-center gap-1 text-[10px] text-zinc-500">
+									<input
+										type="checkbox"
+										class="accent-emerald-500"
+										checked={variable.perProfile ?? false}
+										onchange={(e) => updateVariable(i, { perProfile: (e.target as HTMLInputElement).checked || undefined })}
+									/>
+									Per Profile
+								</label>
+							{/if}
 						</div>
 					{/each}
 				</div>
@@ -1834,6 +2001,17 @@
 								onchange={(e) => updateVariable(i, { arraySize: parseInt((e.target as HTMLInputElement).value) || 32 })}
 							/>
 						</div>
+						<div class="mb-1 ml-1 flex items-center gap-2">
+							<label class="flex items-center gap-1 text-[10px] text-zinc-500">
+								<input
+									type="checkbox"
+									class="accent-emerald-500"
+									checked={variable.persist}
+									onchange={(e) => updateVariable(i, { persist: (e.target as HTMLInputElement).checked })}
+								/>
+								Persist
+							</label>
+						</div>
 					{:else}
 						<div class="mb-1 ml-1 flex items-center gap-1">
 							<span class="text-[10px] text-zinc-500">Default</span>
@@ -1859,6 +2037,28 @@
 								placeholder="—"
 								onchange={(e) => { const v = (e.target as HTMLInputElement).value; updateVariable(i, { max: v === '' ? undefined : parseInt(v) }); }}
 							/>
+						</div>
+						<div class="mb-1 ml-1 flex items-center gap-2">
+							<label class="flex items-center gap-1 text-[10px] text-zinc-500">
+								<input
+									type="checkbox"
+									class="accent-emerald-500"
+									checked={variable.persist}
+									onchange={(e) => updateVariable(i, { persist: (e.target as HTMLInputElement).checked })}
+								/>
+								Persist
+							</label>
+							{#if getProfiles().length > 1}
+								<label class="flex items-center gap-1 text-[10px] text-zinc-500">
+									<input
+										type="checkbox"
+										class="accent-emerald-500"
+										checked={variable.perProfile ?? false}
+										onchange={(e) => updateVariable(i, { perProfile: (e.target as HTMLInputElement).checked || undefined })}
+									/>
+									Per Profile
+								</label>
+							{/if}
 						</div>
 					{/if}
 				{/each}

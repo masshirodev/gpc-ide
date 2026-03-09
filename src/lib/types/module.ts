@@ -9,6 +9,7 @@ export interface ModuleSummary {
 	conflicts: string[];
 	needs_weapondata: boolean;
 	is_user_module: boolean;
+	flow_target: string;
 }
 
 export interface ModuleDefinition {
@@ -29,6 +30,7 @@ export interface ModuleDefinition {
 	needs_weapondata?: boolean;
 	requires_keyboard_file?: boolean;
 	config_menu?: ConfigMenu;
+	flow_target?: string;
 }
 
 export interface ConfigMenu {

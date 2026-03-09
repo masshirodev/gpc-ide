@@ -1,0 +1,7 @@
+[profiledata]
+display_name = "Profile Data"
+id = "profiledata"
+type = "all"
+flow_target = "data"
+description = "Profile label string array and count define.\nAuto-populated from the Profile Panel. Provides ProfileLabels[] and PROFILE_COUNT."
+state_display = ""

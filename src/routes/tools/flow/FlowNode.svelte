@@ -40,7 +40,9 @@
 
 	let isModule = $derived(node.type === 'module');
 	let height = $derived(isModule ? HEADER_HEIGHT + 62 + FOOTER_HEIGHT : getNodeHeight(node, expanded));
-	let color = $derived(NODE_COLORS[node.type] || '#6b7280');
+	let color = $derived(
+		node.moduleData?.flowTarget === 'data' ? '#10b981' : (NODE_COLORS[node.type] || '#6b7280')
+	);
 	let hasCode = $derived(node.gpcCode.trim().length > 0);
 	let hasCombo = $derived(node.comboCode.trim().length > 0 || (node.moduleData?.comboCode?.trim().length ?? 0) > 0);
 	let sortedSubNodes = $derived(getSortedSubNodes(node));

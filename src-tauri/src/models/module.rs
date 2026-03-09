@@ -38,6 +38,13 @@ pub struct ModuleDefinition {
     pub config_menu: Option<ConfigMenu>,
     #[serde(default)]
     pub is_user_module: bool,
+    /// Which flow tab this module belongs to: "gameplay" (default) or "data"
+    #[serde(default = "default_flow_target")]
+    pub flow_target: String,
+}
+
+fn default_flow_target() -> String {
+    "gameplay".to_string()
 }
 
 /// Custom menu configuration for data modules (weapondata, adp)
@@ -92,6 +99,7 @@ pub struct ModuleSummary {
     pub conflicts: Vec<String>,
     pub needs_weapondata: bool,
     pub is_user_module: bool,
+    pub flow_target: String,
 }
 
 impl ModuleDefinition {
@@ -107,6 +115,7 @@ impl ModuleDefinition {
             conflicts: self.conflicts.clone(),
             needs_weapondata: self.needs_weapondata.unwrap_or(false),
             is_user_module: self.is_user_module,
+            flow_target: self.flow_target.clone(),
         }
     }
 }

@@ -126,11 +126,21 @@
 	}
 
 	let weaponNamesFromData = $derived.by(() => {
-		const gameplayNodes = flowStore.project?.flows.find((f) => f.flowType === 'gameplay')?.nodes ?? [];
-		const wdNode = gameplayNodes.find((n) => n.moduleData?.moduleId === 'weapondata');
+		const allModuleNodes = flowStore.project?.flows
+			.filter((f) => f.flowType === 'gameplay' || f.flowType === 'data')
+			.flatMap((f) => f.nodes) ?? [];
+		const wdNode = allModuleNodes.find((n) => n.moduleData?.moduleId === 'weapondata');
 		return wdNode?.moduleData?.weaponNames ?? [];
 	});
 	let availableModules = $state<ModuleSummary[]>([]);
+	let filteredModulesForFlow = $derived(
+		availableModules.filter((m) => {
+			const target = m.flow_target || 'gameplay';
+			if (flowStore.activeFlowType === 'data') return target === 'data';
+			if (flowStore.activeFlowType === 'gameplay') return target === 'gameplay';
+			return true;
+		})
+	);
 	let building = $state(false);
 
 	let lastLoadedGamePath = $state<string | null>(flowStore.gamePath);
@@ -532,7 +542,7 @@
 <!-- Flow type tabs -->
 {#if flowStore.project}
 	<div class="flex border-b border-zinc-800 bg-zinc-900/50">
-		{#each [{ type: 'menu' as FlowType, label: 'Menu Flow' }, { type: 'gameplay' as FlowType, label: 'Gameplay Flow' }] as tab}
+		{#each [{ type: 'menu' as FlowType, label: 'Menu Flow' }, { type: 'gameplay' as FlowType, label: 'Gameplay Flow' }, { type: 'data' as FlowType, label: 'Data' }] as tab}
 			<button
 				class="px-5 py-2 text-sm font-medium transition-colors {flowStore.activeFlowType === tab.type
 					? 'border-b-2 border-emerald-500 text-emerald-400'
@@ -569,7 +579,7 @@
 		{building}
 		graphName={flowStore.graph.name}
 		flowType={flowStore.activeFlowType}
-		{availableModules}
+		availableModules={filteredModulesForFlow}
 	/>
 {/if}
 
@@ -592,7 +602,7 @@
 			<ChunkLibrary
 				flowType={flowStore.activeFlowType}
 				onInsertChunk={handleInsertChunk}
-				{availableModules}
+				availableModules={filteredModulesForFlow}
 				onAddModule={handleAddModule}
 				gameType={gameStore.selectedGame?.game_type}
 				refreshKey={chunkRefreshKey}
@@ -674,7 +684,7 @@
 						selectedSubNode={selectedSubNode}
 						allModuleNodes={flowStore.graph?.nodes.filter((n) => n.type === 'module' && n.moduleData) ?? []}
 						sharedVariables={flowStore.project?.sharedVariables ?? []}
-						gameplayModuleNodes={flowStore.project?.flows.find((f) => f.flowType === 'gameplay')?.nodes.filter((n) => n.type === 'module' && n.moduleData) ?? []}
+						gameplayModuleNodes={flowStore.project?.flows.filter((f) => f.flowType === 'gameplay' || f.flowType === 'data').flatMap((f) => f.nodes).filter((n) => n.type === 'module' && n.moduleData) ?? []}
 						onUpdateNode={updateNode}
 						onUpdateEdge={updateEdge}
 						onSetInitial={setInitialState}
@@ -718,7 +728,7 @@
 	{/if}
 </div>
 
-<ChunkSaveModal open={showChunkSave} node={selectedNode} onclose={() => (showChunkSave = false)} onsaved={() => chunkRefreshKey++} />
+<ChunkSaveModal open={showChunkSave} node={selectedNode} flowType={flowStore.activeFlowType} onclose={() => (showChunkSave = false)} onsaved={() => chunkRefreshKey++} />
 
 <WeaponDataModal
 	open={weaponDataModalOpen}

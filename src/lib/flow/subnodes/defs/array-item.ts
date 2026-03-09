@@ -3,6 +3,60 @@ import { addString } from '$lib/types/flow';
 import { widgetDrawRect } from '$lib/oled-widgets/types';
 import { drawBitmapText, measureText } from '$lib/oled-widgets/font';
 
+/**
+ * Build the GPC array access expression based on indexMode.
+ *
+ * - 'direct':  arrayName[boundVar]
+ * - '2d':      arrayName[parentVar][boundVar]
+ * - 'offset':  arrayName[offsetArray[parentVar] + boundVar]
+ */
+function arrayAccessExpr(
+	arrayName: string,
+	boundVar: string,
+	config: Record<string, unknown>
+): string {
+	const mode = (config.indexMode as string) || 'direct';
+	const parentVar = (config.parentVar as string) || '';
+
+	if (mode === '2d' && parentVar) {
+		return `${arrayName}[${parentVar}][${boundVar}]`;
+	}
+	if (mode === 'offset' && parentVar) {
+		const offsetArray = (config.offsetArray as string) || '';
+		if (offsetArray) {
+			return `${arrayName}[${offsetArray}[${parentVar}] + ${boundVar}]`;
+		}
+	}
+	return `${arrayName}[${boundVar}]`;
+}
+
+/**
+ * Build the max expression for wrap-around cycling.
+ *
+ * - countMode 'fixed':    arraySize - 1
+ * - countMode 'variable': countVar - 1
+ * - countMode 'array':    countArray[parentVar] - 1
+ */
+function maxExpression(config: Record<string, unknown>): string {
+	const countMode = (config.countMode as string) || 'fixed';
+	const parentVar = (config.parentVar as string) || '';
+
+	if (countMode === 'array' && parentVar) {
+		const countArray = (config.countArray as string) || '';
+		if (countArray) return `(${countArray}[${parentVar}] - 1)`;
+	}
+
+	// Legacy: useCountVar + countVar (backwards compatible)
+	const useCountVar = !!config.useCountVar;
+	const countVar = (config.countVar as string) || '';
+	if ((countMode === 'variable' || useCountVar) && countVar) {
+		return `(${countVar} - 1)`;
+	}
+
+	const arraySize = (config.arraySize as number) || 10;
+	return String(arraySize - 1);
+}
+
 export const arrayItemDef: SubNodeDef = {
 	id: 'array-item',
 	name: 'Array Item',
@@ -18,6 +72,12 @@ export const arrayItemDef: SubNodeDef = {
 		useCountVar: false,
 		countVar: '',
 		font: 'default',
+		// Dependency (cascading) support
+		indexMode: 'direct',
+		parentVar: '',
+		offsetArray: '',
+		countMode: 'fixed',
+		countArray: '',
 	},
 	params: [
 		{
@@ -47,6 +107,52 @@ export const arrayItemDef: SubNodeDef = {
 				{ value: 'small', label: 'Small (3x5)' },
 			],
 		},
+		// --- Dependency / Cascading ---
+		{
+			key: 'indexMode',
+			label: 'Index Mode',
+			type: 'select',
+			default: 'direct',
+			description: 'How to index into the array. Use 2D or Offset for cascading dependencies.',
+			options: [
+				{ value: 'direct', label: 'Direct — array[index]' },
+				{ value: '2d', label: '2D — array[parent][index]' },
+				{ value: 'offset', label: 'Offset — array[offsets[parent] + index]' },
+			],
+		},
+		{
+			key: 'parentVar',
+			label: 'Parent Variable',
+			type: 'string',
+			default: '',
+			description: 'Bound variable of the parent array-item this depends on',
+		},
+		{
+			key: 'offsetArray',
+			label: 'Offset Array',
+			type: 'string',
+			default: '',
+			description: 'Name of the int[] array holding per-parent offsets (for Offset mode)',
+		},
+		{
+			key: 'countMode',
+			label: 'Count Mode',
+			type: 'select',
+			default: 'fixed',
+			description: 'How to determine the number of items to cycle through',
+			options: [
+				{ value: 'fixed', label: 'Fixed — arraySize' },
+				{ value: 'variable', label: 'Variable — countVar' },
+				{ value: 'array', label: 'Array — countArray[parent]' },
+			],
+		},
+		{
+			key: 'countArray',
+			label: 'Count Array',
+			type: 'string',
+			default: '',
+			description: 'Name of the int[] array holding per-parent counts (for Array count mode)',
+		},
 	],
 	stackHeight: 8,
 	render(config, ctx) {
@@ -54,7 +160,19 @@ export const arrayItemDef: SubNodeDef = {
 		const label = (config as Record<string, unknown>).label as string || 'Array';
 		const arrayName = (config.arrayName as string) || '?';
 		const val = typeof ctx.boundValue === 'number' ? ctx.boundValue : 0;
-		const valStr = `${arrayName}[${val}]`;
+		const mode = (config.indexMode as string) || 'direct';
+		const parentVar = (config.parentVar as string) || '';
+
+		let valStr: string;
+		if (mode === '2d' && parentVar) {
+			valStr = `${arrayName}[${parentVar}][${val}]`;
+		} else if (mode === 'offset' && parentVar) {
+			const oa = (config.offsetArray as string) || 'Off';
+			valStr = `${arrayName}[${oa}[${parentVar}]+${val}]`;
+		} else {
+			valStr = `${arrayName}[${val}]`;
+		}
+
 		const on = style !== 'invert' || !ctx.isSelected;
 
 		if (ctx.isSelected && style === 'invert') {
@@ -82,13 +200,12 @@ export const arrayItemDef: SubNodeDef = {
 		const prefix = (config.prefixChar as string) || '>';
 		const spacing = (config.prefixSpacing as number) ?? 1;
 		const arrayName = (config.arrayName as string) || 'ArrayData';
-		const arraySize = (config.arraySize as number) || 10;
-		const useCountVar = !!config.useCountVar;
-		const countVar = (config.countVar as string) || '';
 		const font = 'OLED_FONT_SMALL';
 		const label = (config as Record<string, unknown>).label as string || '';
 		const boundVar = ctx.boundVariable || '_array_idx';
 		const lines: string[] = [];
+
+		const accessExpr = arrayAccessExpr(arrayName, boundVar, config);
 
 		// Non-interactive: just print label (if any) + array value
 		if (ctx.cursorIndex < 0) {
@@ -96,7 +213,7 @@ export const arrayItemDef: SubNodeDef = {
 				const labelIdx = addString(ctx, label);
 				lines.push(`    print(${ctx.x + 2}, ${ctx.y}, ${font}, OLED_WHITE, ${ctx.stringArrayName}[${labelIdx}]);`);
 			}
-			lines.push(`    print(${label ? 80 : ctx.x + 2}, ${ctx.y}, ${font}, OLED_WHITE, ${arrayName}[${boundVar}]);`);
+			lines.push(`    print(${label ? 80 : ctx.x + 2}, ${ctx.y}, ${font}, OLED_WHITE, ${accessExpr});`);
 			return lines.join('\n');
 		}
 
@@ -113,29 +230,26 @@ export const arrayItemDef: SubNodeDef = {
 			lines.push(`    if(${ctx.cursorVar} == ${ctx.cursorIndex}) {`);
 			lines.push(`        rect_oled(${ctx.x}, ${ctx.y}, ${128 - ctx.x}, 8, 1, OLED_WHITE);`);
 			if (label) lines.push(`        print(${ctx.x + 2}, ${ctx.y}, ${font}, OLED_BLACK, ${labelRef});`);
-			lines.push(`        print(${label ? 80 : ctx.x + 2}, ${ctx.y}, ${font}, OLED_BLACK, ${arrayName}[${boundVar}]);`);
+			lines.push(`        print(${label ? 80 : ctx.x + 2}, ${ctx.y}, ${font}, OLED_BLACK, ${accessExpr});`);
 			lines.push(`    } else {`);
 			if (label) lines.push(`        print(${ctx.x + 2}, ${ctx.y}, ${font}, OLED_WHITE, ${labelRef});`);
-			lines.push(`        print(${label ? 80 : ctx.x + 2}, ${ctx.y}, ${font}, OLED_WHITE, ${arrayName}[${boundVar}]);`);
+			lines.push(`        print(${label ? 80 : ctx.x + 2}, ${ctx.y}, ${font}, OLED_WHITE, ${accessExpr});`);
 			lines.push(`    }`);
 		} else {
 			const prefixIdx = addString(ctx, prefix);
 			const prefixRef = `${ctx.stringArrayName}[${prefixIdx}]`;
 			lines.push(`    if(${ctx.cursorVar} == ${ctx.cursorIndex}) print(${ctx.x}, ${ctx.y}, ${font}, OLED_WHITE, ${prefixRef});`);
 			if (label) lines.push(`    print(${labelX}, ${ctx.y}, ${font}, OLED_WHITE, ${labelRef});`);
-			lines.push(`    print(${label ? 80 : labelX}, ${ctx.y}, ${font}, OLED_WHITE, ${arrayName}[${boundVar}]);`);
+			lines.push(`    print(${label ? 80 : labelX}, ${ctx.y}, ${font}, OLED_WHITE, ${accessExpr});`);
 		}
 
 		return lines.join('\n');
 	},
 	generateGpcInput(config, ctx) {
 		if (ctx.cursorIndex < 0) return '';
-		const arraySize = (config.arraySize as number) || 10;
-		const useCountVar = !!config.useCountVar;
-		const countVar = (config.countVar as string) || '';
 		const boundVar = ctx.boundVariable || '_array_idx';
 		const label = (config as Record<string, unknown>).label as string || 'Array';
-		const maxExpr = useCountVar && countVar ? `(${countVar} - 1)` : String(arraySize - 1);
+		const maxExpr = maxExpression(config);
 		const onChangeCode = (config.onChangeCode as string) || '';
 		const changeSuffix = onChangeCode ? ` ${onChangeCode}` : '';
 		const lines: string[] = [];

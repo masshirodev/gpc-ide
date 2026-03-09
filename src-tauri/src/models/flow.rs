@@ -134,6 +134,21 @@ pub struct ModuleNodeData {
     /// Structured keyboard mappings for keyboard module — converted to GPC code at build time
     #[serde(default)]
     pub keyboard_mappings: Option<Vec<KeyMapping>>,
+    /// Which flow tab this module belongs to: "gameplay" (default) or "data"
+    #[serde(default)]
+    pub flow_target: Option<String>,
+    /// Custom string arrays for arraybuilder module
+    #[serde(default)]
+    pub custom_arrays: Option<Vec<CustomArrayDef>>,
+}
+
+/// A user-defined const string array for the Array Builder module
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CustomArrayDef {
+    pub name: String,
+    pub count_define: String,
+    pub values: Vec<String>,
 }
 
 /// ADT signature for a single weapon used by the ADP weapon detection module.

@@ -77,12 +77,12 @@
 			<svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
 				<path d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" />
 			</svg>
-			{flowType === 'gameplay' ? 'Add Module' : 'Add Node'}
+			{flowType !== 'menu' ? 'Add Module' : 'Add Node'}
 		</button>
 		{#if showAddMenu}
 			<button class="fixed inset-0 z-40" onclick={() => (showAddMenu = false)}></button>
 			<div class="absolute left-0 top-full z-50 mt-1 max-h-72 w-48 overflow-y-auto rounded border border-zinc-700 bg-zinc-800 py-1 shadow-lg">
-				{#if flowType === 'gameplay'}
+				{#if flowType !== 'menu'}
 					{#if availableModules.length > 0}
 						{#each availableModules as mod}
 							<button

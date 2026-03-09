@@ -2,7 +2,7 @@ import type { SerializedScene } from '../../routes/tools/oled/types';
 
 // ==================== Flow Types ====================
 
-export type FlowType = 'menu' | 'gameplay';
+export type FlowType = 'menu' | 'gameplay' | 'data';
 
 // ==================== Flow Node Types ====================
 
@@ -177,6 +177,17 @@ export interface ModuleNodeData {
 	alwaysActive?: boolean;
 	/** Structured keyboard mappings for keyboard module — converted to GPC code at build time */
 	keyboardMappings?: import('$lib/utils/keyboard-parser').KeyMapping[];
+	/** Which flow tab this module belongs to: "gameplay" (default) or "data" */
+	flowTarget?: string;
+	/** Custom string arrays for arraybuilder module — each entry is a named array with string values */
+	customArrays?: CustomArrayDef[];
+}
+
+/** A user-defined const string array for the Array Builder module */
+export interface CustomArrayDef {
+	name: string;
+	countDefine: string;
+	values: string[];
 }
 
 /** ADT signature for a single weapon used by the ADP weapon detection module.
@@ -474,6 +485,7 @@ export function createEmptyFlowProject(): FlowProject {
 		flows: [
 			createEmptyFlowGraph('Menu Flow', 'menu'),
 			createEmptyFlowGraph('Gameplay Flow', 'gameplay'),
+			createEmptyFlowGraph('Data', 'data'),
 		],
 		sharedVariables: [],
 		sharedCode: '',

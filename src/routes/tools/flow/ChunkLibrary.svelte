@@ -22,7 +22,7 @@
 	let settings = $derived($settingsStore);
 	let userChunks = $state<FlowChunk[]>([]);
 	let search = $state('');
-	let expandedCategories = $state<Set<string>>(new Set(['intro', 'menu', 'home', 'screensaver', 'utility', 'code', 'modules']));
+	let expandedCategories = $state<Set<string>>(new Set(['intro', 'menu', 'home', 'screensaver', 'utility', 'code', 'modules', 'gameplay', 'data']));
 
 	async function reloadChunks() {
 		try {
@@ -88,7 +88,7 @@
 	let categories = $derived(Object.keys(grouped).sort());
 
 	let hasChunks = $derived(filteredChunks.length > 0);
-	let hasModules = $derived(flowType === 'gameplay' && filteredModules.length > 0);
+	let hasModules = $derived(flowType !== 'menu' && filteredModules.length > 0);
 
 	function toggleCategory(cat: string) {
 		const next = new Set(expandedCategories);
@@ -130,7 +130,7 @@
 <div class="flex h-full w-56 flex-col border-r border-zinc-800 bg-zinc-900">
 	<div class="border-b border-zinc-800 px-3 py-2">
 		<h3 class="text-xs font-medium uppercase tracking-wider text-zinc-500">
-			{flowType === 'gameplay' ? 'Modules & Chunks' : 'Chunks'}
+			{flowType !== 'menu' ? 'Modules & Chunks' : 'Chunks'}
 		</h3>
 	</div>
 
@@ -139,14 +139,14 @@
 		<input
 			type="text"
 			class="w-full rounded border border-zinc-700 bg-zinc-800 px-2 py-1 text-xs text-zinc-200 placeholder-zinc-500 focus:border-emerald-500 focus:outline-none"
-			placeholder={flowType === 'gameplay' ? 'Search modules & chunks...' : 'Search chunks...'}
+			placeholder={flowType !== 'menu' ? 'Search modules & chunks...' : 'Search chunks...'}
 			bind:value={search}
 		/>
 	</div>
 
 	<div class="flex-1 overflow-y-auto px-2">
 		<!-- Modules section (gameplay flow only) -->
-		{#if flowType === 'gameplay'}
+		{#if flowType !== 'menu'}
 			<div class="mb-1">
 				<button
 					class="flex w-full items-center gap-1 rounded px-2 py-1 text-left text-xs font-medium text-red-400 hover:bg-zinc-800 hover:text-red-300"
