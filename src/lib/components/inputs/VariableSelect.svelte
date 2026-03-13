@@ -80,7 +80,7 @@
 			scrollToHighlight();
 			e.preventDefault();
 		} else if (e.key === 'Enter') {
-			if (filtered[highlightIndex]) {
+			if (filtered[highlightIndex] && !(highlightIndex === 0 && search.trim())) {
 				select(filtered[highlightIndex]);
 			} else {
 				commitCustom();

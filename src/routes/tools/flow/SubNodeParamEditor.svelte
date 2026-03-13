@@ -1,14 +1,16 @@
 <script lang="ts">
 	import type { SubNodeParam } from '$lib/types/flow';
 	import MiniMonaco from '$lib/components/editor/MiniMonaco.svelte';
+	import VariableSelect from '$lib/components/inputs/VariableSelect.svelte';
 
 	interface Props {
 		params: SubNodeParam[];
 		config: Record<string, unknown>;
 		onUpdate: (key: string, value: unknown) => void;
+		variableOptions?: { name: string; label: string }[];
 	}
 
-	let { params, config, onUpdate }: Props = $props();
+	let { params, config, onUpdate, variableOptions = [] }: Props = $props();
 </script>
 
 {#each params as param (param.key)}
@@ -53,6 +55,13 @@
 					<option value={opt.value}>{opt.label}</option>
 				{/each}
 			</select>
+		{:else if param.type === 'variable'}
+			<VariableSelect
+				value={(config[param.key] as string) ?? (param.default as string) ?? ''}
+				options={variableOptions}
+				placeholder="Search or type variable..."
+				onchange={(val) => onUpdate(param.key, val)}
+			/>
 		{:else if param.type === 'string'}
 			<input
 				id="param-{param.key}"

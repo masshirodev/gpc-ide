@@ -287,24 +287,32 @@
 				}
 			}
 
-			// Auto-add weapondata dependency
-			if (moduleDef.needs_weapondata && !existingModules.some((n) => n.moduleData!.moduleId === 'weapondata')) {
-				try {
-					const wdDef = await getModule('weapondata', workspacePaths);
-					const wdX = x - 260;
-					const wdY = y;
-					const wdModuleNode = createModuleNode(wdDef, { x: wdX, y: wdY });
-					const wdCreated = addNode('module', { x: wdX, y: wdY });
-					if (wdCreated) {
-						updateNode(wdCreated.id, {
-							label: wdModuleNode.label,
-							moduleData: wdModuleNode.moduleData,
-							variables: wdModuleNode.variables,
-						});
+			// Auto-add weapondata dependency — always place on the data flow
+			if (moduleDef.needs_weapondata) {
+				// Check all flows for existing weapondata, not just the current one
+				const allModuleNodes = flowStore.project?.flows
+					.flatMap((f) => f.nodes)
+					.filter((n) => n.type === 'module' && n.moduleData) ?? [];
+				if (!allModuleNodes.some((n) => n.moduleData!.moduleId === 'weapondata')) {
+					try {
+						const wdDef = await getModule('weapondata', workspacePaths);
+						const dataFlow = flowStore.project?.flows.find((f) => f.flowType === 'data');
+						if (dataFlow) {
+							const wdNodeCount = dataFlow.nodes.length;
+							const wdX = 300 + (wdNodeCount % 5) * 260;
+							const wdY = 200 + Math.floor(wdNodeCount / 5) * 140;
+							const wdModuleNode = createModuleNode(wdDef, { x: wdX, y: wdY });
+							wdModuleNode.id = crypto.randomUUID();
+							if (dataFlow.nodes.length === 0) {
+								wdModuleNode.isInitialState = true;
+							}
+							dataFlow.nodes = [...dataFlow.nodes, wdModuleNode];
+							dataFlow.updatedAt = Date.now();
+						}
+						addToast(`Auto-added Weapon Data to Data flow (required by ${moduleDef.display_name})`, 'info');
+					} catch {
+						addToast(`${moduleDef.display_name} requires Weapon Data but it could not be loaded`, 'warning');
 					}
-					addToast(`Auto-added Weapon Data (required by ${moduleDef.display_name})`, 'info');
-				} catch {
-					addToast(`${moduleDef.display_name} requires Weapon Data but it could not be loaded`, 'warning');
 				}
 			}
 
@@ -391,7 +399,8 @@
 			markClean();
 
 			// Generate the merged GPC code
-			const { code: gpcCode, extraFiles } = generateMergedFlowGpc(project);
+			const gameVersion = gameStore.selectedMeta?.version;
+			const { code: gpcCode, extraFiles } = generateMergedFlowGpc(project, { gameVersion });
 
 			// Write main.gpc and any extra files (e.g. recoiltable.gpc)
 			await writeFile(gamePath + '/main.gpc', gpcCode);
@@ -549,7 +558,7 @@
 					: 'text-zinc-500 hover:text-zinc-300'}"
 				onclick={() => switchFlow(tab.type)}
 			>
-				{tab.label}
+				{tab.label}{#if flowStore.activeFlowType === tab.type && flowStore.dirty}<span class="ml-1 text-amber-400">*</span>{/if}
 			</button>
 		{/each}
 	</div>
@@ -558,8 +567,6 @@
 <!-- Toolbar -->
 {#if flowStore.graph}
 	<FlowToolbar
-		onAddNode={handleAddNode}
-		onAddModule={handleAddModule}
 		onDeleteSelected={deleteSelected}
 		onZoomIn={() => setZoom(flowStore.canvas.zoom * 1.2)}
 		onZoomOut={() => setZoom(flowStore.canvas.zoom * 0.8)}
@@ -575,11 +582,8 @@
 		canUndo={canUndo()}
 		canRedo={canRedo()}
 		{hasSelection}
-		dirty={flowStore.dirty}
 		{building}
-		graphName={flowStore.graph.name}
 		flowType={flowStore.activeFlowType}
-		availableModules={filteredModulesForFlow}
 	/>
 {/if}
 
@@ -604,6 +608,7 @@
 				onInsertChunk={handleInsertChunk}
 				availableModules={filteredModulesForFlow}
 				onAddModule={handleAddModule}
+				onAddNode={handleAddNode}
 				gameType={gameStore.selectedGame?.game_type}
 				refreshKey={chunkRefreshKey}
 			/>

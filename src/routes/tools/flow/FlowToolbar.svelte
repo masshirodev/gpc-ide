@@ -1,11 +1,7 @@
 <script lang="ts">
-	import type { FlowNodeType, FlowType } from '$lib/types/flow';
-	import { NODE_LABELS } from '$lib/types/flow';
-	import type { ModuleSummary } from '$lib/types/module';
+	import type { FlowType } from '$lib/types/flow';
 
 	interface Props {
-		onAddNode: (type: FlowNodeType) => void;
-		onAddModule: (moduleId: string) => void;
 		onDeleteSelected: () => void;
 		onZoomIn: () => void;
 		onZoomOut: () => void;
@@ -21,16 +17,11 @@
 		canUndo: boolean;
 		canRedo: boolean;
 		hasSelection: boolean;
-		dirty: boolean;
 		building: boolean;
-		graphName: string;
 		flowType: FlowType;
-		availableModules: ModuleSummary[];
 	}
 
 	let {
-		onAddNode,
-		onAddModule,
 		onDeleteSelected,
 		onZoomIn,
 		onZoomOut,
@@ -46,87 +37,12 @@
 		canUndo,
 		canRedo,
 		hasSelection,
-		dirty,
 		building,
-		graphName,
 		flowType,
-		availableModules,
 	}: Props = $props();
-
-	let showAddMenu = $state(false);
-
-	const menuNodeTypes: FlowNodeType[] = ['intro', 'home', 'menu', 'submenu', 'custom', 'screensaver', 'debug'];
 </script>
 
 <div class="flex items-center gap-1 border-b border-zinc-800 bg-zinc-900 px-3 py-1.5">
-	<!-- Graph name -->
-	<span class="mr-2 text-sm font-medium text-zinc-200">
-		{graphName || 'Untitled Flow'}
-		{#if dirty}<span class="text-amber-400">*</span>{/if}
-	</span>
-
-	<div class="mx-2 h-5 w-px bg-zinc-700"></div>
-
-	<!-- Add Node -->
-	<div class="relative">
-		<button
-			class="flex items-center gap-1 rounded px-2 py-1 text-xs text-zinc-300 hover:bg-zinc-800"
-			onclick={() => (showAddMenu = !showAddMenu)}
-			title="Add node"
-		>
-			<svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-				<path d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" />
-			</svg>
-			{flowType !== 'menu' ? 'Add Module' : 'Add Node'}
-		</button>
-		{#if showAddMenu}
-			<button class="fixed inset-0 z-40" onclick={() => (showAddMenu = false)}></button>
-			<div class="absolute left-0 top-full z-50 mt-1 max-h-72 w-48 overflow-y-auto rounded border border-zinc-700 bg-zinc-800 py-1 shadow-lg">
-				{#if flowType !== 'menu'}
-					{#if availableModules.length > 0}
-						{#each availableModules as mod}
-							<button
-								class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-zinc-300 hover:bg-zinc-700"
-								onclick={() => {
-									onAddModule(mod.id);
-									showAddMenu = false;
-								}}
-								title={mod.description || ''}
-							>
-								<span class="h-1.5 w-1.5 rounded-full bg-red-500"></span>
-								{mod.display_name}
-							</button>
-						{/each}
-					{:else}
-						<div class="px-3 py-2 text-xs text-zinc-500">No modules available</div>
-					{/if}
-					<div class="my-1 border-t border-zinc-700"></div>
-					<button
-						class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-zinc-300 hover:bg-zinc-700"
-						onclick={() => {
-							onAddNode('custom');
-							showAddMenu = false;
-						}}
-					>
-						{NODE_LABELS['custom']}
-					</button>
-				{:else}
-					{#each menuNodeTypes as type}
-						<button
-							class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-zinc-300 hover:bg-zinc-700"
-							onclick={() => {
-								onAddNode(type);
-								showAddMenu = false;
-							}}
-						>
-							{NODE_LABELS[type]}
-						</button>
-					{/each}
-				{/if}
-			</div>
-		{/if}
-	</div>
-
 	<!-- Delete -->
 	<button
 		class="rounded px-2 py-1 text-xs text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200 disabled:opacity-30"

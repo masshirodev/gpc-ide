@@ -191,16 +191,17 @@ export function generateGameplayGpc(graph: FlowGraph): GameplayCodegenResult {
 
 		result.mainLoopCode.push(`    // ${md.moduleName}`);
 		if (mainCode) {
+			const dedented = dedentBlock(mainCode);
 			if (md.alwaysActive) {
 				// Always-active modules run unguarded
-				for (const line of mainCode.split('\n')) {
-					result.mainLoopCode.push(`    ${line.trim()}`);
+				for (const line of dedented.split('\n')) {
+					result.mainLoopCode.push(`    ${line}`);
 				}
 			} else {
 				// Full code block — guarded by enable variable
 				result.mainLoopCode.push(`    if(${enableVar}) {`);
-				for (const line of mainCode.split('\n')) {
-					result.mainLoopCode.push(`        ${line.trim()}`);
+				for (const line of dedented.split('\n')) {
+					result.mainLoopCode.push(`        ${line}`);
 				}
 				result.mainLoopCode.push(`    }`);
 			}
@@ -323,32 +324,66 @@ function collectGameplayPersistVars(graph: FlowGraph): PersistVar[] {
 	const result = flowVarsToPersistVars(persistFlowVars, 0);
 	const seen = new Set(result.map((v) => v.name));
 
-	// Weapons_RecoilValues array persistence when weapondata + recoil module present
+	// Weapons_RecoilValues persistence: basic/decay use full array, timeline uses sparse
 	const hasWeapondata = graph.nodes.some((n) => n.moduleData?.moduleId === 'weapondata');
-	const hasRecoilModule = graph.nodes.some(
+	const hasBasicDecayRecoil = graph.nodes.some(
 		(n) =>
 			n.moduleData?.needsWeapondata &&
 			n.moduleData.moduleId !== 'weapondata' &&
 			n.moduleData.moduleId !== 'antirecoil_timeline'
 	);
+	const hasTimeline = graph.nodes.some((n) => n.moduleData?.moduleId === 'antirecoil_timeline');
 
-	if (hasWeapondata && hasRecoilModule && !seen.has('Weapons_RecoilValues')) {
-		result.push({
-			name: 'Weapons_RecoilValues',
-			min: -100,
-			max: 100,
-			defaultValue: 0,
-			arrayLoop: {
-				countExpr: 'WEAPON_COUNT * 2',
-				indexVar: '_bp_loop_i',
-			},
-		});
+	if (hasWeapondata && (hasBasicDecayRecoil || hasTimeline) && !seen.has('Weapons_RecoilValues')) {
+		if (hasBasicDecayRecoil) {
+			// Full persistence — every weapon V/H value is user-set
+			result.push({
+				name: 'Weapons_RecoilValues',
+				min: -100,
+				max: 100,
+				defaultValue: 0,
+				arrayLoop: {
+					countExpr: 'WEAPON_COUNT * 2',
+					indexVar: '_bp_loop_i',
+				},
+			});
+		} else {
+			// Sparse persistence — timeline V/H are offsets, most stay at 0
+			result.push({
+				name: 'Weapons_RecoilValues',
+				min: -100,
+				max: 100,
+				defaultValue: 0,
+				sparseArray: {
+					countExpr: 'WEAPON_COUNT',
+					maxCount: 'WEAPON_COUNT',
+					indexVar: '_bp_loop_i',
+					countVar: '_bp_sparse_count',
+					stride: 2,
+				},
+			});
+		}
 	}
 
 	return result;
 }
 
 // ==================== Helpers ====================
+
+/** Remove common leading whitespace from a multi-line code block, preserving relative indentation */
+function dedentBlock(code: string): string {
+	const lines = code.split('\n');
+	const nonEmpty = lines.filter((l) => l.trim().length > 0);
+	if (nonEmpty.length === 0) return code;
+	const minIndent = Math.min(
+		...nonEmpty.map((l) => {
+			const match = l.match(/^(\s*)/);
+			return match ? match[1].length : 0;
+		})
+	);
+	if (minIndent === 0) return code;
+	return lines.map((l) => l.slice(minIndent)).join('\n');
+}
 
 function sanitizeName(name: string): string {
 	return name

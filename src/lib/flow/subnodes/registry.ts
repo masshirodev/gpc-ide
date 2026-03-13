@@ -12,6 +12,7 @@ import { pixelArtDef } from './defs/pixel-art';
 import { separatorDef } from './defs/separator';
 import { blankDef } from './defs/blank';
 import { customDef } from './defs/custom';
+import { executableItemDef } from './defs/executable-item';
 
 const ALL_SUBNODE_DEFS: SubNodeDef[] = [
 	headerDef,
@@ -19,6 +20,7 @@ const ALL_SUBNODE_DEFS: SubNodeDef[] = [
 	toggleItemDef,
 	valueItemDef,
 	arrayItemDef,
+	executableItemDef,
 	scrollBarDef,
 	textLineDef,
 	barDef,

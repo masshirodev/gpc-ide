@@ -47,6 +47,8 @@ pub fn load_flow_project(game_path: String) -> Result<Option<FlowProject>, Strin
             flows: vec![graph],
             shared_variables: vec![],
             shared_code: String::new(),
+            profiles: None,
+            profile_switch: None,
             updated_at: 0,
         };
         return Ok(Some(project));

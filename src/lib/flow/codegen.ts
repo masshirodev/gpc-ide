@@ -17,6 +17,15 @@ export interface PersistVar {
 		countExpr: string;
 		indexVar: string;
 	};
+	/** Sparse array: only persist non-default entries as (index, values...).
+	 *  Saves count + per-entry (index + stride values). */
+	sparseArray?: {
+		countExpr: string;       // e.g. 'WEAPON_COUNT'
+		maxCount: string;        // e.g. 'WEAPON_COUNT' — max value for count field
+		indexVar: string;        // loop var e.g. '_bp_loop_i'
+		countVar: string;        // temp count var e.g. '_bp_sparse_count'
+		stride: number;          // values per entry (e.g. 2 for V+H)
+	};
 }
 
 /** Convert FlowVariables (persist=true) to PersistVars with resolved min/max ranges */
@@ -67,11 +76,16 @@ export function generateBitpackPersistence(vars: PersistVar[]): string {
 	if (vars.length === 0) return '';
 
 	const hasArrayLoop = vars.some((v) => v.arrayLoop);
+	const hasSparse = vars.some((v) => v.sparseArray);
 	const lines: string[] = [];
 
 	lines.push(`define SPVAR_BITPACK_START = SPVAR_6;`);
-	if (hasArrayLoop) {
+	if (hasArrayLoop || hasSparse) {
 		lines.push(`int _bp_loop_i;`);
+	}
+	if (hasSparse) {
+		lines.push(`int _bp_sparse_count;`);
+		lines.push(`int _bp_loop_j;`);
 	}
 	lines.push(``);
 
@@ -82,7 +96,28 @@ export function generateBitpackPersistence(vars: PersistVar[]): string {
 	lines.push(`    spvar_current_value = 0;`);
 	lines.push(`    spvar_total_bits = 0;`);
 	for (const v of vars) {
-		if (v.arrayLoop) {
+		if (v.sparseArray) {
+			const s = v.sparseArray;
+			// Pass 1: count non-default entries
+			lines.push(`    _bp_sparse_count = 0;`);
+			lines.push(`    for(${s.indexVar} = 0; ${s.indexVar} < ${s.countExpr}; ${s.indexVar}++) {`);
+			const checks = Array.from({ length: s.stride }, (_, i) =>
+				`${v.name}[${s.indexVar} * ${s.stride} + ${i}] != ${v.defaultValue}`
+			).join(' || ');
+			lines.push(`        if(${checks}) _bp_sparse_count++;`);
+			lines.push(`    }`);
+			// Save count
+			lines.push(`    save_spvar(_bp_sparse_count, 0, ${s.maxCount});`);
+			// Pass 2: save non-default entries as (index, values...)
+			lines.push(`    for(${s.indexVar} = 0; ${s.indexVar} < ${s.countExpr}; ${s.indexVar}++) {`);
+			lines.push(`        if(${checks}) {`);
+			lines.push(`            save_spvar(${s.indexVar}, 0, ${s.maxCount});`);
+			for (let i = 0; i < s.stride; i++) {
+				lines.push(`            save_spvar(${v.name}[${s.indexVar} * ${s.stride} + ${i}], ${v.min}, ${v.max});`);
+			}
+			lines.push(`        }`);
+			lines.push(`    }`);
+		} else if (v.arrayLoop) {
 			lines.push(`    for(_bp_loop_i = 0; _bp_loop_i < ${v.arrayLoop.countExpr}; _bp_loop_i++) {`);
 			lines.push(`        save_spvar(${v.name}[_bp_loop_i], ${v.min}, ${v.max});`);
 			lines.push(`    }`);
@@ -107,7 +142,17 @@ export function generateBitpackPersistence(vars: PersistVar[]): string {
 	lines.push(`    spvar_current_value = 0;`);
 	lines.push(`    spvar_total_bits = 0;`);
 	for (const v of vars) {
-		if (v.arrayLoop) {
+		if (v.sparseArray) {
+			const s = v.sparseArray;
+			// Read count, then read that many (index, values...) entries
+			lines.push(`    _bp_sparse_count = read_spvar(0, ${s.maxCount}, 0);`);
+			lines.push(`    for(_bp_loop_j = 0; _bp_loop_j < _bp_sparse_count; _bp_loop_j++) {`);
+			lines.push(`        ${s.indexVar} = read_spvar(0, ${s.maxCount}, 0);`);
+			for (let i = 0; i < s.stride; i++) {
+				lines.push(`        ${v.name}[${s.indexVar} * ${s.stride} + ${i}] = read_spvar(${v.min}, ${v.max}, ${v.defaultValue});`);
+			}
+			lines.push(`    }`);
+		} else if (v.arrayLoop) {
 			lines.push(`    for(_bp_loop_i = 0; _bp_loop_i < ${v.arrayLoop.countExpr}; _bp_loop_i++) {`);
 			lines.push(`        ${v.name}[_bp_loop_i] = read_spvar(${v.min}, ${v.max}, ${v.defaultValue});`);
 			lines.push(`    }`);

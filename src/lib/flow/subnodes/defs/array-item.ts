@@ -96,10 +96,10 @@ export const arrayItemDef: SubNodeDef = {
 		},
 		{ key: 'prefixChar', label: 'Prefix Character', type: 'string', default: '>', visibleWhen: { key: 'cursorStyle', values: ['prefix'] } },
 		{ key: 'prefixSpacing', label: 'Prefix Spacing', type: 'number', default: 1, min: 0, max: 4, visibleWhen: { key: 'cursorStyle', values: ['prefix'] } },
-		{ key: 'arrayName', label: 'Array Name', type: 'string', default: '', description: 'Name of the const string[] array in GPC code' },
+		{ key: 'arrayName', label: 'Array Name', type: 'variable', default: '', description: 'Name of the const string[] array in GPC code' },
 		{ key: 'arraySize', label: 'Array Size', type: 'number', default: 10, min: 1, max: 100, visibleWhen: { key: 'indexMode', values: ['direct', undefined, ''] } },
 		{ key: 'useCountVar', label: 'Use Variable for Count', type: 'boolean', default: false, description: 'Use a define/variable instead of a fixed number', visibleWhen: { key: 'indexMode', values: ['direct', undefined, ''] } },
-		{ key: 'countVar', label: 'Count Variable', type: 'string', default: '', description: 'Define or variable holding the array length (e.g. WEAPON_COUNT)', visibleWhen: { key: 'useCountVar', values: [true] } },
+		{ key: 'countVar', label: 'Count Variable', type: 'variable', default: '', description: 'Define or variable holding the array length (e.g. WEAPON_COUNT)', visibleWhen: { key: 'useCountVar', values: [true] } },
 		{
 			key: 'font',
 			label: 'Font',
@@ -126,7 +126,7 @@ export const arrayItemDef: SubNodeDef = {
 		{
 			key: 'parentVar',
 			label: 'Parent Variable',
-			type: 'string',
+			type: 'variable',
 			default: '',
 			description: 'Bound variable of the parent array-item this depends on',
 			visibleWhen: { key: 'indexMode', values: ['2d', 'offset'] },
@@ -134,7 +134,7 @@ export const arrayItemDef: SubNodeDef = {
 		{
 			key: 'offsetArray',
 			label: 'Offset Array',
-			type: 'string',
+			type: 'variable',
 			default: '',
 			description: 'Name of the int[] array holding per-parent offsets',
 			visibleWhen: { key: 'indexMode', values: ['offset'] },
@@ -155,7 +155,7 @@ export const arrayItemDef: SubNodeDef = {
 		{
 			key: 'countArray',
 			label: 'Count Array',
-			type: 'string',
+			type: 'variable',
 			default: '',
 			description: 'Name of the int[] array holding per-parent counts',
 			visibleWhen: { key: 'indexMode', values: ['offset'] },
@@ -164,7 +164,7 @@ export const arrayItemDef: SubNodeDef = {
 	stackHeight: 8,
 	render(config, ctx) {
 		const style = (config.cursorStyle as string) || 'prefix';
-		const label = (config as Record<string, unknown>).label as string || 'Array';
+		const label = (config as Record<string, unknown>).label as string || '';
 		const arrayName = (config.arrayName as string) || '?';
 		const val = typeof ctx.boundValue === 'number' ? ctx.boundValue : 0;
 		const mode = (config.indexMode as string) || 'direct';
@@ -190,16 +190,21 @@ export const arrayItemDef: SubNodeDef = {
 			drawBitmapText(ctx.pixels, prefix, ctx.x, ctx.y);
 		}
 
-		if (ctx.isSelected && style === 'bracket') {
-			drawBitmapText(ctx.pixels, `[${label}]`, ctx.x, ctx.y, on);
-		} else {
-			const textX = ctx.isSelected && style === 'prefix' ? ctx.x + 8 : ctx.x + 2;
-			drawBitmapText(ctx.pixels, label, textX, ctx.y, on);
-		}
+		const textX = ctx.isSelected && style === 'prefix' ? ctx.x + 8 : ctx.x + 2;
 
-		// Show array reference on right
-		const valX = ctx.x + ctx.width - measureText(valStr) - 2;
-		drawBitmapText(ctx.pixels, valStr, valX, ctx.y, on);
+		if (label) {
+			if (ctx.isSelected && style === 'bracket') {
+				drawBitmapText(ctx.pixels, `[${label}]`, ctx.x, ctx.y, on);
+			} else {
+				drawBitmapText(ctx.pixels, label, textX, ctx.y, on);
+			}
+			// Show array reference on right when label is present
+			const valX = ctx.x + ctx.width - measureText(valStr) - 2;
+			drawBitmapText(ctx.pixels, valStr, valX, ctx.y, on);
+		} else {
+			// No label — render value on left (matching codegen behavior)
+			drawBitmapText(ctx.pixels, valStr, textX, ctx.y, on);
+		}
 	},
 	generateGpc(config, ctx) {
 		const style = (config.cursorStyle as string) || 'prefix';

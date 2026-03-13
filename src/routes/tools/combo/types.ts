@@ -19,11 +19,19 @@ export interface ComboStep {
 	label?: string;
 }
 
+export interface Combo {
+	id: string;
+	name: string;
+	steps: ComboStep[];
+}
+
 export interface ComboProject {
 	version: 1;
 	name: string;
 	consoleType: ConsoleType;
 	steps: ComboStep[];
+	/** Multiple named combos (v1.1+). When present, `steps` is ignored. */
+	combos?: Combo[];
 }
 
 export interface ModuleExportConfig {
@@ -41,6 +49,14 @@ export function createEmptyStep(): ComboStep {
 		buttons: [],
 		sticks: [],
 		waitMs: 50
+	};
+}
+
+export function createEmptyCombo(name = 'Combo 1'): Combo {
+	return {
+		id: crypto.randomUUID(),
+		name,
+		steps: [createEmptyStep()]
 	};
 }
 

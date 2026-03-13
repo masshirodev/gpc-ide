@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { exportComboGPC, exportModuleTOML, exportComboData } from './export';
+	import { exportComboGPC, exportModuleTOML, exportComboData, exportAllCombosGPC, exportAllCombosData } from './export';
 	import type { ComboProject, ModuleExportConfig } from './types';
 	import { addToast } from '$lib/stores/toast.svelte';
 	import MiniMonaco from '$lib/components/editor/MiniMonaco.svelte';
@@ -43,9 +43,10 @@
 		triggerMode
 	});
 
-	let gpcOutput = $derived(exportComboGPC(project, exportConsole));
+	let hasMultipleCombos = $derived((project.combos?.length ?? 0) > 1);
+	let gpcOutput = $derived(hasMultipleCombos ? exportAllCombosGPC(project, exportConsole) : exportComboGPC(project, exportConsole));
 	let tomlOutput = $derived(exportModuleTOML(project, moduleConfig));
-	let dataOutput = $derived(exportComboData(project, exportConsole));
+	let dataOutput = $derived(hasMultipleCombos ? exportAllCombosData(project, exportConsole) : exportComboData(project, exportConsole));
 
 	let settingsStore = getSettings();
 	let settings = $derived($settingsStore);
@@ -68,7 +69,7 @@
 			addToast('No game selected. Select a game in the sidebar first.', 'error');
 			return;
 		}
-		const code = exportComboGPC(project, exportConsole);
+		const code = hasMultipleCombos ? exportAllCombosGPC(project, exportConsole) : exportComboGPC(project, exportConsole);
 		const name = project.name.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() || 'combo';
 		setComboTransfer({
 			comboName: name,

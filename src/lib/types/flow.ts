@@ -26,6 +26,7 @@ export type SubNodeType =
 	| 'toggle-item'
 	| 'value-item'
 	| 'array-item'
+	| 'executable-item'
 	| 'scroll-bar'
 	| 'text-line'
 	| 'bar'
@@ -58,12 +59,14 @@ export interface SubNode {
 	condition?: SubNodeCondition;
 	/** Text rendered on the OLED. When empty, falls back to label. */
 	displayText?: string;
+	/** Visual grouping label for organizing sub-nodes (no code generation impact) */
+	group?: string;
 }
 
 export interface SubNodeParam {
 	key: string;
 	label: string;
-	type: 'number' | 'boolean' | 'select' | 'string' | 'code';
+	type: 'number' | 'boolean' | 'select' | 'string' | 'code' | 'variable';
 	default: unknown;
 	min?: number;
 	max?: number;

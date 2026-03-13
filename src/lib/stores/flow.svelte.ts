@@ -351,6 +351,22 @@ export function formatLayout() {
 	const START_X = 100;
 	const START_Y = 100;
 
+	// Gameplay/Data flows: use grid layout (5 columns) since modules are independent
+	if (state.activeFlowType !== 'menu') {
+		const GRID_COLS = 5;
+		state.graph.nodes = nodes.map((n, i) => ({
+			...n,
+			position: {
+				x: START_X + (i % GRID_COLS) * NODE_W,
+				y: START_Y + Math.floor(i / GRID_COLS) * NODE_H,
+			},
+		}));
+		state.dirty = true;
+		return;
+	}
+
+	// Menu flow: BFS-based layout following edges
+
 	// Build adjacency map
 	const outgoing = new Map<string, string[]>();
 	for (const edge of edges) {

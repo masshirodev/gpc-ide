@@ -28,6 +28,8 @@
 	import MenuLayoutBuilder from '$lib/components/editor/MenuLayoutBuilder.svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
+	import { addToast } from '$lib/stores/toast.svelte';
+	import * as m from '$lib/paraglide/messages.js';
 	import { setKeyboardTransfer } from '$lib/stores/keyboard-transfer.svelte';
 	import { setRecoilTransfer } from '$lib/stores/recoil-transfer.svelte';
 	import type { ModuleNodeData } from '$lib/types/flow';
@@ -313,9 +315,25 @@
 		if (!selectedNode || !selectedNode.moduleData) return;
 		const md = { ...selectedNode.moduleData };
 		const opts = [...md.options];
-		opts[index] = { ...opts[index], ...updates };
+		const updated = { ...opts[index], ...updates };
+		opts[index] = updated;
 		md.options = opts;
-		onUpdateNode(selectedNode.id, { moduleData: md });
+		// Sync defaultValue/min/max to the corresponding FlowVariable
+		const nodeUpdates: Partial<FlowNode> = { moduleData: md };
+		if ('defaultValue' in updates || 'min' in updates || 'max' in updates) {
+			const varIdx = selectedNode.variables.findIndex((v) => v.name === updated.variable);
+			if (varIdx >= 0) {
+				const vars = [...selectedNode.variables];
+				vars[varIdx] = {
+					...vars[varIdx],
+					defaultValue: updated.defaultValue,
+					min: updated.min,
+					max: updated.max,
+				};
+				nodeUpdates.variables = vars;
+			}
+		}
+		onUpdateNode(selectedNode.id, nodeUpdates);
 	}
 
 	function addModuleOption() {
@@ -448,13 +466,61 @@
 	let subNodeDef = $derived(selectedSubNode ? getSubNodeDef(selectedSubNode.type) : null);
 	let isTextSubNode = $derived(
 		selectedSubNode
-			? ['header', 'text-line', 'menu-item', 'toggle-item', 'value-item', 'array-item'].includes(selectedSubNode.type)
+			? ['header', 'text-line', 'menu-item', 'toggle-item', 'value-item', 'array-item', 'executable-item'].includes(selectedSubNode.type)
 			: false
 	);
 	let sortedSubNodes = $derived(
 		selectedNode ? [...selectedNode.subNodes].sort((a, b) => a.order - b.order) : []
 	);
 	let subNodeCategories = $derived(listSubNodeCategories());
+	let collapsedGroups = $state<Set<string>>(new Set());
+	let editingGroupName = $state<string | null>(null);
+	let editGroupInput = $state('');
+
+	function toggleGroupCollapse(group: string) {
+		const next = new Set(collapsedGroups);
+		if (next.has(group)) next.delete(group);
+		else next.add(group);
+		collapsedGroups = next;
+	}
+
+	function setSubNodeGroup(subNodeId: string, group: string | undefined) {
+		if (!selectedNode) return;
+		onUpdateSubNode(selectedNode.id, subNodeId, { group });
+	}
+
+	function renameGroup(oldName: string, newName: string) {
+		if (!selectedNode || !newName.trim()) return;
+		for (const sub of selectedNode.subNodes) {
+			if (sub.group === oldName) {
+				onUpdateSubNode(selectedNode.id, sub.id, { group: newName.trim() });
+			}
+		}
+		editingGroupName = null;
+	}
+
+	function removeGroup(groupName: string) {
+		if (!selectedNode) return;
+		for (const sub of selectedNode.subNodes) {
+			if (sub.group === groupName) {
+				onUpdateSubNode(selectedNode.id, sub.id, { group: undefined });
+			}
+		}
+	}
+
+	/** Get unique groups from subnodes, preserving order */
+	let subNodeGroups = $derived.by(() => {
+		const groups: string[] = [];
+		const seen = new Set<string>();
+		for (const sub of sortedSubNodes) {
+			const g = sub.group;
+			if (g && !seen.has(g)) {
+				groups.push(g);
+				seen.add(g);
+			}
+		}
+		return groups;
+	});
 	let availableVariables = $derived.by(() => {
 		if (!selectedNode) return [] as { name: string; label: string }[];
 		const seen = new Set<string>();
@@ -468,15 +534,79 @@
 			}
 		}
 
-		// Gameplay module variables (tagged G)
+		// Gameplay & data module variables (tagged G or D)
 		for (const modNode of gameplayModuleNodes) {
 			const md = modNode.moduleData;
 			if (!md) continue;
-			const tag = md.moduleName;
+			const isData = md.flowTarget === 'data';
+			const tag = isData ? `D:${md.moduleName}` : `G:${md.moduleName}`;
+
+			// Node variables
 			for (const v of modNode.variables) {
 				if (!seen.has(v.name)) {
-					result.push({ name: v.name, label: `G:${tag} - ${v.name}` });
+					result.push({ name: v.name, label: `${tag} - ${v.name}` });
 					seen.add(v.name);
+				}
+			}
+
+			// Data module: expose defines + arrays from ProfileData
+			if (md.moduleId === 'profiledata') {
+				for (const name of ['PROFILE_COUNT', 'FLOW_PROFILE_COUNT']) {
+					if (!seen.has(name)) {
+						result.push({ name, label: `${tag} - ${name}` });
+						seen.add(name);
+					}
+				}
+				for (const name of ['ProfileLabels']) {
+					if (!seen.has(name)) {
+						result.push({ name, label: `${tag} - ${name}[]` });
+						seen.add(name);
+					}
+				}
+			}
+
+			// Data module: expose arrays, offsets, row counts, count defines from ArrayBuilder
+			if (md.moduleId === 'arraybuilder' && md.customArrays) {
+				for (const arr of md.customArrays) {
+					if (!arr.name) continue;
+					const is2d = arr.dimension === '2d';
+					// Array name
+					if (!seen.has(arr.name)) {
+						result.push({ name: arr.name, label: `${tag} - ${arr.name}${is2d ? '[][]' : '[]'}` });
+						seen.add(arr.name);
+					}
+					// Count define
+					if (arr.countDefine && !seen.has(arr.countDefine)) {
+						result.push({ name: arr.countDefine, label: `${tag} - ${arr.countDefine}` });
+						seen.add(arr.countDefine);
+					}
+					// 2D extras: offsets + row counts
+					if (is2d) {
+						const offsetName = `${arr.name}_Offsets`;
+						const rowCountName = `${arr.name}_RowCounts`;
+						if (!seen.has(offsetName)) {
+							result.push({ name: offsetName, label: `${tag} - ${offsetName}[]` });
+							seen.add(offsetName);
+						}
+						if (!seen.has(rowCountName)) {
+							result.push({ name: rowCountName, label: `${tag} - ${rowCountName}[]` });
+							seen.add(rowCountName);
+						}
+					}
+				}
+			}
+
+			// Data module: expose WeaponData arrays
+			if (md.moduleId === 'weapondata') {
+				for (const name of ['WEAPON_COUNT']) {
+					if (!seen.has(name)) {
+						result.push({ name, label: `${tag} - ${name}` });
+						seen.add(name);
+					}
+				}
+				if (!seen.has('Weapons')) {
+					result.push({ name: 'Weapons', label: `${tag} - Weapons[]` });
+					seen.add('Weapons');
 				}
 			}
 		}
@@ -597,6 +727,8 @@
 	// Drag and drop state for subnode reordering
 	let dragSubNodeIdx = $state<number | null>(null);
 	let dragOverSubNodeIdx = $state<number | null>(null);
+	let dragDropPosition = $state<'before' | 'after'>('after');
+	let dragOverGroup = $state<string | null>(null);
 
 	function handleSubNodeDragStart(e: DragEvent, idx: number) {
 		dragSubNodeIdx = idx;
@@ -610,24 +742,67 @@
 		e.preventDefault();
 		if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
 		dragOverSubNodeIdx = idx;
+		dragOverGroup = null;
+		// Determine if drop should be before or after based on cursor Y position
+		const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+		dragDropPosition = e.clientY < rect.top + rect.height / 2 ? 'before' : 'after';
 	}
 
 	function handleSubNodeDragLeave() {
 		dragOverSubNodeIdx = null;
+		dragOverGroup = null;
+	}
+
+	function handleGroupDragOver(e: DragEvent, groupName: string) {
+		e.preventDefault();
+		if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+		dragOverGroup = groupName;
+		dragOverSubNodeIdx = null;
+	}
+
+	function handleGroupDragLeave() {
+		dragOverGroup = null;
+	}
+
+	function handleGroupDrop(e: DragEvent, groupName: string) {
+		e.preventDefault();
+		if (dragSubNodeIdx !== null && selectedNode) {
+			const sub = sortedSubNodes[dragSubNodeIdx];
+			if (sub) {
+				onUpdateSubNode(selectedNode.id, sub.id, { group: groupName });
+			}
+		}
+		dragSubNodeIdx = null;
+		dragOverSubNodeIdx = null;
+		dragOverGroup = null;
 	}
 
 	function handleSubNodeDrop(e: DragEvent, toIdx: number) {
 		e.preventDefault();
 		if (dragSubNodeIdx !== null && dragSubNodeIdx !== toIdx && selectedNode) {
-			onReorderSubNodes(selectedNode.id, dragSubNodeIdx, toIdx);
+			// If dropping before and the source is above, adjust target
+			const adjustedIdx = dragDropPosition === 'before' && dragSubNodeIdx < toIdx ? toIdx - 1 :
+				dragDropPosition === 'after' && dragSubNodeIdx > toIdx ? toIdx + 1 : toIdx;
+			const clampedIdx = Math.max(0, Math.min(sortedSubNodes.length - 1, adjustedIdx));
+			if (clampedIdx !== dragSubNodeIdx) {
+				// If target subnode has a group, assign the dragged subnode to that group
+				const targetSub = sortedSubNodes[toIdx];
+				const draggedSub = sortedSubNodes[dragSubNodeIdx];
+				if (targetSub?.group && draggedSub?.group !== targetSub.group) {
+					onUpdateSubNode(selectedNode.id, draggedSub.id, { group: targetSub.group });
+				}
+				onReorderSubNodes(selectedNode.id, dragSubNodeIdx, clampedIdx);
+			}
 		}
 		dragSubNodeIdx = null;
 		dragOverSubNodeIdx = null;
+		dragOverGroup = null;
 	}
 
 	function handleSubNodeDragEnd() {
 		dragSubNodeIdx = null;
 		dragOverSubNodeIdx = null;
+		dragOverGroup = null;
 	}
 
 	function handleSubNodeParamUpdate(key: string, value: unknown) {
@@ -672,6 +847,23 @@
 				/>
 			</div>
 
+			<!-- Group assignment -->
+			{#if subNodeGroups.length > 0 || selectedSubNode.group}
+				<div class="mb-3">
+					<label class="mb-1 block text-xs text-zinc-400">{m.flow_subnode_group()}</label>
+					<select
+						class="w-full rounded border border-zinc-700 bg-zinc-800 px-2 py-1 text-sm text-zinc-200 focus:border-emerald-500 focus:outline-none"
+						value={selectedSubNode.group || ''}
+						onchange={(e) => setSubNodeGroup(selectedSubNode!.id, (e.target as HTMLSelectElement).value || undefined)}
+					>
+						<option value="">{m.flow_ungrouped()}</option>
+						{#each subNodeGroups as g}
+							<option value={g}>{g}</option>
+						{/each}
+					</select>
+				</div>
+			{/if}
+
 			<!-- Display Text (for text/interactive subnodes) -->
 			{#if isTextSubNode}
 				<div class="mb-3">
@@ -690,7 +882,7 @@
 			{/if}
 
 			<!-- Interactive toggle (for naturally interactive subnode types) -->
-			{#if ['menu-item', 'toggle-item', 'value-item', 'array-item'].includes(selectedSubNode.type)}
+			{#if ['menu-item', 'toggle-item', 'value-item', 'array-item', 'executable-item'].includes(selectedSubNode.type)}
 				<div class="mb-3">
 					<label class="flex items-center gap-2 text-xs text-zinc-400">
 						<input
@@ -843,6 +1035,7 @@
 						params={subNodeDef.params}
 						config={selectedSubNode.config}
 						onUpdate={handleSubNodeParamUpdate}
+						variableOptions={availableVariables}
 					/>
 				</div>
 			{/if}
@@ -1188,27 +1381,28 @@
 
 			<!-- ProfileData exposed variables -->
 			{#if selectedNode.moduleData?.moduleId === 'profiledata'}
+				{@const exposedVars = [
+					{ name: 'PROFILE_COUNT', type: 'define' },
+					{ name: 'ProfileLabels[]', type: 'const string[]' },
+					{ name: 'FLOW_PROFILE_COUNT', type: 'define' },
+					{ name: 'Flow_CurrentProfile', type: 'int variable' },
+				]}
 				<div class="mb-3 rounded border border-emerald-900 bg-emerald-950/30 px-2 py-2">
-					<p class="mb-1.5 text-xs font-medium text-emerald-400">Exposed Variables</p>
+					<p class="mb-1.5 text-xs font-medium text-emerald-400">{m.flow_exposed_variables()}</p>
 					<div class="space-y-1 text-[10px]">
-						<div class="flex items-center justify-between">
-							<span class="font-mono text-emerald-300">PROFILE_COUNT</span>
-							<span class="text-zinc-500">define</span>
-						</div>
-						<div class="flex items-center justify-between">
-							<span class="font-mono text-emerald-300">ProfileLabels[]</span>
-							<span class="text-zinc-500">const string[]</span>
-						</div>
-						<div class="flex items-center justify-between">
-							<span class="font-mono text-emerald-300">FLOW_PROFILE_COUNT</span>
-							<span class="text-zinc-500">define</span>
-						</div>
-						<div class="flex items-center justify-between">
-							<span class="font-mono text-emerald-300">Flow_CurrentProfile</span>
-							<span class="text-zinc-500">int variable</span>
-						</div>
+						{#each exposedVars as v}
+							<div class="flex items-center justify-between">
+								<button
+									type="button"
+									class="cursor-pointer font-mono text-emerald-300 hover:text-emerald-200"
+									title={m.flow_click_to_copy()}
+									onclick={() => { navigator.clipboard.writeText(v.name.replace('[]', '')); addToast(m.flow_copied_variable(), 'success', 1500); }}
+								>{v.name}</button>
+								<span class="text-zinc-500">{v.type}</span>
+							</div>
+						{/each}
 					</div>
-					<p class="mt-1.5 text-[10px] text-zinc-600">Auto-populated from the project's Profile panel</p>
+					<p class="mt-1.5 text-[10px] text-zinc-600">{m.flow_auto_populated_profiles()}</p>
 				</div>
 			{/if}
 
@@ -1606,9 +1800,19 @@
 										<option value="array">Array</option>
 									</select>
 								</div>
-								{#if opt.type === 'value' || opt.type === 'array'}
+								{#if opt.type === 'toggle'}
 									<div class="mt-1 flex items-center gap-1">
-										<span class="text-[10px] text-zinc-500">Default</span>
+										<span class="text-[10px] text-zinc-500">{m.flow_default()}</span>
+										<button
+											class="rounded px-2 py-0.5 text-xs {opt.defaultValue ? 'bg-emerald-700 text-emerald-100' : 'bg-zinc-700 text-zinc-400'}"
+											onclick={() => updateModuleOption(i, { defaultValue: opt.defaultValue ? 0 : 1 })}
+										>
+											{opt.defaultValue ? 'ON' : 'OFF'}
+										</button>
+									</div>
+								{:else if opt.type === 'value' || opt.type === 'array'}
+									<div class="mt-1 flex items-center gap-1">
+										<span class="text-[10px] text-zinc-500">{m.flow_default()}</span>
 										<input
 											type="number"
 											class="w-14 rounded border border-zinc-700 bg-zinc-900 px-1 py-0.5 text-xs text-zinc-300 focus:border-emerald-500 focus:outline-none"
@@ -1834,12 +2038,29 @@
 			<div class="mb-3">
 				<div class="mb-1 flex items-center justify-between">
 					<label class="text-xs text-zinc-400">Sub-Nodes</label>
-					<button
-						class="rounded px-1.5 py-0.5 text-xs text-emerald-400 hover:bg-zinc-800"
-						onclick={() => (showSubNodePicker = !showSubNodePicker)}
-					>
-						+ Add
-					</button>
+					<div class="flex gap-1">
+						{#if sortedSubNodes.length > 0}
+							<button
+								class="rounded px-1.5 py-0.5 text-xs text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300"
+								title={m.flow_add_group()}
+								onclick={() => {
+									const name = `${m.flow_subnode_group()} ${subNodeGroups.length + 1}`;
+									for (const sub of sortedSubNodes.filter(s => !s.group)) {
+										setSubNodeGroup(sub.id, name);
+										break;
+									}
+								}}
+							>
+								+ {m.flow_subnode_group()}
+							</button>
+						{/if}
+						<button
+							class="rounded px-1.5 py-0.5 text-xs text-emerald-400 hover:bg-zinc-800"
+							onclick={() => (showSubNodePicker = !showSubNodePicker)}
+						>
+							+ Add
+						</button>
+					</div>
 				</div>
 
 				<!-- Sub-node type picker -->
@@ -1864,13 +2085,120 @@
 					</div>
 				{/if}
 
-				<!-- Sub-node list -->
+				<!-- Sub-node list with groups -->
 				{#if sortedSubNodes.length > 0}
+					{@const ungrouped = sortedSubNodes.filter(s => !s.group)}
 					<div class="space-y-0.5">
-						{#each sortedSubNodes as subNode, i (subNode.id)}
+						<!-- Grouped sub-nodes -->
+						{#each subNodeGroups as groupName}
+							{@const groupSubs = sortedSubNodes.filter(s => s.group === groupName)}
+							<div class="rounded border {dragOverGroup === groupName ? 'border-emerald-500 bg-emerald-900/10' : 'border-zinc-700/50'}">
+								<div
+									class="flex w-full cursor-pointer items-center gap-1 rounded-t px-1.5 py-1 text-xs text-zinc-400 hover:bg-zinc-800"
+									onclick={() => toggleGroupCollapse(groupName)}
+									role="button"
+									tabindex="0"
+									onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') toggleGroupCollapse(groupName); }}
+									ondragover={(e) => handleGroupDragOver(e, groupName)}
+									ondragleave={handleGroupDragLeave}
+									ondrop={(e) => handleGroupDrop(e, groupName)}
+								>
+									<svg
+										class="h-3 w-3 transition-transform {collapsedGroups.has(groupName) ? '' : 'rotate-90'}"
+										viewBox="0 0 20 20" fill="currentColor"
+									>
+										<path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clip-rule="evenodd" />
+									</svg>
+									{#if editingGroupName === groupName}
+										<!-- svelte-ignore a11y_autofocus -->
+										<input
+											type="text"
+											class="flex-1 rounded border border-zinc-600 bg-zinc-800 px-1 py-0.5 text-xs text-zinc-200 focus:border-emerald-500 focus:outline-none"
+											bind:value={editGroupInput}
+											autofocus
+											onkeydown={(e) => { if (e.key === 'Enter') renameGroup(groupName, editGroupInput); if (e.key === 'Escape') editingGroupName = null; }}
+											onblur={() => renameGroup(groupName, editGroupInput)}
+											onclick={(e) => e.stopPropagation()}
+										/>
+									{:else}
+										<span class="flex-1 text-left font-medium">{groupName}</span>
+									{/if}
+									<span class="text-zinc-600">{groupSubs.length}</span>
+									<button
+										class="text-zinc-600 hover:text-zinc-300"
+										title={m.flow_rename_group()}
+										onclick={(e) => { e.stopPropagation(); editingGroupName = groupName; editGroupInput = groupName; }}
+									>
+										<svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+									</button>
+									<button
+										class="text-zinc-600 hover:text-red-400"
+										title={m.flow_remove_group()}
+										onclick={(e) => { e.stopPropagation(); removeGroup(groupName); }}
+									>
+										<svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+									</button>
+								</div>
+								{#if !collapsedGroups.has(groupName)}
+									<div class="space-y-0.5 px-0.5 pb-0.5">
+										{#each groupSubs as subNode}
+											{@const def = getSubNodeDef(subNode.type)}
+											{@const i = sortedSubNodes.indexOf(subNode)}
+											{#if dragOverSubNodeIdx === i && dragSubNodeIdx !== null && dragSubNodeIdx !== i && dragDropPosition === 'before'}
+												<div class="flex h-6 items-center rounded border border-dashed border-emerald-500/70 bg-emerald-900/20 px-1.5">
+													<span class="text-[10px] text-emerald-500/70">{sortedSubNodes[dragSubNodeIdx]?.label || ''}</span>
+												</div>
+											{/if}
+											<div
+												class="flex items-center gap-1 rounded px-1.5 py-1 transition-colors bg-zinc-800 {dragSubNodeIdx === i ? 'opacity-30' : ''}"
+												draggable="true"
+												ondragstart={(e) => handleSubNodeDragStart(e, i)}
+												ondragover={(e) => handleSubNodeDragOver(e, i)}
+												ondragleave={handleSubNodeDragLeave}
+												ondrop={(e) => handleSubNodeDrop(e, i)}
+												ondragend={handleSubNodeDragEnd}
+											>
+												<div class="flex flex-col cursor-grab active:cursor-grabbing">
+													<button class="text-zinc-600 hover:text-zinc-300 disabled:opacity-30" disabled={i === 0} onclick={() => handleMoveSubNode(i, -1)}>
+														<svg class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M14.707 12.707a1 1 0 01-1.414 0L10 9.414l-3.293 3.293a1 1 0 01-1.414-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 010 1.414z" clip-rule="evenodd" /></svg>
+													</button>
+													<button class="text-zinc-600 hover:text-zinc-300 disabled:opacity-30" disabled={i === sortedSubNodes.length - 1} onclick={() => handleMoveSubNode(i, 1)}>
+														<svg class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" /></svg>
+													</button>
+												</div>
+												<button class="flex-1 truncate text-left text-xs text-zinc-300 hover:text-zinc-100" onclick={() => onSelectSubNode(selectedNode!.id, subNode.id)}>
+													<span class="mr-1 text-zinc-500">{def?.name || subNode.type}</span>
+													{subNode.label}
+												</button>
+												{#if subNode.interactive}
+													<span class="rounded bg-purple-900/50 px-1 text-[9px] text-purple-400">INT</span>
+												{/if}
+												<button class="text-zinc-600 hover:text-red-400" onclick={() => onRemoveSubNode(selectedNode!.id, subNode.id)}>
+													<svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+												</button>
+											</div>
+											{#if dragOverSubNodeIdx === i && dragSubNodeIdx !== null && dragSubNodeIdx !== i && dragDropPosition === 'after'}
+												<div class="flex h-6 items-center rounded border border-dashed border-emerald-500/70 bg-emerald-900/20 px-1.5">
+													<span class="text-[10px] text-emerald-500/70">{sortedSubNodes[dragSubNodeIdx]?.label || ''}</span>
+												</div>
+											{/if}
+										{/each}
+									</div>
+								{/if}
+							</div>
+						{/each}
+
+						<!-- Ungrouped sub-nodes -->
+						{#each ungrouped as subNode}
 							{@const def = getSubNodeDef(subNode.type)}
+							{@const i = sortedSubNodes.indexOf(subNode)}
+							{#if dragOverSubNodeIdx === i && dragSubNodeIdx !== null && dragSubNodeIdx !== i && dragDropPosition === 'before'}
+								<div class="flex h-6 items-center rounded border border-dashed border-emerald-500/70 bg-emerald-900/20 px-1.5">
+									<span class="text-[10px] text-emerald-500/70">{sortedSubNodes[dragSubNodeIdx]?.label || ''}</span>
+								</div>
+							{/if}
 							<div
-								class="flex items-center gap-1 rounded px-1.5 py-1 transition-colors {dragOverSubNodeIdx === i && dragSubNodeIdx !== i ? 'border border-emerald-500/50 bg-emerald-900/20' : 'bg-zinc-800'} {dragSubNodeIdx === i ? 'opacity-40' : ''}"
+								class="flex items-center gap-1 rounded px-1.5 py-1 transition-colors bg-zinc-800 {dragSubNodeIdx === i ? 'opacity-30' : ''}"
 								draggable="true"
 								ondragstart={(e) => handleSubNodeDragStart(e, i)}
 								ondragover={(e) => handleSubNodeDragOver(e, i)}
@@ -1878,52 +2206,30 @@
 								ondrop={(e) => handleSubNodeDrop(e, i)}
 								ondragend={handleSubNodeDragEnd}
 							>
-								<!-- Drag handle + reorder buttons -->
 								<div class="flex flex-col cursor-grab active:cursor-grabbing">
-									<button
-										class="text-zinc-600 hover:text-zinc-300 disabled:opacity-30"
-										disabled={i === 0}
-										onclick={() => handleMoveSubNode(i, -1)}
-									>
-										<svg class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
-											<path fill-rule="evenodd" d="M14.707 12.707a1 1 0 01-1.414 0L10 9.414l-3.293 3.293a1 1 0 01-1.414-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 010 1.414z" clip-rule="evenodd" />
-										</svg>
+									<button class="text-zinc-600 hover:text-zinc-300 disabled:opacity-30" disabled={i === 0} onclick={() => handleMoveSubNode(i, -1)}>
+										<svg class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M14.707 12.707a1 1 0 01-1.414 0L10 9.414l-3.293 3.293a1 1 0 01-1.414-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 010 1.414z" clip-rule="evenodd" /></svg>
 									</button>
-									<button
-										class="text-zinc-600 hover:text-zinc-300 disabled:opacity-30"
-										disabled={i === sortedSubNodes.length - 1}
-										onclick={() => handleMoveSubNode(i, 1)}
-									>
-										<svg class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
-											<path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
-										</svg>
+									<button class="text-zinc-600 hover:text-zinc-300 disabled:opacity-30" disabled={i === sortedSubNodes.length - 1} onclick={() => handleMoveSubNode(i, 1)}>
+										<svg class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" /></svg>
 									</button>
 								</div>
-
-								<!-- Click to select -->
-								<button
-									class="flex-1 truncate text-left text-xs text-zinc-300 hover:text-zinc-100"
-									onclick={() => onSelectSubNode(selectedNode!.id, subNode.id)}
-								>
+								<button class="flex-1 truncate text-left text-xs text-zinc-300 hover:text-zinc-100" onclick={() => onSelectSubNode(selectedNode!.id, subNode.id)}>
 									<span class="mr-1 text-zinc-500">{def?.name || subNode.type}</span>
 									{subNode.label}
 								</button>
-
-								<!-- Interactive badge -->
 								{#if subNode.interactive}
 									<span class="rounded bg-purple-900/50 px-1 text-[9px] text-purple-400">INT</span>
 								{/if}
-
-								<!-- Remove -->
-								<button
-									class="text-zinc-600 hover:text-red-400"
-									onclick={() => onRemoveSubNode(selectedNode!.id, subNode.id)}
-								>
-									<svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-									</svg>
+								<button class="text-zinc-600 hover:text-red-400" onclick={() => onRemoveSubNode(selectedNode!.id, subNode.id)}>
+									<svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
 								</button>
 							</div>
+							{#if dragOverSubNodeIdx === i && dragSubNodeIdx !== null && dragSubNodeIdx !== i && dragDropPosition === 'after'}
+								<div class="flex h-6 items-center rounded border border-dashed border-emerald-500/70 bg-emerald-900/20 px-1.5">
+									<span class="text-[10px] text-emerald-500/70">{sortedSubNodes[dragSubNodeIdx]?.label || ''}</span>
+								</div>
+							{/if}
 						{/each}
 					</div>
 				{:else}

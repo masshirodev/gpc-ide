@@ -331,5 +331,32 @@
 	"sprite_stamp_no_collections": "Nenhuma coleção de sprites encontrada",
 	"sprite_stamp_scale": "Escala",
 	"sprite_stamp_collection": "Coleção",
-	"sprite_stamp_frame": "Frame"
+	"sprite_stamp_frame": "Frame",
+
+	"flow_click_to_copy": "Clique para copiar",
+	"flow_copied_variable": "Nome da variável copiado",
+	"flow_exposed_variables": "Variáveis Expostas",
+	"flow_auto_populated_profiles": "Preenchido automaticamente pelo painel de Perfis do projeto",
+	"flow_subnode_group": "Grupo",
+	"flow_add_group": "Adicionar Grupo",
+	"flow_rename_group": "Renomear Grupo",
+	"flow_remove_group": "Remover Grupo",
+	"flow_ungrouped": "Sem Grupo",
+	"flow_executable_item": "Executável",
+	"flow_executable_item_desc": "Botão que executa código ao confirmar",
+	"flow_execute_code": "Código a Executar",
+	"flow_default_values": "Valores Padrão",
+	"flow_variable_defaults_title": "Padrões de Variáveis",
+	"flow_no_variables": "Nenhuma variável definida",
+	"flow_default": "Padrão",
+
+	"combo_import": "Importar",
+	"combo_import_title": "Importar Combo",
+	"combo_import_from_data": "Importar de data()",
+	"combo_import_from_code": "Importar de código GPC",
+	"combo_import_paste": "Cole os dados ou código do combo abaixo",
+	"combo_add_combo": "Adicionar Combo",
+	"combo_combo_name": "Nome do Combo",
+	"combo_delete_combo": "Excluir Combo",
+	"combo_delete_combo_confirm": "Excluir este combo?"
 }

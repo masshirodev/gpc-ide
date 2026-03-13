@@ -1,4 +1,4 @@
-import type { ComboProject, ComboStep, ModuleExportConfig } from './types';
+import type { Combo, ComboProject, ComboStep, ModuleExportConfig } from './types';
 import {
 	CONSOLE_AXES,
 	translateButton,
@@ -154,4 +154,38 @@ export function exportComboData(
 
 function sanitizeName(name: string): string {
 	return name.replace(/[^a-zA-Z0-9_]/g, '') || 'MyCombo';
+}
+
+/** Resolve the list of combos from a project (backwards compatible with single-combo format) */
+export function getProjectCombos(project: ComboProject): Combo[] {
+	if (project.combos && project.combos.length > 0) return project.combos;
+	return [{ id: 'legacy', name: project.name, steps: project.steps }];
+}
+
+/** Export all combos in a project as GPC code */
+export function exportAllCombosGPC(
+	project: ComboProject,
+	targetConsole?: ConsoleType
+): string {
+	const combos = getProjectCombos(project);
+	return combos
+		.map((c) => {
+			const legacy: ComboProject = { ...project, name: c.name, steps: c.steps };
+			return exportComboGPC(legacy, targetConsole);
+		})
+		.join('\n\n');
+}
+
+/** Export all combos in a project as data() blocks */
+export function exportAllCombosData(
+	project: ComboProject,
+	targetConsole?: ConsoleType
+): string {
+	const combos = getProjectCombos(project);
+	return combos
+		.map((c) => {
+			const legacy: ComboProject = { ...project, name: c.name, steps: c.steps };
+			return exportComboData(legacy, targetConsole);
+		})
+		.join('\n\n');
 }

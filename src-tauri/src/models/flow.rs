@@ -11,8 +11,37 @@ pub struct FlowProject {
     pub shared_variables: Vec<FlowVariable>,
     #[serde(default)]
     pub shared_code: String,
+    /// Profile definitions. Empty/absent = single implicit profile (no profile switching).
+    #[serde(default)]
+    pub profiles: Option<Vec<FlowProfile>>,
+    /// Profile switch button configuration
+    #[serde(default)]
+    pub profile_switch: Option<ProfileSwitchConfig>,
     #[serde(default)]
     pub updated_at: u64,
+}
+
+/// A named profile with per-profile variable overrides
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FlowProfile {
+    pub id: String,
+    pub name: String,
+    #[serde(default)]
+    pub variable_overrides: HashMap<String, serde_json::Value>,
+}
+
+/// Button configuration for switching between profiles
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProfileSwitchConfig {
+    /// Button to switch to next profile
+    pub next: String,
+    /// Button to switch to previous profile
+    pub prev: String,
+    /// Optional modifier button that must be held
+    #[serde(default)]
+    pub modifier: Option<String>,
 }
 
 /// Complete flow graph definition
@@ -79,9 +108,14 @@ pub struct FlowNode {
     #[serde(default)]
     pub back_button: Option<String>,
     #[serde(default)]
+    pub line_margin: Option<u32>,
+    #[serde(default)]
     pub block_inputs: Option<bool>,
     #[serde(default)]
     pub module_data: Option<ModuleNodeData>,
+    /// Variable names of auto-generated sub-nodes the user intentionally removed
+    #[serde(default)]
+    pub auto_suppressed: Option<Vec<String>>,
 }
 
 /// Module-specific data for gameplay flow nodes
@@ -221,6 +255,9 @@ pub struct ModuleNodeOption {
     /// For 'array' type: number of entries in the array
     #[serde(default)]
     pub array_size: Option<i32>,
+    /// GPC code to run when the value changes in the menu
+    #[serde(default)]
+    pub on_change_code: Option<String>,
 }
 
 /// An edge connecting two nodes representing a transition
@@ -283,6 +320,9 @@ pub struct FlowVariable {
     pub default_value: serde_json::Value, // number or string
     #[serde(default)]
     pub persist: bool,
+    /// If true, this variable has independent values per profile
+    #[serde(default)]
+    pub per_profile: Option<bool>,
     #[serde(default)]
     pub min: Option<i32>,
     #[serde(default)]
@@ -354,6 +394,9 @@ pub struct SubNode {
     /// Text rendered on the OLED. When empty, falls back to label.
     #[serde(default)]
     pub display_text: Option<String>,
+    /// Visual grouping label for organizing sub-nodes (no code generation impact)
+    #[serde(default)]
+    pub group: Option<String>,
 }
 
 fn default_stack() -> String {

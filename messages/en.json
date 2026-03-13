@@ -331,5 +331,32 @@
 	"sprite_stamp_no_collections": "No sprite collections found",
 	"sprite_stamp_scale": "Scale",
 	"sprite_stamp_collection": "Collection",
-	"sprite_stamp_frame": "Frame"
+	"sprite_stamp_frame": "Frame",
+
+	"flow_click_to_copy": "Click to copy",
+	"flow_copied_variable": "Variable name copied",
+	"flow_exposed_variables": "Exposed Variables",
+	"flow_auto_populated_profiles": "Auto-populated from the project's Profile panel",
+	"flow_subnode_group": "Group",
+	"flow_add_group": "Add Group",
+	"flow_rename_group": "Rename Group",
+	"flow_remove_group": "Remove Group",
+	"flow_ungrouped": "Ungrouped",
+	"flow_executable_item": "Executable",
+	"flow_executable_item_desc": "Button that executes code on confirm",
+	"flow_execute_code": "Execute Code",
+	"flow_default_values": "Default Values",
+	"flow_variable_defaults_title": "Variable Defaults",
+	"flow_no_variables": "No variables defined",
+	"flow_default": "Default",
+
+	"combo_import": "Import",
+	"combo_import_title": "Import Combo",
+	"combo_import_from_data": "Import from data()",
+	"combo_import_from_code": "Import from GPC code",
+	"combo_import_paste": "Paste combo data or code below",
+	"combo_add_combo": "Add Combo",
+	"combo_combo_name": "Combo Name",
+	"combo_delete_combo": "Delete Combo",
+	"combo_delete_combo_confirm": "Delete this combo?"
 }
