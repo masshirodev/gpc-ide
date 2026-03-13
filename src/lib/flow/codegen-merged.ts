@@ -385,7 +385,7 @@ export function generateMergedFlowGpc(project: FlowProject, options?: MergedFlow
  * Includes shared vars, menu flow vars, gameplay flow vars, and special
  * array persistence for Weapons_RecoilValues when applicable.
  */
-function collectCombinedPersistVars(
+export function collectCombinedPersistVars(
 	project: FlowProject,
 	menuFlow: FlowGraph,
 	gameplayFlow: FlowGraph,

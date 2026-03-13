@@ -97,6 +97,7 @@
 	import TaskRunnerPanel from '$lib/components/editor/TaskRunnerPanel.svelte';
 	import HistoryPanel from '$lib/components/editor/HistoryPanel.svelte';
 	import GitPanel from '$lib/components/editor/GitPanel.svelte';
+	import FlowPersistencePanel from '$lib/components/editor/FlowPersistencePanel.svelte';
 	import { getDiagnosticsStore, getFileSeverityMap } from '$lib/stores/diagnostics.svelte';
 	import { getFlowStore, closeGraph } from '$lib/stores/flow.svelte';
 	import { getKeyCombo, matchesCombo } from '$lib/stores/keybindings.svelte';
@@ -241,7 +242,7 @@
 	let activeFileGitChanges = $state<GitLineChange[]>([]);
 
 	// Page tab state
-	let activeTab = $state<'overview' | 'files' | 'flow' | 'build' | 'history' | 'git' | 'recoil'>('overview');
+	let activeTab = $state<'overview' | 'files' | 'flow' | 'build' | 'history' | 'git' | 'recoil' | 'persistence'>('overview');
 
 	// Git repo detection
 	let isGitRepo = $state(false);
@@ -272,6 +273,9 @@
 		}
 		if (hasAntirecoilTimeline) {
 			tabs.push('recoil');
+		}
+		if (isFlow) {
+			tabs.push('persistence');
 		}
 		tabs.push('build', 'history', 'git');
 		return tabs;
@@ -975,37 +979,36 @@
 	<!-- Game Detail View -->
 	{@const gameVersion = store.selectedMeta?.version ?? store.selectedConfig?.version ?? 0}
 	{@const isFlowGame = store.selectedGame.generation_mode === 'flow'}
-	<div
-		class={activeTab === 'files' || activeTab === 'flow' ? 'flex h-full flex-col overflow-hidden' : 'mx-auto max-w-5xl p-6'}
-	>
-		<div class="mb-4 flex items-center justify-between {activeTab === 'files' || activeTab === 'flow' ? 'px-4 pt-3' : ''}">
-			<div>
-				<h1 class="text-2xl font-bold text-zinc-100">{store.selectedGame.name}</h1>
-				<p class="text-sm text-zinc-400">
-					{store.selectedGame.console_type.toUpperCase()} &middot; {store.selectedGame.game_type.toUpperCase()}
-					{#if !isFlowGame}
-						<span class="ml-1 rounded bg-zinc-800 px-1.5 py-0.5 text-xs text-zinc-500">Legacy</span>
+	<div class="flex h-full flex-col overflow-hidden">
+		<div class="shrink-0 {activeTab === 'files' || activeTab === 'flow' ? 'px-4 pt-3' : 'px-6 pt-6'}">
+			<div class="mb-4 flex items-center justify-between">
+				<div>
+					<h1 class="text-2xl font-bold text-zinc-100">{store.selectedGame.name}</h1>
+					<p class="text-sm text-zinc-400">
+						{store.selectedGame.console_type.toUpperCase()} &middot; {store.selectedGame.game_type.toUpperCase()}
+						{#if !isFlowGame}
+							<span class="ml-1 rounded bg-zinc-800 px-1.5 py-0.5 text-xs text-zinc-500">Legacy</span>
+						{/if}
+					</p>
+				</div>
+				<div class="flex items-center gap-2">
+					{#if store.selectedGame.game_type}
+						<span
+							class="rounded bg-emerald-900/50 px-2 py-1 text-xs font-medium text-emerald-400 uppercase"
+						>
+							{store.selectedGame.game_type}
+						</span>
 					{/if}
-				</p>
-			</div>
-			<div class="flex items-center gap-2">
-				{#if store.selectedGame.game_type}
 					<span
-						class="rounded bg-emerald-900/50 px-2 py-1 text-xs font-medium text-emerald-400 uppercase"
+						class="rounded bg-zinc-800 px-2 py-1 text-xs text-zinc-400"
 					>
-						{store.selectedGame.game_type}
+						v{gameVersion}
 					</span>
-				{/if}
-				<span
-					class="rounded bg-zinc-800 px-2 py-1 text-xs text-zinc-400"
-				>
-					v{gameVersion}
-				</span>
+				</div>
 			</div>
-		</div>
 
-		<!-- Tab Bar -->
-		<div class="mb-4 flex gap-1 border-b border-zinc-800 {activeTab === 'files' || activeTab === 'flow' ? 'px-4' : ''}">
+			<!-- Tab Bar -->
+			<div class="mb-4 flex gap-1 border-b border-zinc-800">
 			{#each gameTabs as tab}
 				<button
 					class="border-b-2 px-4 py-2 text-sm font-medium transition-colors"
@@ -1016,7 +1019,7 @@
 					class:hover:text-zinc-200={activeTab !== tab}
 					onclick={() => (activeTab = tab as typeof activeTab)}
 				>
-					{{ overview: m.page_tab_overview(), files: m.page_tab_files(), flow: m.page_tab_flow(), build: m.page_tab_build(), history: m.page_tab_history(), git: m.page_tab_git(), recoil: 'Recoil' }[tab]}
+					{{ overview: m.page_tab_overview(), files: m.page_tab_files(), flow: m.page_tab_flow(), build: m.page_tab_build(), history: m.page_tab_history(), git: m.page_tab_git(), recoil: 'Recoil', persistence: m.page_tab_persistence() }[tab]}
 					{#if tab === 'build' && buildResult}
 						<span
 							class="ml-1 inline-block h-2 w-2 rounded-full"
@@ -1026,19 +1029,10 @@
 					{/if}
 				</button>
 			{/each}
+			</div>
 		</div>
 
-		{#if activeTab === 'overview'}
-			<GameOverviewPanel
-				game={store.selectedGame}
-				meta={store.selectedMeta}
-				config={store.selectedConfig}
-				onTagsChanged={async () => { await loadGames(settings.workspaces); }}
-				onMetaChanged={async () => { await loadGames(settings.workspaces); if (store.selectedGame) await selectGame(store.selectedGame); }}
-				onSaveAsTemplate={() => (showSaveTemplateModal = true)}
-				onExportZip={handleExportZip}
-			/>
-		{:else if activeTab === 'files'}
+		{#if activeTab === 'files'}
 			<!-- File Browser - Full Width -->
 			<div class="flex min-h-0 flex-1 gap-0">
 				<FileTreePanel
@@ -1073,74 +1067,94 @@
 			</div>
 		{:else if activeTab === 'flow'}
 			<FlowEditor />
-		{:else if activeTab === 'build'}
-			<BuildPanel
-				{buildResult}
-				{buildOutputContent}
-				{buildOutputLoading}
-				{building}
-				{sendingToZenStudio}
-				onBuild={handleBuild}
-				onBuildErrorClick={handleBuildErrorClick}
-				onCopyBuildOutput={handleCopyBuildOutput}
-				onSendToZenStudio={handleSendToZenStudio}
-			/>
-			<div class="mt-4">
-				<TaskRunnerPanel gamePath={store.selectedGame?.path ?? ''} />
-			</div>
-		{:else if activeTab === 'history'}
-			<HistoryPanel
-				{snapshots}
-				{snapshotsLoading}
-				{snapshotPreview}
-				{renamingSnapshotId}
-				{renameLabel}
-				gamePath={store.selectedGame?.path ?? ''}
-				currentConfigContent={editorStore.tabs.find(t => t.path.endsWith('config.toml'))?.content ?? ''}
-				onCreateSnapshot={handleCreateSnapshot}
-				onPreviewSnapshot={handlePreviewSnapshot}
-				onRollback={handleRollback}
-				onDeleteSnapshot={handleDeleteSnapshot}
-				onStartRename={(id, label) => {
-					renamingSnapshotId = id;
-					renameLabel = label;
-				}}
-				onCancelRename={() => (renamingSnapshotId = null)}
-				onRenameSnapshot={handleRenameSnapshot}
-				onRenameLabelChange={(v) => (renameLabel = v)}
-			/>
-		{:else if activeTab === 'recoil'}
-			{#if recoilContent !== null}
-				<RecoilTableEditor
-					content={recoilContent}
-					gamePath={store.selectedGame?.path ?? ''}
-					filePath={recoilFilePath ?? undefined}
-					onchange={async (newContent) => {
-						recoilContent = newContent;
-						if (recoilFilePath) {
-							await writeFile(recoilFilePath, newContent);
-							addToast('Recoil table saved', 'success');
-						}
-					}}
-				/>
-			{:else}
-				<div class="flex h-64 items-center justify-center text-sm text-zinc-500">
-					Loading recoil table...
+		{:else}
+			<div class="min-h-0 flex-1 overflow-y-auto px-6 pb-6">
+				<div class="mx-auto max-w-5xl">
+					{#if activeTab === 'overview'}
+						<GameOverviewPanel
+							game={store.selectedGame}
+							meta={store.selectedMeta}
+							config={store.selectedConfig}
+							onTagsChanged={async () => { await loadGames(settings.workspaces); }}
+							onMetaChanged={async () => { await loadGames(settings.workspaces); if (store.selectedGame) await selectGame(store.selectedGame); }}
+							onSaveAsTemplate={() => (showSaveTemplateModal = true)}
+							onExportZip={handleExportZip}
+						/>
+					{:else if activeTab === 'build'}
+						<BuildPanel
+							{buildResult}
+							{buildOutputContent}
+							{buildOutputLoading}
+							{building}
+							{sendingToZenStudio}
+							onBuild={handleBuild}
+							onBuildErrorClick={handleBuildErrorClick}
+							onCopyBuildOutput={handleCopyBuildOutput}
+							onSendToZenStudio={handleSendToZenStudio}
+						/>
+						<div class="mt-4">
+							<TaskRunnerPanel gamePath={store.selectedGame?.path ?? ''} />
+						</div>
+					{:else if activeTab === 'history'}
+						<HistoryPanel
+							{snapshots}
+							{snapshotsLoading}
+							{snapshotPreview}
+							{renamingSnapshotId}
+							{renameLabel}
+							gamePath={store.selectedGame?.path ?? ''}
+							currentConfigContent={editorStore.tabs.find(t => t.path.endsWith('config.toml'))?.content ?? ''}
+							onCreateSnapshot={handleCreateSnapshot}
+							onPreviewSnapshot={handlePreviewSnapshot}
+							onRollback={handleRollback}
+							onDeleteSnapshot={handleDeleteSnapshot}
+							onStartRename={(id, label) => {
+								renamingSnapshotId = id;
+								renameLabel = label;
+							}}
+							onCancelRename={() => (renamingSnapshotId = null)}
+							onRenameSnapshot={handleRenameSnapshot}
+							onRenameLabelChange={(v) => (renameLabel = v)}
+						/>
+					{:else if activeTab === 'recoil'}
+						{#if recoilContent !== null}
+							<RecoilTableEditor
+								content={recoilContent}
+								gamePath={store.selectedGame?.path ?? ''}
+								filePath={recoilFilePath ?? undefined}
+								onchange={async (newContent) => {
+									recoilContent = newContent;
+									if (recoilFilePath) {
+										await writeFile(recoilFilePath, newContent);
+										addToast('Recoil table saved', 'success');
+									}
+								}}
+							/>
+						{:else}
+							<div class="flex h-64 items-center justify-center text-sm text-zinc-500">
+								Loading recoil table...
+							</div>
+						{/if}
+					{:else if activeTab === 'persistence'}
+						{#if flowStore.project}
+							<FlowPersistencePanel project={flowStore.project} />
+						{/if}
+					{:else if activeTab === 'git'}
+						<GitPanel
+							gamePath={store.selectedGame?.path ?? ''}
+							{isGitRepo}
+							onCommitted={async () => {
+								if (store.selectedGame) {
+									await refreshFileTree(store.selectedGame.path);
+								}
+							}}
+							onRepoInit={async () => {
+								isGitRepo = true;
+							}}
+						/>
+					{/if}
 				</div>
-			{/if}
-		{:else if activeTab === 'git'}
-			<GitPanel
-				gamePath={store.selectedGame?.path ?? ''}
-				{isGitRepo}
-				onCommitted={async () => {
-					if (store.selectedGame) {
-						await refreshFileTree(store.selectedGame.path);
-					}
-				}}
-				onRepoInit={async () => {
-					isGitRepo = true;
-				}}
-			/>
+			</div>
 		{/if}
 	</div>
 {:else}
