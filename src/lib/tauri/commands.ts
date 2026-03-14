@@ -48,8 +48,25 @@ export async function validateModuleSelection(moduleIds: string[], workspacePath
 
 // === User Module Commands ===
 
-export async function saveUserModule(workspacePath: string, moduleToml: string): Promise<string> {
-	return invoke<string>('save_user_module', { workspacePath, moduleToml });
+export async function saveUserModule(
+	workspacePath: string,
+	moduleDef: ModuleDefinition
+): Promise<string> {
+	return invoke<string>('save_user_module', { workspacePath, moduleDef });
+}
+
+export async function exportModuleToml(
+	moduleId: string,
+	workspacePaths?: string[]
+): Promise<string | null> {
+	return invoke<string | null>('export_module_toml', {
+		moduleId,
+		workspacePaths: workspacePaths ?? null
+	});
+}
+
+export async function importModuleToml(workspacePath: string): Promise<string | null> {
+	return invoke<string | null>('import_module_toml', { workspacePath });
 }
 
 export async function deleteUserModule(moduleId: string, workspacePaths?: string[]): Promise<void> {

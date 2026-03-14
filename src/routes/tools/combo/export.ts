@@ -1,4 +1,5 @@
 import type { Combo, ComboProject, ComboStep, ModuleExportConfig } from './types';
+import type { ModuleDefinition } from '$lib/types/module';
 import {
 	CONSOLE_AXES,
 	translateButton,
@@ -99,6 +100,37 @@ export function exportModuleTOML(
 	];
 
 	return lines.join('\n');
+}
+
+export function exportModuleDefinition(
+	project: ComboProject,
+	config: ModuleExportConfig
+): ModuleDefinition {
+	const comboName = sanitizeName(project.name);
+	const comboCode = exportComboGPC(project);
+
+	let trigger: string;
+	if (config.triggerMode === 'hold') {
+		trigger = `if (${comboName}Status && get_val(${config.triggerButton})) {\n    combo_run(${comboName});\n} else {\n    combo_stop(${comboName});\n}`;
+	} else {
+		trigger = `if (${comboName}Status && event_press(${config.triggerButton})) {\n    combo_run(${comboName});\n}`;
+	}
+
+	return {
+		id: config.id,
+		display_name: config.displayName,
+		type: config.gameType,
+		description: config.description || 'Custom combo created with Combo Maker',
+		trigger,
+		combo: comboCode,
+		options: [
+			{ name: 'Status', var: `${comboName}Status`, type: 'toggle', default: 0 }
+		],
+		extra_vars: {},
+		params: [],
+		conflicts: [],
+		flow_target: 'gameplay'
+	};
 }
 
 /**

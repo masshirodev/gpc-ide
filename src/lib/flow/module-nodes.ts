@@ -35,15 +35,28 @@ export function createModuleNode(
 		.replace(/^[0-9]/, '_$&');
 	const enableVar = statusOption?.variable ?? `${capitalize(safeName)}_Enabled`;
 
-	// Parse the combo field into separate code sections
-	const parsed = parseComboField(moduleDef.combo ?? '');
+	// Use explicit code section fields when present (new format),
+	// otherwise fall back to parsing the combo field (legacy format)
+	let initCode: string;
+	let functionsCode: string;
+	let comboCode: string;
 
-	// Strip config_menu rendering functions — the flow editor generates menus instead
-	const menuFunctions = collectConfigMenuFunctions(moduleDef);
-	const functionsCode =
-		menuFunctions.length > 0
-			? stripFunctions(parsed.functionsCode, menuFunctions)
-			: parsed.functionsCode;
+	if (moduleDef.functions_code !== undefined) {
+		// New format: explicit fields
+		initCode = moduleDef.init_code ?? '';
+		functionsCode = moduleDef.functions_code ?? '';
+		comboCode = moduleDef.combo ?? '';
+	} else {
+		// Legacy format: parse combo into sections, strip config_menu functions
+		const parsed = parseComboField(moduleDef.combo ?? '');
+		const menuFunctions = collectConfigMenuFunctions(moduleDef);
+		initCode = moduleDef.init_code ?? '';
+		functionsCode =
+			menuFunctions.length > 0
+				? stripFunctions(parsed.functionsCode, menuFunctions)
+				: parsed.functionsCode;
+		comboCode = parsed.comboCode;
+	}
 
 	// Build params map from module definition (button/key params with defaults)
 	const params: Record<string, string> = {};
@@ -58,10 +71,10 @@ export function createModuleNode(
 		moduleName: moduleDef.display_name,
 		triggerCondition: '',
 		enableVariable: enableVar,
-		initCode: '',
+		initCode,
 		mainCode: moduleDef.trigger ?? '',
 		functionsCode,
-		comboCode: parsed.comboCode,
+		comboCode,
 		options,
 		extraVars: { ...moduleDef.extra_vars },
 		params: Object.keys(params).length > 0 ? params : undefined,

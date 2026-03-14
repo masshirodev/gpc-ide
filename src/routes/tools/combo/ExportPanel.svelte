@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { exportComboGPC, exportModuleTOML, exportComboData, exportAllCombosGPC, exportAllCombosData } from './export';
+	import { exportComboGPC, exportModuleTOML, exportModuleDefinition, exportComboData, exportAllCombosGPC, exportAllCombosData } from './export';
 	import type { ComboProject, ModuleExportConfig } from './types';
 	import { addToast } from '$lib/stores/toast.svelte';
 	import MiniMonaco from '$lib/components/editor/MiniMonaco.svelte';
@@ -119,7 +119,8 @@
 				return;
 			}
 
-			await saveUserModule(settings.workspaces[0], tomlOutput);
+			const moduleDef = exportModuleDefinition(project, moduleConfig);
+			await saveUserModule(settings.workspaces[0], moduleDef);
 			addToast(
 				existing
 					? `Module "${moduleConfig.displayName}" updated`

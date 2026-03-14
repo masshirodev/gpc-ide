@@ -21,6 +21,10 @@ pub struct ModuleDefinition {
     #[serde(default)]
     pub combo: Option<String>,
     #[serde(default)]
+    pub init_code: Option<String>,
+    #[serde(default)]
+    pub functions_code: Option<String>,
+    #[serde(default)]
     pub options: Vec<ModuleOption>,
     #[serde(default)]
     pub extra_vars: HashMap<String, String>,
@@ -36,7 +40,7 @@ pub struct ModuleDefinition {
     pub requires_keyboard_file: Option<bool>,
     #[serde(default)]
     pub config_menu: Option<ConfigMenu>,
-    #[serde(default)]
+    #[serde(default, skip_serializing)]
     pub is_user_module: bool,
     /// Which flow tab this module belongs to: "gameplay" (default) or "data"
     #[serde(default = "default_flow_target")]
@@ -75,6 +79,12 @@ pub struct ModuleOption {
     pub min: Option<i32>,
     #[serde(default)]
     pub max: Option<i32>,
+    #[serde(default)]
+    pub array_name: Option<String>,
+    #[serde(default)]
+    pub array_size: Option<i32>,
+    #[serde(default)]
+    pub on_change_code: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

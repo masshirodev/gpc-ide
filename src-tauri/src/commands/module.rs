@@ -1,8 +1,9 @@
 use crate::commands::game::app_root;
 use crate::models::module::{ModuleDefinition, ModuleSummary};
 use crate::pipeline::modules;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
+use tauri_plugin_dialog::DialogExt;
 
 fn workspace_dirs(workspace_paths: &Option<Vec<String>>) -> Vec<PathBuf> {
     workspace_paths
@@ -122,36 +123,120 @@ pub fn validate_module_selection(
     modules::resolve_dependencies(&module_ids, &all)
 }
 
-/// Save a user module TOML file to the first workspace's modules/ directory
+/// Serialize a ModuleDefinition to TOML with the module ID as the top-level key
+fn module_to_toml(module_def: &ModuleDefinition) -> Result<String, String> {
+    let mut wrapper: HashMap<String, &ModuleDefinition> = HashMap::new();
+    wrapper.insert(module_def.id.clone(), module_def);
+    toml::to_string_pretty(&wrapper).map_err(|e| format!("Failed to serialize module: {}", e))
+}
+
+/// Save a user module to the first workspace's modules/ directory
 #[tauri::command]
 pub fn save_user_module(
     workspace_path: String,
-    module_toml: String,
+    module_def: ModuleDefinition,
 ) -> Result<String, String> {
     let workspace = PathBuf::from(&workspace_path);
     let modules_dir = workspace.join("modules");
 
-    // Create modules directory if it doesn't exist
     if !modules_dir.exists() {
         std::fs::create_dir_all(&modules_dir)
             .map_err(|e| format!("Failed to create modules directory: {}", e))?;
     }
 
-    // Parse the TOML to extract the module ID for the filename
-    let table: std::collections::HashMap<String, toml::Value> =
-        toml::from_str(&module_toml).map_err(|e| format!("Invalid TOML: {}", e))?;
+    let toml_str = module_to_toml(&module_def)?;
+    let file_path = modules_dir.join(format!("{}.toml", module_def.id));
 
-    let (key, _) = table
-        .into_iter()
-        .next()
-        .ok_or_else(|| "Empty module TOML".to_string())?;
-
-    let file_path = modules_dir.join(format!("{}.toml", key));
-
-    std::fs::write(&file_path, &module_toml)
+    std::fs::write(&file_path, &toml_str)
         .map_err(|e| format!("Failed to write module file: {}", e))?;
 
     Ok(file_path.to_string_lossy().to_string())
+}
+
+/// Export a module as a .toml file via native save dialog
+#[tauri::command]
+pub async fn export_module_toml(
+    app: tauri::AppHandle,
+    module_id: String,
+    workspace_paths: Option<Vec<String>>,
+) -> Result<Option<String>, String> {
+    let root = app_root();
+    let extra = workspace_dirs(&workspace_paths);
+    let all = modules::load_all_modules_with_paths(&root, &extra)?;
+
+    let module_def = all
+        .into_iter()
+        .find(|m| m.id == module_id)
+        .ok_or_else(|| format!("Module '{}' not found", module_id))?;
+
+    let toml_str = module_to_toml(&module_def)?;
+
+    let path = app
+        .dialog()
+        .file()
+        .set_title("Export Module")
+        .set_file_name(format!("{}.toml", module_id))
+        .add_filter("TOML files", &["toml"])
+        .blocking_save_file();
+
+    match path {
+        Some(file_path) => {
+            let p = file_path.as_path().ok_or("Invalid file path")?;
+            std::fs::write(p, &toml_str)
+                .map_err(|e| format!("Failed to write file: {}", e))?;
+            Ok(Some(p.to_string_lossy().to_string()))
+        }
+        None => Ok(None),
+    }
+}
+
+/// Import a .toml module file via native open dialog
+#[tauri::command]
+pub async fn import_module_toml(
+    app: tauri::AppHandle,
+    workspace_path: String,
+) -> Result<Option<String>, String> {
+    let path = app
+        .dialog()
+        .file()
+        .set_title("Import Module")
+        .add_filter("TOML files", &["toml"])
+        .blocking_pick_file();
+
+    match path {
+        Some(file_path) => {
+            let p = file_path.as_path().ok_or("Invalid file path")?;
+            let content = std::fs::read_to_string(p)
+                .map_err(|e| format!("Failed to read file: {}", e))?;
+
+            // Validate: parse as module TOML (top-level key wrapping a ModuleDefinition)
+            let table: HashMap<String, toml::Value> =
+                toml::from_str(&content).map_err(|e| format!("Invalid TOML: {}", e))?;
+
+            let (key, value) = table
+                .into_iter()
+                .next()
+                .ok_or_else(|| "Empty TOML file".to_string())?;
+
+            let _module: ModuleDefinition = value
+                .try_into()
+                .map_err(|e| format!("Invalid module format: {}", e))?;
+
+            // Copy to workspace modules/ directory
+            let modules_dir = PathBuf::from(&workspace_path).join("modules");
+            if !modules_dir.exists() {
+                std::fs::create_dir_all(&modules_dir)
+                    .map_err(|e| format!("Failed to create modules directory: {}", e))?;
+            }
+
+            let dest = modules_dir.join(format!("{}.toml", key));
+            std::fs::write(&dest, &content)
+                .map_err(|e| format!("Failed to write module file: {}", e))?;
+
+            Ok(Some(key))
+        }
+        None => Ok(None),
+    }
 }
 
 /// Delete a user module TOML file

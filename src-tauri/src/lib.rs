@@ -40,6 +40,8 @@ pub fn run() {
             commands::module::validate_module_selection,
             commands::module::save_user_module,
             commands::module::delete_user_module,
+            commands::module::export_module_toml,
+            commands::module::import_module_toml,
             commands::wizard::create_game,
             commands::build::build_game_cmd,
             commands::build::get_build_output_path,

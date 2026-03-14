@@ -22,6 +22,8 @@ export interface ModuleDefinition {
 	quick_toggle?: string[];
 	trigger?: string;
 	combo?: string;
+	init_code?: string;
+	functions_code?: string;
 	options: ModuleOption[];
 	extra_vars: Record<string, string>;
 	params: ModuleParam[];
@@ -50,6 +52,9 @@ export interface ModuleOption {
 	default?: unknown;
 	min?: number;
 	max?: number;
+	array_name?: string;
+	array_size?: number;
+	on_change_code?: string;
 }
 
 export interface ModuleParam {
@@ -57,4 +62,37 @@ export interface ModuleParam {
 	prompt: string;
 	type: string;
 	default?: string;
+}
+
+export interface ModuleFormState {
+	moduleId: string;
+	displayName: string;
+	moduleType: string;
+	flowTarget: 'gameplay' | 'data';
+	description: string;
+	enableVariable: string;
+	quickToggleMode: 'buttons' | 'key';
+	quickToggle: string[];
+	options: ModuleFormOption[];
+	initCode: string;
+	mainCode: string;
+	functionsCode: string;
+	comboCode: string;
+	needsWeapondata: boolean;
+	requiresKeyboardFile: boolean;
+	conflicts: string[];
+	extraVars: Array<{ name: string; type: string }>;
+	params: Array<{ key: string; prompt: string; type: string; default: string }>;
+}
+
+export interface ModuleFormOption {
+	name: string;
+	variable: string;
+	type: 'toggle' | 'value' | 'array';
+	default: string;
+	min: string;
+	max: string;
+	arrayName: string;
+	arraySize: string;
+	onChangeCode: string;
 }
