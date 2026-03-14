@@ -117,7 +117,7 @@ pub fn list_chunks(workspace_paths: Vec<String>) -> Result<Vec<FlowChunk>, Strin
         for entry in entries {
             let entry = entry.map_err(|e| format!("Failed to read entry: {}", e))?;
             let path = entry.path();
-            if path.extension().and_then(|e| e.to_str()) != Some("json") {
+            if !matches!(path.extension().and_then(|e| e.to_str()), Some("zchunk") | Some("json")) {
                 continue;
             }
             let content = match std::fs::read_to_string(&path) {
@@ -145,7 +145,7 @@ pub fn save_chunk(workspace_path: String, chunk: FlowChunk) -> Result<(), String
     std::fs::create_dir_all(&dir)
         .map_err(|e| format!("Failed to create chunks directory: {}", e))?;
 
-    let filename = format!("{}.json", chunk.id);
+    let filename = format!("{}.zchunk", chunk.id);
     let path = dir.join(filename);
     let content = serde_json::to_string_pretty(&chunk)
         .map_err(|e| format!("Failed to serialize chunk: {}", e))?;
@@ -158,7 +158,9 @@ pub fn save_chunk(workspace_path: String, chunk: FlowChunk) -> Result<(), String
 #[tauri::command]
 pub fn delete_chunk(workspace_paths: Vec<String>, chunk_id: String) -> Result<(), String> {
     for workspace in &workspace_paths {
-        let path = chunks_dir(workspace).join(format!("{}.json", chunk_id));
+        let dir = chunks_dir(workspace);
+        let path = dir.join(format!("{}.zchunk", chunk_id));
+        let path = if path.exists() { path } else { dir.join(format!("{}.json", chunk_id)) };
         if path.exists() {
             std::fs::remove_file(&path)
                 .map_err(|e| format!("Failed to delete chunk: {}", e))?;
@@ -172,7 +174,9 @@ pub fn delete_chunk(workspace_paths: Vec<String>, chunk_id: String) -> Result<()
 #[tauri::command]
 pub fn get_chunk(workspace_paths: Vec<String>, chunk_id: String) -> Result<FlowChunk, String> {
     for workspace in &workspace_paths {
-        let path = chunks_dir(workspace).join(format!("{}.json", chunk_id));
+        let dir = chunks_dir(workspace);
+        let path = dir.join(format!("{}.zchunk", chunk_id));
+        let path = if path.exists() { path } else { dir.join(format!("{}.json", chunk_id)) };
         if path.exists() {
             let content = std::fs::read_to_string(&path)
                 .map_err(|e| format!("Failed to read chunk: {}", e))?;

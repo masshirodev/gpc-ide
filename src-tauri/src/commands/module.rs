@@ -175,8 +175,8 @@ pub async fn export_module_toml(
         .dialog()
         .file()
         .set_title("Export Module")
-        .set_file_name(format!("{}.toml", module_id))
-        .add_filter("TOML files", &["toml"])
+        .set_file_name(format!("{}.zmod", module_id))
+        .add_filter("Zen Forge Module", &["zmod"])
         .blocking_save_file();
 
     match path {
@@ -200,7 +200,7 @@ pub async fn import_module_toml(
         .dialog()
         .file()
         .set_title("Import Module")
-        .add_filter("TOML files", &["toml"])
+        .add_filter("Zen Forge Module", &["zmod", "toml"])
         .blocking_pick_file();
 
     match path {

@@ -903,9 +903,9 @@
 		if (!store.selectedGame) return;
 		const gameName = store.selectedGame.name;
 		const outputPath = await saveDialog({
-			title: 'Export Game as Zip',
-			defaultPath: `${gameName}.zip`,
-			filters: [{ name: 'Zip Archive', extensions: ['zip'] }]
+			title: 'Export Game',
+			defaultPath: `${gameName}.zforge`,
+			filters: [{ name: 'Zen Forge Archive', extensions: ['zforge'] }]
 		});
 		if (!outputPath) return;
 		try {
@@ -918,8 +918,8 @@
 
 	async function handleImportZip() {
 		const zipPath = await openDialog({
-			title: 'Import Game from Zip',
-			filters: [{ name: 'Zip Archive', extensions: ['zip'] }],
+			title: 'Import Game',
+			filters: [{ name: 'Zen Forge Archive', extensions: ['zforge', 'zip'] }],
 			multiple: false
 		});
 		if (!zipPath) return;
