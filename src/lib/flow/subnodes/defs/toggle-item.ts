@@ -56,6 +56,13 @@ export const toggleItemDef: SubNodeDef = {
 				{ value: 'small', label: 'Small (3x5)' },
 			],
 		},
+		{
+			key: 'onChangeCode',
+			label: 'On Change Code',
+			type: 'code',
+			default: '',
+			description: 'GPC code to run when the toggle changes (e.g. ApplySettings();)',
+		},
 	],
 	stackHeight: 8,
 	render(config, ctx) {
@@ -144,6 +151,21 @@ export const toggleItemDef: SubNodeDef = {
 			lines.push(`    if(${boundVar}) print(${valX}, ${ctx.y}, ${font}, OLED_WHITE, ${onRef});`);
 			lines.push(`    else print(${valX}, ${ctx.y}, ${font}, OLED_WHITE, ${offRef});`);
 		}
+
+		return lines.join('\n');
+	},
+	generateGpcInput(config, ctx) {
+		if (ctx.cursorIndex < 0) return '';
+		const boundVar = ctx.boundVariable || '_toggle_var';
+		const label = (config as Record<string, unknown>).label as string || 'Toggle';
+		const onChangeCode = (config.onChangeCode as string) || '';
+		const changeSuffix = onChangeCode ? ` ${onChangeCode}` : '';
+		const lines: string[] = [];
+
+		lines.push(`    // Toggle: ${label}`);
+		lines.push(`    if(${ctx.cursorVar} == ${ctx.cursorIndex} && event_press(${ctx.buttons.confirm})) {`);
+		lines.push(`        ${boundVar} = !${boundVar}; FlowRedraw = TRUE;${changeSuffix}`);
+		lines.push(`    }`);
 
 		return lines.join('\n');
 	},

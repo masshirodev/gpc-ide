@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { FlowProfile, ProfileSwitchConfig, FlowVariable } from '$lib/types/flow';
 	import ButtonSelect from '$lib/components/inputs/ButtonSelect.svelte';
+	import KeySelect from '$lib/components/inputs/KeySelect.svelte';
 
 	interface Props {
 		profiles: FlowProfile[];
@@ -53,25 +54,25 @@
 		onUpdateProfile(profileId, { variableOverrides: overrides });
 	}
 
-	let switchNext = $state('');
-	let switchPrev = $state('');
+	let switchButton = $state('');
 	let switchModifier = $state('');
+	let switchKeyboardKey = $state('');
 
 	$effect(() => {
-		switchNext = profileSwitch?.next ?? '';
-		switchPrev = profileSwitch?.prev ?? '';
+		switchButton = profileSwitch?.button ?? profileSwitch?.next ?? '';
 		switchModifier = profileSwitch?.modifier ?? '';
+		switchKeyboardKey = profileSwitch?.keyboardKey ?? '';
 	});
 
 	function commitSwitchConfig() {
-		if (!switchNext) {
+		if (!switchButton && !switchKeyboardKey) {
 			onSetProfileSwitch(undefined);
 			return;
 		}
 		onSetProfileSwitch({
-			next: switchNext,
-			prev: switchPrev || switchNext,
+			button: switchButton,
 			modifier: switchModifier || undefined,
+			keyboardKey: switchKeyboardKey || undefined,
 		});
 	}
 </script>
@@ -171,28 +172,17 @@
 		<p class="text-xs text-zinc-500">Maximum 8 profiles reached.</p>
 	{/if}
 
-	<!-- Profile switch buttons -->
+	<!-- Profile switch button -->
 	{#if profiles.length > 1}
 		<div class="border-t border-zinc-700 pt-3">
 			<h4 class="mb-2 text-xs font-semibold text-zinc-400 uppercase">Profile Switching</h4>
 			<div class="space-y-2">
 				<div>
-					<label class="mb-1 block text-xs text-zinc-500">Next Profile</label>
+					<label class="mb-1 block text-xs text-zinc-500">Cycle Button</label>
 					<ButtonSelect
-						value={switchNext}
+						value={switchButton}
 						onchange={(v) => {
-							switchNext = v;
-							commitSwitchConfig();
-						}}
-						placeholder="Select button..."
-					/>
-				</div>
-				<div>
-					<label class="mb-1 block text-xs text-zinc-500">Previous Profile</label>
-					<ButtonSelect
-						value={switchPrev}
-						onchange={(v) => {
-							switchPrev = v;
+							switchButton = v;
 							commitSwitchConfig();
 						}}
 						placeholder="Select button..."
@@ -204,6 +194,17 @@
 						value={switchModifier}
 						onchange={(v) => {
 							switchModifier = v;
+							commitSwitchConfig();
+						}}
+						placeholder="None (optional)"
+					/>
+				</div>
+				<div>
+					<label class="mb-1 block text-xs text-zinc-500">Keyboard Key (optional)</label>
+					<KeySelect
+						value={switchKeyboardKey}
+						onchange={(v) => {
+							switchKeyboardKey = v;
 							commitSwitchConfig();
 						}}
 						placeholder="None (optional)"

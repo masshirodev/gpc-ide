@@ -201,10 +201,21 @@
 			name.includes('STICK_');
 	}
 
-	// Active buttons for display
+	// Track all buttons ever used in the combo
+	let usedButtons = $derived.by(() => {
+		const used = new Set<string>();
+		for (const step of steps) {
+			for (const key of step.values.keys()) {
+				used.add(key);
+			}
+		}
+		return used;
+	});
+
+	// Show all used buttons, even if currently at 0
 	let activeButtons = $derived(
-		Array.from(activeValues.entries())
-			.filter(([_, v]) => v !== 0)
+		Array.from(usedButtons)
+			.map((name) => [name, activeValues.get(name) ?? 0] as [string, number])
 			.sort((a, b) => a[0].localeCompare(b[0]))
 	);
 
@@ -342,9 +353,9 @@
 					<!-- Current state -->
 					<div class="mb-4 min-h-24">
 						<h3 class="mb-2 text-xs font-semibold text-zinc-400 uppercase">Active Outputs</h3>
-						{#if activeButtons.length === 0}
+						{#if activeButtons.length === 0 || currentStep < 0}
 							<div class="rounded border border-zinc-800 bg-zinc-900 px-3 py-4 text-center text-xs text-zinc-600">
-								No active outputs
+								{currentStep < 0 ? 'Step through the combo to see outputs' : 'No outputs used in this combo'}
 							</div>
 						{:else}
 							<div class="grid grid-cols-2 gap-2">
@@ -358,7 +369,7 @@
 													style="width: {Math.abs(value)}%"
 												></div>
 											</div>
-											<span class="w-8 text-right text-xs font-mono {value > 0 ? 'text-emerald-400' : 'text-blue-400'}">
+											<span class="w-8 text-right text-xs font-mono {value === 0 ? 'text-zinc-600' : value > 0 ? 'text-emerald-400' : 'text-blue-400'}">
 												{value}
 											</span>
 										</div>

@@ -17,7 +17,8 @@ pub struct FlowProject {
     /// Profile switch button configuration
     #[serde(default)]
     pub profile_switch: Option<ProfileSwitchConfig>,
-    /// Per-weapon variable defaults. When set, replaces the profile system.
+    /// Per-weapon variable defaults. Coexists with profiles — profiles select
+    /// which weapon is active, weapon defaults apply per-weapon values on switch.
     #[serde(default)]
     pub weapon_defaults: Option<WeaponDefaultsConfig>,
     #[serde(default)]
@@ -38,13 +39,20 @@ pub struct FlowProfile {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProfileSwitchConfig {
-    /// Button to switch to next profile
-    pub next: String,
-    /// Button to switch to previous profile
-    pub prev: String,
+    /// Button that cycles to next profile
+    #[serde(default)]
+    pub button: String,
     /// Optional modifier button that must be held
     #[serde(default)]
     pub modifier: Option<String>,
+    /// Optional keyboard key that also cycles profiles
+    #[serde(default)]
+    pub keyboard_key: Option<String>,
+    // Legacy fields kept for migration
+    #[serde(default)]
+    pub next: Option<String>,
+    #[serde(default)]
+    pub prev: Option<String>,
 }
 
 /// Per-weapon variable default overrides
@@ -132,6 +140,12 @@ pub struct FlowNode {
     pub block_inputs: Option<bool>,
     #[serde(default)]
     pub module_data: Option<ModuleNodeData>,
+    /// Variable to watch for changes (gameplay/data custom nodes)
+    #[serde(default)]
+    pub on_change_variable: Option<String>,
+    /// GPC code to execute when on_change_variable changes value
+    #[serde(default)]
+    pub on_change_code: Option<String>,
     /// Variable names of auto-generated sub-nodes the user intentionally removed
     #[serde(default)]
     pub auto_suppressed: Option<Vec<String>>,

@@ -231,6 +231,23 @@ export function generateGameplayGpc(graph: FlowGraph, allFlowModuleNodes?: FlowN
 				result.mainLoopCode.push(`    ${line}`);
 			}
 		}
+		// On Change: watch a variable and run code when it changes
+		const ocVar = node.onChangeVariable?.trim();
+		const ocCode = node.onChangeCode?.trim();
+		if (ocVar && ocCode) {
+			const prevVar = `_prev_${sanitizeName(ocVar)}_${sanitizeName(node.id)}`;
+			if (!declaredVars.has(prevVar)) {
+				result.variables.push(`int ${prevVar} = -1;`);
+				declaredVars.add(prevVar);
+			}
+			result.mainLoopCode.push(`    // On Change: ${node.label} (${ocVar})`);
+			result.mainLoopCode.push(`    if(${ocVar} != ${prevVar}) {`);
+			for (const line of ocCode.split('\n')) {
+				result.mainLoopCode.push(`        ${line}`);
+			}
+			result.mainLoopCode.push(`        ${prevVar} = ${ocVar};`);
+			result.mainLoopCode.push(`    }`);
+		}
 		if (node.comboCode.trim()) {
 			result.combos.push(`// Custom combo: ${node.label}`);
 			result.combos.push(node.comboCode.trim());
@@ -400,8 +417,10 @@ function generateVarDecl(v: FlowVariable): string {
 		return `int8 ${v.name}[${size}];`;
 	}
 	const gpcType = v.type === 'bool' ? 'int' : v.type;
-	const profile = v.perProfile ? ' [profile]' : '';
-	return `${gpcType} ${v.name}${profile} = ${v.defaultValue};`;
+	if (v.perProfile) {
+		return `${gpcType} ${v.name} [profile];`;
+	}
+	return `${gpcType} ${v.name} = ${v.defaultValue};`;
 }
 
 /**
@@ -569,7 +588,8 @@ export function generateWeaponDefaultsCode(
 	config: WeaponDefaultsConfig,
 	weaponCount: number,
 	allVars: FlowVariable[],
-	weaponNames: string[]
+	weaponNames: string[],
+	currentWeaponExpr: string = 'CurrentWeapon'
 ): WeaponDefaultsCodeResult | null {
 	if (config.enabledVars.length === 0 || weaponCount === 0) return null;
 
@@ -649,7 +669,7 @@ export function generateWeaponDefaultsCode(
 		functions.push('    }');
 		functions.push('    // Load incoming weapon values');
 		for (const v of vars) {
-			functions.push(`    ${v.name} = _wd_${v.name}[CurrentWeapon];`);
+			functions.push(`    ${v.name} = _wd_${v.name}[${currentWeaponExpr}];`);
 		}
 		functions.push('}');
 		functions.push('');
@@ -676,7 +696,7 @@ export function generateWeaponDefaultsCode(
 
 			const label = weaponNames[wi] ?? `Weapon ${wi}`;
 			const assignments = entries.map(([name, val]) => `${name} = ${val};`).join(' ');
-			functions.push(`    if(CurrentWeapon == ${wi}) { ${assignments} }  // ${label}`);
+			functions.push(`    if(${currentWeaponExpr} == ${wi}) { ${assignments} }  // ${label}`);
 		}
 
 		functions.push('}');
@@ -685,9 +705,9 @@ export function generateWeaponDefaultsCode(
 
 	// Main loop: weapon change detection
 	mainLoopLines.push('    // --- Weapon Defaults ---');
-	mainLoopLines.push('    if(CurrentWeapon != _prev_CurrentWeapon) {');
+	mainLoopLines.push(`    if(${currentWeaponExpr} != _prev_CurrentWeapon) {`);
 	mainLoopLines.push('        ApplyWeaponDefaults();');
-	mainLoopLines.push('        _prev_CurrentWeapon = CurrentWeapon;');
+	mainLoopLines.push(`        _prev_CurrentWeapon = ${currentWeaponExpr};`);
 	mainLoopLines.push('        FlowRedraw = TRUE;');
 	mainLoopLines.push('    }');
 
@@ -695,13 +715,13 @@ export function generateWeaponDefaultsCode(
 	if (config.rememberTweaks) {
 		// In remember mode after Flow_Load(), just load from backup arrays
 		for (const v of vars) {
-			initLines.push(`    ${v.name} = _wd_${v.name}[CurrentWeapon];`);
+			initLines.push(`    ${v.name} = _wd_${v.name}[${currentWeaponExpr}];`);
 		}
-		initLines.push('    _prev_CurrentWeapon = CurrentWeapon;');
+		initLines.push(`    _prev_CurrentWeapon = ${currentWeaponExpr};`);
 	} else {
 		// In reset mode, apply defaults and set tracking var
 		initLines.push('    ApplyWeaponDefaults();');
-		initLines.push('    _prev_CurrentWeapon = CurrentWeapon;');
+		initLines.push(`    _prev_CurrentWeapon = ${currentWeaponExpr};`);
 	}
 
 	return { varDecls, functions, mainLoopLines, initLines, persistVars, hasInitFunction: config.rememberTweaks };

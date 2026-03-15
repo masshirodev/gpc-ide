@@ -69,6 +69,7 @@
 	import { mergeRecoilTable, parseWeaponNames } from '$lib/utils/recoil-parser';
 	import { createModuleNode } from '$lib/flow/module-nodes';
 	import { getFlowOledTransfer, setFlowOledTransfer, clearFlowOledTransfer, type FlowOledLayer } from '$lib/stores/flow-transfer.svelte';
+	import { setLastBuildResult } from '$lib/stores/build.svelte';
 	import { getKeyboardTransfer, clearKeyboardTransfer } from '$lib/stores/keyboard-transfer.svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
@@ -484,11 +485,19 @@
 			if (result.success && result.output_path) {
 				const fileName = result.output_path.split('/').pop() || 'output';
 				addToast(`Build succeeded: ${fileName}`, 'success');
+				// Store result so the main page Build tab can pick it up
+				try {
+					const outputContent = await readFile(result.output_path);
+					setLastBuildResult(result, outputContent, gamePath);
+				} catch {
+					setLastBuildResult(result, null, gamePath);
+				}
 			} else {
 				const errMsg = result.errors.length > 0
 					? result.errors.join('; ')
 					: 'Unknown build error';
 				addToast(`Build failed: ${errMsg}`, 'error');
+				setLastBuildResult(result, null, gamePath);
 			}
 		} catch (e) {
 			addToast(`Build failed: ${e}`, 'error');
@@ -737,6 +746,7 @@
 			panX={flowStore.canvas.panX}
 			panY={flowStore.canvas.panY}
 			zoom={flowStore.canvas.zoom}
+			isDataFlow={flowStore.activeFlowType === 'data'}
 			onSelectNode={selectNode}
 			onSelectNodeMulti={selectNodeMulti}
 			onSelectNodesBatch={selectNodesBatch}

@@ -23,6 +23,8 @@
 	let inputLog = $state<string[]>([]);
 	let variables = $state<[string, number | string][]>([]);
 	let frameCount = $state(0);
+	let showController = $state(false);
+	let heldControllerButtons = $state<Set<string>>(new Set());
 
 	const SCALE = 4;
 	const WIDTH = 128;
@@ -143,6 +145,87 @@
 			cancelAnimationFrame(frameId);
 		}
 	}
+
+	function controllerPress(button: string) {
+		if (!emulator) return;
+		emulator.handleButtonPress(button);
+		heldControllerButtons = new Set([...heldControllerButtons, button]);
+	}
+
+	function controllerRelease(button: string) {
+		if (!emulator) return;
+		emulator.handleButtonRelease(button);
+		const next = new Set(heldControllerButtons);
+		next.delete(button);
+		heldControllerButtons = next;
+	}
+
+	function controllerTap(button: string) {
+		if (!emulator) return;
+		emulator.handleButtonPress(button);
+		heldControllerButtons = new Set([...heldControllerButtons, button]);
+		setTimeout(() => {
+			if (emulator) emulator.handleButtonRelease(button);
+			const next = new Set(heldControllerButtons);
+			next.delete(button);
+			heldControllerButtons = next;
+		}, 80);
+	}
+
+	function comboPress(buttons: string[]) {
+		if (!emulator) return;
+		for (const btn of buttons) {
+			emulator.handleButtonPress(btn);
+		}
+		heldControllerButtons = new Set([...heldControllerButtons, ...buttons]);
+		setTimeout(() => {
+			for (const btn of buttons) {
+				if (emulator) emulator.handleButtonRelease(btn);
+			}
+			const next = new Set(heldControllerButtons);
+			for (const btn of buttons) next.delete(btn);
+			heldControllerButtons = next;
+		}, 80);
+	}
+
+	// Controller button layout
+	const CONTROLLER_BUTTONS = {
+		dpad: [
+			{ name: 'PS5_UP', label: '\u25B2', short: 'Up' },
+			{ name: 'PS5_DOWN', label: '\u25BC', short: 'Down' },
+			{ name: 'PS5_LEFT', label: '\u25C0', short: 'Left' },
+			{ name: 'PS5_RIGHT', label: '\u25B6', short: 'Right' }
+		],
+		face: [
+			{ name: 'PS5_TRIANGLE', label: '\u25B3', short: 'Tri' },
+			{ name: 'PS5_CROSS', label: '\u2715', short: 'Cross' },
+			{ name: 'PS5_CIRCLE', label: '\u25CB', short: 'Circle' },
+			{ name: 'PS5_SQUARE', label: '\u25A1', short: 'Square' }
+		],
+		shoulder: [
+			{ name: 'PS5_L1', label: 'L1' },
+			{ name: 'PS5_R1', label: 'R1' },
+			{ name: 'PS5_L2', label: 'L2' },
+			{ name: 'PS5_R2', label: 'R2' }
+		],
+		center: [
+			{ name: 'PS5_SHARE', label: 'Share' },
+			{ name: 'PS5_OPTIONS', label: 'Options' },
+			{ name: 'PS5_PS', label: 'PS' },
+			{ name: 'PS5_TOUCH', label: 'Touch' }
+		],
+		sticks: [
+			{ name: 'PS5_L3', label: 'L3' },
+			{ name: 'PS5_R3', label: 'R3' }
+		]
+	};
+
+	const COMBO_PRESETS = [
+		{ label: 'L2 + Options', buttons: ['PS5_L2', 'PS5_OPTIONS'] },
+		{ label: 'L2 + Share', buttons: ['PS5_L2', 'PS5_SHARE'] },
+		{ label: 'L2 + R2', buttons: ['PS5_L2', 'PS5_R2'] },
+		{ label: 'L1 + R1', buttons: ['PS5_L1', 'PS5_R1'] }
+	];
 </script>
 
 <svelte:window onkeydown={handleKeyDown} onkeyup={handleKeyUp} />
@@ -153,18 +236,26 @@
 		class="fixed inset-0 z-50 flex items-center justify-center bg-black/80"
 		onmousedown={(e) => { if (e.target === e.currentTarget) onclose(); }}
 	>
-		<div class="flex h-[90vh] w-[640px] flex-col rounded-lg border border-zinc-700 bg-zinc-900 shadow-2xl">
+		<div class="flex h-[90vh] flex-col rounded-lg border border-zinc-700 bg-zinc-900 shadow-2xl" style="width: {showController ? '960px' : '640px'}; transition: width 0.2s ease;">
 			<!-- Header -->
 			<div class="flex items-center justify-between border-b border-zinc-800 px-4 py-3">
 				<h2 class="text-sm font-semibold text-zinc-200">OLED Emulator</h2>
-				<button
-					class="text-zinc-400 hover:text-zinc-200"
-					onclick={onclose}
-				>
-					<svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-					</svg>
-				</button>
+				<div class="flex items-center gap-2">
+					<button
+						class="rounded border px-2.5 py-1 text-xs transition-colors {showController ? 'border-emerald-700 bg-emerald-900/30 text-emerald-300' : 'border-zinc-700 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'}"
+						onclick={() => (showController = !showController)}
+					>
+						Controller
+					</button>
+					<button
+						class="text-zinc-400 hover:text-zinc-200"
+						onclick={onclose}
+					>
+						<svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+						</svg>
+					</button>
+				</div>
 			</div>
 
 			<!-- Display -->
@@ -253,6 +344,127 @@
 					{running ? 'Pause' : 'Run'}
 				</button>
 			</div>
+
+			<!-- Controller Panel -->
+			{#if showController}
+				<div class="border-t border-zinc-800 px-4 py-3">
+					<div class="flex items-start gap-6">
+						<!-- D-Pad -->
+						<div class="flex flex-col items-center gap-0.5">
+							<span class="mb-1 text-[10px] text-zinc-600">D-Pad</span>
+							<div class="grid grid-cols-3 grid-rows-3 gap-0.5" style="width: 78px; height: 78px;">
+								<div></div>
+								<button
+									class="flex items-center justify-center rounded text-xs transition-colors {heldControllerButtons.has('PS5_UP') ? 'bg-emerald-600 text-white' : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'}"
+									onmousedown={() => controllerPress('PS5_UP')}
+									onmouseup={() => controllerRelease('PS5_UP')}
+									onmouseleave={() => { if (heldControllerButtons.has('PS5_UP')) controllerRelease('PS5_UP'); }}
+								>{'\u25B2'}</button>
+								<div></div>
+								<button
+									class="flex items-center justify-center rounded text-xs transition-colors {heldControllerButtons.has('PS5_LEFT') ? 'bg-emerald-600 text-white' : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'}"
+									onmousedown={() => controllerPress('PS5_LEFT')}
+									onmouseup={() => controllerRelease('PS5_LEFT')}
+									onmouseleave={() => { if (heldControllerButtons.has('PS5_LEFT')) controllerRelease('PS5_LEFT'); }}
+								>{'\u25C0'}</button>
+								<div></div>
+								<button
+									class="flex items-center justify-center rounded text-xs transition-colors {heldControllerButtons.has('PS5_RIGHT') ? 'bg-emerald-600 text-white' : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'}"
+									onmousedown={() => controllerPress('PS5_RIGHT')}
+									onmouseup={() => controllerRelease('PS5_RIGHT')}
+									onmouseleave={() => { if (heldControllerButtons.has('PS5_RIGHT')) controllerRelease('PS5_RIGHT'); }}
+								>{'\u25B6'}</button>
+								<div></div>
+								<button
+									class="flex items-center justify-center rounded text-xs transition-colors {heldControllerButtons.has('PS5_DOWN') ? 'bg-emerald-600 text-white' : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'}"
+									onmousedown={() => controllerPress('PS5_DOWN')}
+									onmouseup={() => controllerRelease('PS5_DOWN')}
+									onmouseleave={() => { if (heldControllerButtons.has('PS5_DOWN')) controllerRelease('PS5_DOWN'); }}
+								>{'\u25BC'}</button>
+								<div></div>
+							</div>
+						</div>
+
+						<!-- Face Buttons -->
+						<div class="flex flex-col items-center gap-0.5">
+							<span class="mb-1 text-[10px] text-zinc-600">Face</span>
+							<div class="grid grid-cols-3 grid-rows-3 gap-0.5" style="width: 78px; height: 78px;">
+								<div></div>
+								<button
+									class="flex items-center justify-center rounded text-xs transition-colors {heldControllerButtons.has('PS5_TRIANGLE') ? 'bg-emerald-600 text-white' : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'}"
+									onmousedown={() => controllerTap('PS5_TRIANGLE')}
+									title="Triangle"
+								>{'\u25B3'}</button>
+								<div></div>
+								<button
+									class="flex items-center justify-center rounded text-xs transition-colors {heldControllerButtons.has('PS5_SQUARE') ? 'bg-emerald-600 text-white' : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'}"
+									onmousedown={() => controllerTap('PS5_SQUARE')}
+									title="Square"
+								>{'\u25A1'}</button>
+								<div></div>
+								<button
+									class="flex items-center justify-center rounded text-xs transition-colors {heldControllerButtons.has('PS5_CIRCLE') ? 'bg-emerald-600 text-white' : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'}"
+									onmousedown={() => controllerTap('PS5_CIRCLE')}
+									title="Circle"
+								>{'\u25CB'}</button>
+								<div></div>
+								<button
+									class="flex items-center justify-center rounded text-xs transition-colors {heldControllerButtons.has('PS5_CROSS') ? 'bg-emerald-600 text-white' : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'}"
+									onmousedown={() => controllerTap('PS5_CROSS')}
+									title="Cross"
+								>{'\u2715'}</button>
+								<div></div>
+							</div>
+						</div>
+
+						<!-- Shoulders -->
+						<div class="flex flex-col items-center gap-1">
+							<span class="mb-0.5 text-[10px] text-zinc-600">Shoulders</span>
+							<div class="grid grid-cols-2 gap-1">
+								{#each CONTROLLER_BUTTONS.shoulder as btn}
+									<button
+										class="rounded px-2.5 py-1.5 text-xs font-medium transition-colors {heldControllerButtons.has(btn.name) ? 'bg-emerald-600 text-white' : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'}"
+										onmousedown={() => controllerPress(btn.name)}
+										onmouseup={() => controllerRelease(btn.name)}
+										onmouseleave={() => { if (heldControllerButtons.has(btn.name)) controllerRelease(btn.name); }}
+									>{btn.label}</button>
+								{/each}
+							</div>
+							<!-- Sticks -->
+							<div class="mt-1 grid grid-cols-2 gap-1">
+								{#each CONTROLLER_BUTTONS.sticks as btn}
+									<button
+										class="rounded px-2.5 py-1.5 text-xs font-medium transition-colors {heldControllerButtons.has(btn.name) ? 'bg-emerald-600 text-white' : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'}"
+										onmousedown={() => controllerTap(btn.name)}
+									>{btn.label}</button>
+								{/each}
+							</div>
+						</div>
+
+						<!-- Center + Combos -->
+						<div class="flex flex-col items-center gap-1">
+							<span class="mb-0.5 text-[10px] text-zinc-600">Center</span>
+							<div class="grid grid-cols-2 gap-1">
+								{#each CONTROLLER_BUTTONS.center as btn}
+									<button
+										class="rounded px-2 py-1.5 text-[10px] font-medium transition-colors {heldControllerButtons.has(btn.name) ? 'bg-emerald-600 text-white' : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'}"
+										onmousedown={() => controllerTap(btn.name)}
+									>{btn.label}</button>
+								{/each}
+							</div>
+							<span class="mt-2 text-[10px] text-zinc-600">Combos</span>
+							<div class="flex flex-col gap-1">
+								{#each COMBO_PRESETS as combo}
+									<button
+										class="rounded border border-zinc-700 px-2 py-1 text-[10px] text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
+										onmousedown={() => comboPress(combo.buttons)}
+									>{combo.label}</button>
+								{/each}
+							</div>
+						</div>
+					</div>
+				</div>
+			{/if}
 
 			<!-- Key map hint -->
 			<div class="border-t border-zinc-800 px-4 py-2 text-center text-[10px] text-zinc-600">

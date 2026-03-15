@@ -9,6 +9,7 @@
 		selectedNodeIds: string[];
 		selectedEdgeId: string | null;
 		selectedSubNodeId: string | null;
+		isDataFlow?: boolean;
 		connecting: { sourceNodeId: string; sourcePort: string; sourceSubNodeId?: string | null; mouseX: number; mouseY: number } | null;
 		expandedNodes: Set<string>;
 		panX: number;
@@ -54,6 +55,7 @@
 		onToggleExpand,
 		onPan,
 		onZoom,
+		isDataFlow = false,
 	}: Props = $props();
 
 	let selectedNodeIdSet = $derived(new Set(selectedNodeIds));
@@ -435,6 +437,7 @@
 					selectedSubNodeId={primaryNodeId === node.id ? selectedSubNodeId : null}
 					hasConflict={conflictNodeIds.has(node.id)}
 					isDuplicate={duplicateNodeIds.has(node.id)}
+					{isDataFlow}
 					onSelect={handleNodeSelect}
 					onSelectSubNode={onSelectSubNode}
 					onStartConnect={handleStartConnect}

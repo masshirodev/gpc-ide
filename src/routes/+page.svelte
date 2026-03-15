@@ -71,6 +71,7 @@
 	} from '$lib/stores/keyboard-transfer.svelte';
 	import { getComboTransfer, clearComboTransfer } from '$lib/stores/combo-transfer.svelte';
 	import { getFlowOledTransfer } from '$lib/stores/flow-transfer.svelte';
+	import { getLastBuildResult, clearLastBuildResult } from '$lib/stores/build.svelte';
 	import * as m from '$lib/paraglide/messages.js';
 	import {
 		type KeyMapping,
@@ -277,10 +278,21 @@
 			});
 	});
 
-	// Keep in sync when flowStore.project changes (e.g. user adds/removes modules)
+	// Keep in sync when flowStore.project or working graph changes
 	$effect(() => {
 		if (flowStore.project && flowStore.gamePath === store.selectedGame?.path) {
-			cachedFlowProject = flowStore.project;
+			const graph = flowStore.graph;
+			if (graph) {
+				// Merge working graph into project so Defaults/Persistence tabs see latest vars
+				cachedFlowProject = {
+					...flowStore.project,
+					flows: flowStore.project.flows.map((f) =>
+						f.flowType === graph.flowType ? graph : f
+					),
+				};
+			} else {
+				cachedFlowProject = flowStore.project;
+			}
 		}
 	});
 
@@ -574,6 +586,18 @@
 				.catch(() => {
 					recoilContent = '';
 				});
+		}
+	});
+
+	// Pick up build results from the shared store (e.g. from Flow Editor's "Build to Game")
+	$effect(() => {
+		if (activeTab === 'build') {
+			const shared = getLastBuildResult();
+			if (shared.result && shared.gamePath === store.selectedGame?.path) {
+				buildResult = shared.result;
+				buildOutputContent = shared.outputContent;
+				clearLastBuildResult();
+			}
 		}
 	});
 

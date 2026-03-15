@@ -313,7 +313,7 @@ function compositePixelArts(
 export function generateFlowGpc(
 	graph: FlowGraph,
 	profileCount: number = 0,
-	options?: { skipPersistence?: boolean }
+	options?: { skipPersistence?: boolean; weaponEnabledVars?: Set<string>; extraPerProfileVars?: Set<string> }
 ): string {
 	const lines: string[] = [];
 	const nodes = graph.nodes;
@@ -394,14 +394,17 @@ export function generateFlowGpc(
 	lines.push(``);
 
 	// Collect per-profile variable names for indexing
-	const perProfileVars = new Set<string>();
+	// Weapon-enabled vars are excluded — they use per-weapon defaults instead
+	// extraPerProfileVars includes perProfile vars from other flows (data/gameplay)
+	const perProfileVars = new Set<string>(options?.extraPerProfileVars);
+	const weaponExclude = options?.weaponEnabledVars;
 	if (profileCount > 1) {
 		for (const v of graph.globalVariables) {
-			if (v.perProfile) perProfileVars.add(v.name);
+			if (v.perProfile && !weaponExclude?.has(v.name)) perProfileVars.add(v.name);
 		}
 		for (const node of nodes) {
 			for (const v of node.variables) {
-				if (v.perProfile) perProfileVars.add(v.name);
+				if (v.perProfile && !weaponExclude?.has(v.name)) perProfileVars.add(v.name);
 			}
 		}
 	}
@@ -414,7 +417,7 @@ export function generateFlowGpc(
 	if (graph.globalVariables.length > 0) {
 		lines.push(`// Global flow variables`);
 		for (const v of graph.globalVariables) {
-			lines.push(...generateVarDeclaration(v, profileCount));
+			lines.push(...generateVarDeclaration(v, profileCount, weaponExclude));
 		}
 		lines.push(``);
 	}
@@ -436,7 +439,7 @@ export function generateFlowGpc(
 
 		for (const v of node.variables) {
 			if (!declaredVars.has(v.name)) {
-				lines.push(...generateVarDeclaration(v, profileCount));
+				lines.push(...generateVarDeclaration(v, profileCount, weaponExclude));
 				declaredVars.add(v.name);
 			}
 		}
@@ -844,14 +847,7 @@ export function generateFlowGpc(
 					lines.push(`    if(event_press(${bm.down}) && ${cursorVar} < ${maxCursor}) { ${cursorVar} = ${cursorVar} + 1; FlowRedraw = TRUE; }`);
 				}
 
-				// Toggle interaction (confirm toggles the bound variable)
-				for (let i = 0; i < interactiveSubs.length; i++) {
-					const sub = interactiveSubs[i];
-					if (sub.type === 'toggle-item' && sub.boundVariable) {
-						const bv = profileVar(sub.boundVariable);
-						lines.push(`    if(${cursorVar} == ${i} && event_press(${bm.confirm})) { ${bv} = !${bv}; FlowRedraw = TRUE; }`);
-					}
-				}
+				// Toggle interaction now handled by toggle-item generateGpcInput
 			}
 
 			// Sub-node input handling (value adjust, array cycling — runs every cycle)
@@ -1063,10 +1059,11 @@ function getInteractiveSubNodes(node: FlowNode): SubNode[] {
 	return getSortedSubNodes(node).filter((sn) => sn.interactive && !sn.hidden);
 }
 
-function generateVarDeclaration(v: FlowVariable, profileCount: number = 0): string[] {
+function generateVarDeclaration(v: FlowVariable, profileCount: number = 0, weaponEnabledVars?: Set<string>): string[] {
 	const gpcType = v.type === 'bool' ? 'int' : v.type;
 	// Per-profile variables become arrays when multiple profiles exist
-	if (v.perProfile && profileCount > 1 && v.type !== 'string') {
+	// Weapon-enabled vars are excluded from per-profile treatment
+	if (v.perProfile && !weaponEnabledVars?.has(v.name) && profileCount > 1 && v.type !== 'string') {
 		const lines = [`${gpcType} ${v.name}[${profileCount}];`];
 		for (let i = 0; i < profileCount; i++) {
 			lines.push(`${v.name}[${i}] = ${v.defaultValue};`);

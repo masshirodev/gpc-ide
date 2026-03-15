@@ -277,6 +277,10 @@ export interface FlowNode {
 	backButton?: string;
 	/** When true, calls block_all_inputs() so menu navigation doesn't send inputs to the console */
 	blockInputs?: boolean;
+	/** Variable to watch for changes (gameplay/data custom nodes) */
+	onChangeVariable?: string;
+	/** GPC code to execute when onChangeVariable changes value */
+	onChangeCode?: string;
 	/** Module data for gameplay flow module nodes */
 	moduleData?: ModuleNodeData;
 	/** Variable names of auto-generated sub-nodes the user intentionally removed */
@@ -365,12 +369,17 @@ export interface FlowProfile {
 }
 
 export interface ProfileSwitchConfig {
-	/** Button to switch to next profile */
-	next: string;
-	/** Button to switch to previous profile */
-	prev: string;
+	/** Button that cycles to next profile (wraps to first after last) */
+	button: string;
 	/** Optional modifier button that must be held */
 	modifier?: string;
+	/** Optional keyboard key that also cycles profiles */
+	keyboardKey?: string;
+	// Legacy fields kept for migration
+	/** @deprecated Use button instead */
+	next?: string;
+	/** @deprecated Use button instead */
+	prev?: string;
 }
 
 // ==================== Weapon Defaults ====================
@@ -398,7 +407,9 @@ export interface FlowProject {
 	profiles?: FlowProfile[];
 	/** Profile switch button configuration */
 	profileSwitch?: ProfileSwitchConfig;
-	/** Per-weapon variable defaults. When set, replaces the profile system. */
+	/** Per-weapon variable defaults. Coexists with profiles — profiles select
+	 *  which weapon is active, weapon defaults apply per-weapon values on switch.
+	 *  A variable must be either perProfile or weapon-enabled, never both. */
 	weaponDefaults?: WeaponDefaultsConfig;
 	updatedAt: number;
 }

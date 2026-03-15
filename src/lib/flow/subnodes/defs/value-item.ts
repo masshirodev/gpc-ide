@@ -61,6 +61,13 @@ export const valueItemDef: SubNodeDef = {
 				{ value: 'small', label: 'Small (3x5)' },
 			],
 		},
+		{
+			key: 'onChangeCode',
+			label: 'On Change Code',
+			type: 'code',
+			default: '',
+			description: 'GPC code to run when the value changes (e.g. ApplySettings();)',
+		},
 	],
 	stackHeight: 8,
 	render(config, ctx) {

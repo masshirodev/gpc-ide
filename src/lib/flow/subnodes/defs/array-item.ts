@@ -160,6 +160,13 @@ export const arrayItemDef: SubNodeDef = {
 			description: 'Name of the int[] array holding per-parent counts',
 			visibleWhen: { key: 'indexMode', values: ['offset'] },
 		},
+		{
+			key: 'onChangeCode',
+			label: 'On Change Code',
+			type: 'code',
+			default: '',
+			description: 'GPC code to run when the selected item changes (e.g. ApplyWeapon();)',
+		},
 	],
 	stackHeight: 8,
 	render(config, ctx) {

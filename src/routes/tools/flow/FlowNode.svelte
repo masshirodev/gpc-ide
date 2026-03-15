@@ -19,6 +19,7 @@
 		selectedSubNodeId: string | null;
 		hasConflict?: boolean;
 		isDuplicate?: boolean;
+		isDataFlow?: boolean;
 		onSelect: (nodeId: string) => void;
 		onSelectSubNode: (nodeId: string, subNodeId: string) => void;
 		onStartConnect: (nodeId: string, port: string, e: MouseEvent, subNodeId?: string) => void;
@@ -33,6 +34,7 @@
 		selectedSubNodeId,
 		hasConflict = false,
 		isDuplicate = false,
+		isDataFlow = false,
 		onSelect,
 		onSelectSubNode,
 		onStartConnect,
@@ -43,7 +45,9 @@
 	let isModule = $derived(node.type === 'module');
 	let height = $derived(isModule ? HEADER_HEIGHT + 62 + FOOTER_HEIGHT : getNodeHeight(node, expanded));
 	let color = $derived(
-		node.moduleData?.flowTarget === 'data' ? '#10b981' : (NODE_COLORS[node.type] || '#6b7280')
+		node.moduleData?.flowTarget === 'data' ? '#10b981'
+		: (node.type === 'custom' && isDataFlow) ? '#10b981'
+		: (NODE_COLORS[node.type] || '#6b7280')
 	);
 	let hasCode = $derived(node.gpcCode.trim().length > 0);
 	let hasCombo = $derived(node.comboCode.trim().length > 0 || (node.moduleData?.comboCode?.trim().length ?? 0) > 0);

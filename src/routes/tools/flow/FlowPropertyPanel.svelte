@@ -25,6 +25,7 @@
 	import { OLED_WIDTH } from '../../tools/oled/types';
 	import type { SpriteCollectionSummary, SpriteCollection } from '$lib/types/sprite';
 	import { renderNodePreview, pixelsToDataUrl } from '$lib/flow/oled-preview';
+	import OledLayoutPreview from './OledLayoutPreview.svelte';
 	import MenuLayoutBuilder from '$lib/components/editor/MenuLayoutBuilder.svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
@@ -33,6 +34,7 @@
 	import { setKeyboardTransfer } from '$lib/stores/keyboard-transfer.svelte';
 	import { setRecoilTransfer } from '$lib/stores/recoil-transfer.svelte';
 	import type { ModuleNodeData } from '$lib/types/flow';
+	import { getFlowStore } from '$lib/stores/flow.svelte';
 
 	interface Props {
 		selectedNode: FlowNode | null;
@@ -238,6 +240,10 @@
 			editOnExit = syncedOnExit = selectedNode.onExit;
 			editNodeInitCode = syncedNodeInitCode = selectedNode.initCode ?? '';
 			editComboCode = syncedComboCode = selectedNode.comboCode;
+			// Reset code tab if it's not available for this node type
+			if (selectedNode.type === 'custom' && flowStore.activeFlowType !== 'menu' && (codeTab === 'exit' || codeTab === 'init')) {
+				codeTab = 'gpc';
+			}
 		} else if (!selectedNode && lastSyncedNodeId) {
 			// Deselected — flush pending edits
 			flushNodeEdits(lastSyncedNodeId);
@@ -255,6 +261,9 @@
 	let recoilToolWeaponIdx = $state(0);
 	let isModuleNode = $derived(selectedNode?.type === 'module');
 	let showLayoutBuilder = $state(false);
+	const flowStore = getFlowStore();
+	let isDataCustom = $derived(selectedNode?.type === 'custom' && flowStore.activeFlowType === 'data');
+	let isNonMenuCustom = $derived(selectedNode?.type === 'custom' && flowStore.activeFlowType !== 'menu');
 	let isMenuNode = $derived(
 		selectedNode?.type === 'menu' || selectedNode?.type === 'submenu' ||
 		selectedNode?.type === 'home' || selectedNode?.type === 'intro' ||
@@ -266,6 +275,13 @@
 		selectedNode && selectedNode.subNodes.length > 0 && typeof document !== 'undefined'
 			? pixelsToDataUrl(renderNodePreview(selectedNode))
 			: ''
+	);
+
+	// Check if node has any draggable absolute sub-nodes (non pixel-art)
+	let hasAbsoluteWidgets = $derived(
+		selectedNode?.subNodes.some((sn) =>
+			sn.position === 'absolute' && sn.type !== 'pixel-art' && sn.type !== 'animation' && !sn.hidden
+		) ?? false
 	);
 
 	let lastSyncedModuleNodeId = '';
@@ -2059,12 +2075,21 @@
 				<div class="mb-3">
 					{#if oledPreview}
 						<div class="rounded border border-zinc-800 bg-zinc-950 p-2">
-							<img
-								src={oledPreview}
-								alt="OLED preview"
-								class="w-full"
-								style="image-rendering: pixelated;"
-							/>
+							{#if hasAbsoluteWidgets}
+								<OledLayoutPreview
+									node={selectedNode}
+									selectedSubNodeId={selectedSubNode?.id ?? null}
+									{onUpdateSubNode}
+									{onSelectSubNode}
+								/>
+							{:else}
+								<img
+									src={oledPreview}
+									alt="OLED preview"
+									class="w-full"
+									style="image-rendering: pixelated;"
+								/>
+							{/if}
 						</div>
 					{/if}
 					<div class="mt-1.5 flex gap-1">
@@ -2084,13 +2109,22 @@
 				</div>
 			{:else if oledPreview}
 				<div class="mb-3 rounded border border-zinc-800 bg-zinc-950 p-2">
-					<div class="mb-1 text-[10px] font-medium text-zinc-500 uppercase">OLED Preview</div>
-					<img
-						src={oledPreview}
-						alt="OLED preview"
-						class="w-full"
-						style="image-rendering: pixelated;"
-					/>
+					<div class="mb-1 text-[10px] font-medium text-zinc-500 uppercase">OLED Preview{hasAbsoluteWidgets ? ' (drag to move)' : ''}</div>
+					{#if hasAbsoluteWidgets}
+						<OledLayoutPreview
+							node={selectedNode}
+							selectedSubNodeId={selectedSubNode?.id ?? null}
+							{onUpdateSubNode}
+							{onSelectSubNode}
+						/>
+					{:else}
+						<img
+							src={oledPreview}
+							alt="OLED preview"
+							class="w-full"
+							style="image-rendering: pixelated;"
+						/>
+					{/if}
 				</div>
 				<button
 					class="mb-3 w-full rounded border border-blue-800 bg-blue-950 px-2 py-1.5 text-xs text-blue-300 hover:bg-blue-900"
@@ -2129,7 +2163,9 @@
 			</div>
 
 			<!-- Initial state -->
-			{#if !selectedNode.isInitialState}
+			{#if isDataCustom}
+				<!-- Data flow custom nodes don't have initial state -->
+			{:else if !selectedNode.isInitialState}
 				<button
 					class="mb-3 w-full rounded border border-zinc-700 bg-zinc-800 px-2 py-1.5 text-xs text-zinc-300 hover:bg-zinc-700"
 					onclick={() => onSetInitial(selectedNode!.id)}
@@ -2142,6 +2178,7 @@
 				</div>
 			{/if}
 
+			{#if !isDataCustom}
 			<!-- Sub-Nodes -->
 			<div class="mb-3">
 				<div class="mb-1 flex items-center justify-between">
@@ -2457,6 +2494,7 @@
 				</label>
 				<p class="mt-0.5 ml-5 text-[10px] text-zinc-600">Calls block_all_inputs() to prevent button presses from reaching the console while in this state</p>
 			</div>
+			{/if}
 
 			<!-- Code Tabs -->
 			<div class="mb-2">
@@ -2465,8 +2503,8 @@
 					{#each [
 						{ key: 'gpc', label: 'Main' },
 						{ key: 'enter', label: 'Enter' },
-						{ key: 'exit', label: 'Exit' },
-						{ key: 'init', label: 'Init' },
+						...(isNonMenuCustom ? [] : [{ key: 'exit', label: 'Exit' }]),
+						...(isNonMenuCustom ? [] : [{ key: 'init', label: 'Init' }]),
 						{ key: 'combo', label: 'Combo' },
 					] as tab}
 						<button
@@ -2519,6 +2557,33 @@
 					/>
 				{/if}
 			</div>
+
+			<!-- On Change (gameplay/data custom nodes) -->
+			{#if isNonMenuCustom}
+			<div class="mb-3">
+				<label class="mb-1 block text-xs text-zinc-400">On Change</label>
+				<div class="mb-1">
+					<label class="mb-0.5 block text-[10px] text-zinc-500">Watch Variable</label>
+					<VariableSelect
+						value={selectedNode.onChangeVariable ?? ''}
+						options={availableVariables}
+						placeholder="Select variable to watch..."
+						onchange={(v) => onUpdateNode(selectedNode!.id, { onChangeVariable: v || undefined })}
+					/>
+				</div>
+				{#if selectedNode.onChangeVariable}
+				<div class="h-20 overflow-hidden rounded border border-zinc-700">
+					<MiniMonaco
+						value={selectedNode.onChangeCode ?? ''}
+						language="gpc"
+						label="On Change Code"
+						onchange={(v) => onUpdateNode(selectedNode!.id, { onChangeCode: v })}
+					/>
+				</div>
+				<p class="mt-0.5 text-[10px] text-zinc-600">Runs when {selectedNode.onChangeVariable} changes value</p>
+				{/if}
+			</div>
+			{/if}
 
 			<!-- Variables -->
 			<div class="mb-3">
