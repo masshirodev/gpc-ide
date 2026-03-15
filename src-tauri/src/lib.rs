@@ -21,6 +21,17 @@ pub fn run() {
                         .build(),
                 )?;
             }
+
+            // Disable browser back/forward navigation from mouse buttons 4/5
+            // This is a desktop app, not a browser — navigation should only happen via the UI
+            use tauri::Manager;
+            let webview = app.get_webview_window("main").unwrap();
+            webview.eval(
+                "window.addEventListener('mouseup', function(e) { \
+                    if (e.button === 3 || e.button === 4) { e.preventDefault(); } \
+                }, true);"
+            ).ok();
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

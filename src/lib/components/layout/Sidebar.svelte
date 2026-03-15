@@ -63,6 +63,7 @@
 		'/tools/compare': () => m.layout_sidebar_tool_compare_games(),
 		'/tools/simulator': () => m.layout_sidebar_tool_simulator(),
 		'/tools/keyboard': () => m.layout_sidebar_tool_keyboard_mapper(),
+		'/tools/zmk': () => m.layout_sidebar_tool_zmk_editor(),
 		'/tools/docs': () => m.layout_sidebar_tool_documentation()
 	};
 
@@ -101,6 +102,12 @@
 					href: '/tools/combo',
 					label: 'Combo Maker',
 					icon: 'M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h8a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h4a1 1 0 110 2H4a1 1 0 01-1-1z'
+				},
+				{
+					href: '/tools/zmk',
+					label: 'M&K Editor',
+					icon: 'M15 19l-3-3m0 0l-3 3m3-3v6M4 5h16a1 1 0 011 1v4a1 1 0 01-1 1H4a1 1 0 01-1-1V6a1 1 0 011-1zm0 8h16a1 1 0 011 1v4a1 1 0 01-1 1H4a1 1 0 01-1-1v-4a1 1 0 011-1z',
+					stroke: true
 				}
 			]
 		},

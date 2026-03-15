@@ -100,6 +100,7 @@
 	"layout_sidebar_tool_compare_games": "Compare Games",
 	"layout_sidebar_tool_simulator": "Combo Simulator",
 	"layout_sidebar_tool_keyboard_mapper": "Mapper",
+	"layout_sidebar_tool_zmk_editor": "M&K Editor",
 	"layout_sidebar_tool_documentation": "Documentation",
 	"layout_statusbar_no_game": "No game selected",
 	"layout_statusbar_lsp_running": "GPC LSP",
