@@ -57,7 +57,7 @@ jobs:
 
       - name: Build (Windows)
         if: matrix.target == 'windows'
-        run: npx tauri build --bundles nsis,exe
+        run: npx tauri build --bundles nsis
 
       - name: Build (macOS)
         if: startsWith(matrix.target, 'macos')
@@ -82,7 +82,6 @@ jobs:
           path: |
             src-tauri/target/release/zen-forge.exe
             src-tauri/target/release/bundle/nsis/*.exe
-            src-tauri/target/release/bundle/exe/*.exe
 
       - name: Upload macOS artifacts
         if: startsWith(matrix.target, 'macos')
