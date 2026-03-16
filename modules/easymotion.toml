@@ -2,6 +2,7 @@
 display_name = "Easy Motion"
 id = "easymotion"
 type = "fgs"
+input_device = "controller"
 description = "Simplified special move inputs using a modifier + attack button.\nExecutes QCF, DP, and QCB motions automatically with configurable input delay."
 state_display = "EM"
 status_var = "EasyMotionStatus"

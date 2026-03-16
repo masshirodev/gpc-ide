@@ -2,6 +2,7 @@
 display_name = "Anti AFK"
 id = "antiafk"
 type = "all"
+input_device = "controller"
 description = "Prevents AFK kicks by moving the character after an idle timeout.\nNudges the left stick forward and back when no input is detected."
 state_display = "AFK"
 status_var = "AntiAfkStatus"

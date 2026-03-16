@@ -2,6 +2,7 @@
 display_name = "Fast Melee"
 id = "fastmelee"
 type = "fps"
+input_device = "controller"
 description = "Quick melee attack on R3 press.\nTaps R3 rapidly for faster melee animation cancels."
 state_display = "FM"
 status_var = "FastMeleeStatus"

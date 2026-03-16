@@ -1,5 +1,5 @@
 import type { SubNodeDef } from '$lib/types/flow';
-import { addString } from '$lib/types/flow';
+import { addString, inputPress } from '$lib/types/flow';
 import { widgetDrawRect } from '$lib/oled-widgets/types';
 import { drawBitmapText, measureText } from '$lib/oled-widgets/font';
 
@@ -163,8 +163,8 @@ export const toggleItemDef: SubNodeDef = {
 		const lines: string[] = [];
 
 		lines.push(`    // Toggle: ${label}`);
-		lines.push(`    if(${ctx.cursorVar} == ${ctx.cursorIndex} && event_press(${ctx.buttons.confirm})) {`);
-		lines.push(`        ${boundVar} = !${boundVar}; FlowRedraw = TRUE;${changeSuffix}`);
+		lines.push(`    if(${ctx.cursorVar} == ${ctx.cursorIndex} && ${inputPress(ctx, 'confirm')}) {`);
+		lines.push(`        ${boundVar} = !${boundVar};${ctx.keys ? ' _kb_nav_delay = 200;' : ''} FlowRedraw = TRUE;${changeSuffix}`);
 		lines.push(`    }`);
 
 		return lines.join('\n');

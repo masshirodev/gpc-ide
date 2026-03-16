@@ -45,10 +45,17 @@ pub struct ModuleDefinition {
     /// Which flow tab this module belongs to: "gameplay" (default) or "data"
     #[serde(default = "default_flow_target")]
     pub flow_target: String,
+    /// Input device type: "controller", "kbm", or "any" (default)
+    #[serde(default = "default_input_device")]
+    pub input_device: String,
 }
 
 fn default_flow_target() -> String {
     "gameplay".to_string()
+}
+
+fn default_input_device() -> String {
+    "any".to_string()
 }
 
 /// Custom menu configuration for data modules (weapondata, adp)
@@ -110,6 +117,7 @@ pub struct ModuleSummary {
     pub needs_weapondata: bool,
     pub is_user_module: bool,
     pub flow_target: String,
+    pub input_device: String,
 }
 
 impl ModuleDefinition {
@@ -126,6 +134,7 @@ impl ModuleDefinition {
             needs_weapondata: self.needs_weapondata.unwrap_or(false),
             is_user_module: self.is_user_module,
             flow_target: self.flow_target.clone(),
+            input_device: self.input_device.clone(),
         }
     }
 }

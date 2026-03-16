@@ -134,6 +134,9 @@ pub struct FlowNode {
     pub scroll_mode: Option<String>,
     #[serde(default)]
     pub back_button: Option<String>,
+    /// Keyboard key equivalent for back navigation (e.g. 'KEY_ESC')
+    #[serde(default)]
+    pub back_key: Option<String>,
     #[serde(default)]
     pub line_margin: Option<u32>,
     #[serde(default)]
@@ -210,6 +213,9 @@ pub struct ModuleNodeData {
     /// Custom string arrays for arraybuilder module
     #[serde(default)]
     pub custom_arrays: Option<Vec<CustomArrayDef>>,
+    /// Input device type: "controller", "kbm", or "any"
+    #[serde(default)]
+    pub input_device: Option<String>,
 }
 
 /// A user-defined const string array for the Array Builder module
@@ -332,6 +338,9 @@ pub struct FlowCondition {
     pub r#type: String, // button_press, button_hold, timeout, variable, custom, animation_end
     #[serde(default)]
     pub button: Option<String>,
+    /// Keyboard key equivalent for the same transition (checked with GetKeyboardKey())
+    #[serde(default)]
+    pub keyboard_key: Option<String>,
     #[serde(default)]
     pub modifiers: Option<Vec<String>>,
     #[serde(default)]
@@ -469,6 +478,9 @@ pub struct FlowSettings {
     pub persistence_enabled: bool,
     #[serde(default)]
     pub button_mapping: FlowButtonMapping,
+    /// Keyboard key equivalents for button mappings (optional, for KBM navigation)
+    #[serde(default)]
+    pub keyboard_mapping: Option<FlowKeyboardMapping>,
 }
 
 fn default_timeout() -> u32 {
@@ -509,6 +521,23 @@ impl Default for FlowButtonMapping {
             right: default_right(),
         }
     }
+}
+
+/// Keyboard key mapping for flow navigation (KBM equivalents)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FlowKeyboardMapping {
+    #[serde(default)]
+    pub confirm: Option<String>,
+    #[serde(default)]
+    pub cancel: Option<String>,
+    #[serde(default)]
+    pub up: Option<String>,
+    #[serde(default)]
+    pub down: Option<String>,
+    #[serde(default)]
+    pub left: Option<String>,
+    #[serde(default)]
+    pub right: Option<String>,
 }
 
 fn default_confirm() -> String {

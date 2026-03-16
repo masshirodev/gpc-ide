@@ -2,6 +2,7 @@
 display_name = "Weapon Detection"
 id = "adp"
 type = "fps"
+input_device = "controller"
 description = "Automatic weapon detection using PS5 adaptive trigger signatures.\nDetects the active weapon via ADT values and updates the weapon index."
 state_display = "WPN"
 menu_priority = 0

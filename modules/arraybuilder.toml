@@ -2,6 +2,7 @@
 display_name = "Array Builder"
 id = "arraybuilder"
 type = "all"
+input_device = "any"
 flow_target = "data"
 description = "Custom const string arrays for use with array-item sub-nodes.\nDefine arrays in the Functions Code section, reference them by name in array-items."
 state_display = ""

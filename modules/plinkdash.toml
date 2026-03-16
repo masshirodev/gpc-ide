@@ -2,6 +2,7 @@
 display_name = "Plink Dash"
 id = "plinkdash"
 type = "fgs"
+input_device = "controller"
 description = "Automated double-tap forward dash on a single forward press.\nTaps forward, releases briefly, then taps forward again with configurable timing."
 state_display = "PD"
 status_var = "PlinkDashStatus"

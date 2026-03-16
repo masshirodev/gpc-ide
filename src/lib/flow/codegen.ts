@@ -369,6 +369,7 @@ export function generateFlowGpc(
 	}
 
 	const bm = graph.settings.buttonMapping;
+	const km = graph.settings.keyboardMapping;
 
 	const hasBackButton = nodes.some((n) => n.backButton);
 	const hasAnyBack = nodes.some((n) => n.backButton === '_ANY_BUTTON');
@@ -387,6 +388,9 @@ export function generateFlowGpc(
 	if (hasAnyBack) {
 		lines.push(`int FlowAnyPressed;`);
 		lines.push(`int FlowAnyIdx;`);
+	}
+	if (km) {
+		lines.push(`int _kb_nav_delay;`);
 	}
 	if (hasWindowMode) {
 		lines.push(`int _oled_y_off;`);
@@ -604,6 +608,7 @@ export function generateFlowGpc(
 				y: effectiveY,
 				boundVariable: sub.boundVariable ? profileVar(sub.boundVariable) : undefined,
 				buttons: bm,
+				keys: km ?? undefined,
 				stringArrayName,
 				strings,
 				images,
@@ -831,20 +836,23 @@ export function generateFlowGpc(
 				const maxCursor = interactiveSubs.length - 1;
 				lines.push(``);
 				lines.push(`    // Cursor navigation`);
+				const upPress = navPress(bm.up, km?.up);
+				const downPress = navPress(bm.down, km?.down);
+				const kbDelay = km ? ' _kb_nav_delay = 200;' : '';
 				if (node.scrollMode === 'wrap') {
-					lines.push(`    if(event_press(${bm.up})) { if(${cursorVar} > 0) ${cursorVar} = ${cursorVar} - 1; else ${cursorVar} = ${maxCursor}; FlowRedraw = TRUE; }`);
-					lines.push(`    if(event_press(${bm.down})) { if(${cursorVar} < ${maxCursor}) ${cursorVar} = ${cursorVar} + 1; else ${cursorVar} = 0; FlowRedraw = TRUE; }`);
+					lines.push(`    if(${upPress}) { if(${cursorVar} > 0) ${cursorVar} = ${cursorVar} - 1; else ${cursorVar} = ${maxCursor};${kbDelay} FlowRedraw = TRUE; }`);
+					lines.push(`    if(${downPress}) { if(${cursorVar} < ${maxCursor}) ${cursorVar} = ${cursorVar} + 1; else ${cursorVar} = 0;${kbDelay} FlowRedraw = TRUE; }`);
 				} else if (node.scrollMode === 'window') {
 					const visCount = node.visibleCount ?? interactiveSubs.length;
 					const scrollVar = `Flow_${safeName}_scroll`;
-					lines.push(`    if(event_press(${bm.up}) && ${cursorVar} > 0) { ${cursorVar} = ${cursorVar} - 1; FlowRedraw = TRUE; }`);
-					lines.push(`    if(event_press(${bm.down}) && ${cursorVar} < ${maxCursor}) { ${cursorVar} = ${cursorVar} + 1; FlowRedraw = TRUE; }`);
+					lines.push(`    if(${upPress} && ${cursorVar} > 0) { ${cursorVar} = ${cursorVar} - 1;${kbDelay} FlowRedraw = TRUE; }`);
+					lines.push(`    if(${downPress} && ${cursorVar} < ${maxCursor}) { ${cursorVar} = ${cursorVar} + 1;${kbDelay} FlowRedraw = TRUE; }`);
 					lines.push(`    // Window scrolling`);
 					lines.push(`    if(${cursorVar} < ${scrollVar}) ${scrollVar} = ${cursorVar};`);
 					lines.push(`    if(${cursorVar} >= ${scrollVar} + ${visCount}) ${scrollVar} = ${cursorVar} - ${visCount} + 1;`);
 				} else {
-					lines.push(`    if(event_press(${bm.up}) && ${cursorVar} > 0) { ${cursorVar} = ${cursorVar} - 1; FlowRedraw = TRUE; }`);
-					lines.push(`    if(event_press(${bm.down}) && ${cursorVar} < ${maxCursor}) { ${cursorVar} = ${cursorVar} + 1; FlowRedraw = TRUE; }`);
+					lines.push(`    if(${upPress} && ${cursorVar} > 0) { ${cursorVar} = ${cursorVar} - 1;${kbDelay} FlowRedraw = TRUE; }`);
+					lines.push(`    if(${downPress} && ${cursorVar} < ${maxCursor}) { ${cursorVar} = ${cursorVar} + 1;${kbDelay} FlowRedraw = TRUE; }`);
 				}
 
 				// Toggle interaction now handled by toggle-item generateGpcInput
@@ -932,7 +940,11 @@ export function generateFlowGpc(
 				lines.push(`    if(FlowAnyPressed && FlowStackTop > 0) {`);
 			} else {
 				lines.push(`    // Back button`);
-				lines.push(`    if(event_press(${node.backButton}) && FlowStackTop > 0) {`);
+				const backKey = node.backKey ?? km?.cancel;
+				const backCheck = backKey
+					? `(event_press(${node.backButton}) || (GetKeyboardKey(${backKey}) && FlowStateTimer > 150))`
+					: `event_press(${node.backButton})`;
+				lines.push(`    if(${backCheck} && FlowStackTop > 0) {`);
 			}
 			if (node.onExit.trim()) {
 				for (const line of node.onExit.trim().split('\n')) {
@@ -1048,6 +1060,9 @@ export function generateFlowGpc(
 	lines.push(`        FlowEntered = TRUE;`);
 	lines.push(`    }`);
 	lines.push(`    FlowStateTimer = FlowStateTimer + get_rtime();`);
+	if (km) {
+		lines.push(`    if(_kb_nav_delay > 0) _kb_nav_delay = _kb_nav_delay - get_rtime();`);
+	}
 	lines.push(`}`);
 
 	return lines.join('\n');
@@ -1088,6 +1103,15 @@ function generateVarDeclaration(v: FlowVariable, profileCount: number = 0, weapo
 	return [`${gpcType} ${v.name} = ${v.defaultValue};`];
 }
 
+/**
+ * Generate a combined input check for controller button press + optional keyboard key.
+ * Keyboard keys use _kb_nav_delay timer to prevent rapid-fire while held.
+ */
+function navPress(btn: string, key?: string): string {
+	if (!key) return `event_press(${btn})`;
+	return `(event_press(${btn}) || (GetKeyboardKey(${key}) && _kb_nav_delay <= 0))`;
+}
+
 function sanitizeName(name: string): string {
 	return name
 		.replace(/[^a-zA-Z0-9_]/g, '_')
@@ -1103,16 +1127,27 @@ function generateConditionCode(edge: FlowEdge, sourceNode?: FlowNode): string | 
 
 	let result: string | null = null;
 	switch (c.type) {
-		case 'button_press':
-			result = c.button ? `event_press(${c.button})` : null;
+		case 'button_press': {
+			const parts: string[] = [];
+			if (c.button) parts.push(`event_press(${c.button})`);
+			// GetKeyboardKey fires every frame while held, so debounce with FlowStateTimer
+			// to prevent chain-transitions when entering a new state
+			if (c.keyboardKey) parts.push(`(GetKeyboardKey(${c.keyboardKey}) && FlowStateTimer > 150)`);
+			result = parts.length > 0 ? (parts.length === 1 ? parts[0] : `(${parts.join(' || ')})`) : null;
 			break;
-		case 'button_hold':
-			result = c.button && c.timeoutMs
-				? `get_val(${c.button}) && FlowStateTimer > ${c.timeoutMs}`
-				: c.button
-					? `get_val(${c.button})`
-					: null;
+		}
+		case 'button_hold': {
+			const parts: string[] = [];
+			if (c.button) parts.push(`get_val(${c.button})`);
+			if (c.keyboardKey) parts.push(`GetKeyboardKey(${c.keyboardKey})`);
+			const inputCheck = parts.length > 0 ? (parts.length === 1 ? parts[0] : `(${parts.join(' || ')})`) : null;
+			if (inputCheck && c.timeoutMs) {
+				result = `${inputCheck} && FlowStateTimer > ${c.timeoutMs}`;
+			} else {
+				result = inputCheck;
+			}
 			break;
+		}
 		case 'timeout':
 			result = c.timeoutMs ? `FlowStateTimer > ${c.timeoutMs}` : null;
 			break;

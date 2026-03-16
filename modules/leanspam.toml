@@ -2,6 +2,7 @@
 display_name = "Lean Spam"
 id = "leanspam"
 type = "fps"
+input_device = "controller"
 description = "Alternates lean left/right while ADS and firing.\nTaps R3 and L3 in sequence to peek from both sides rapidly."
 state_display = "LS"
 status_var = "LeanSpamStatus"

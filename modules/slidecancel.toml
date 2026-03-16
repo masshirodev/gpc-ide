@@ -2,6 +2,7 @@
 display_name = "Slide Cancel"
 id = "slidecancel"
 type = "fps"
+input_device = "controller"
 description = "Performs a slide cancel when pressing crouch while moving.\nChains L3 > Circle > Cross inputs to cancel the slide animation."
 state_display = "SC"
 status_var = "SlideCancelStatus"

@@ -2,6 +2,7 @@
 display_name = "Auto Block"
 id = "autoblock"
 type = "fgs"
+input_device = "controller"
 description = "Automatically blocks when no attack buttons are pressed.\nSupports low block (crouch + back) and high block (stand + back) modes."
 state_display = "AB"
 status_var = "AutoBlockStatus"

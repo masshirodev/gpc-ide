@@ -430,6 +430,7 @@
 	// Local editing state for edge
 	let editEdgeLabel = $state('');
 	let editEdgeButton = $state('');
+	let editEdgeKeyboardKey = $state('');
 	let editEdgeTimeoutMs = $state(0);
 	let editEdgeCustomCode = $state('');
 	let editEdgeVariable = $state('');
@@ -449,6 +450,7 @@
 			condition: {
 				type: (lastSyncedEdgeKey.split(':')[1] ?? 'button_press') as FlowConditionType,
 				button: editEdgeButton || undefined,
+				keyboardKey: editEdgeKeyboardKey || undefined,
 				modifiers: editEdgeModifiers.filter(Boolean).length > 0 ? editEdgeModifiers.filter(Boolean) : undefined,
 				timeoutMs: editEdgeTimeoutMs || undefined,
 				customCode: editEdgeCustomCode || undefined,
@@ -472,6 +474,7 @@
 				lastSyncedEdgeId = selectedEdge.id;
 				editEdgeLabel = selectedEdge.label;
 				editEdgeButton = selectedEdge.condition.button || '';
+				editEdgeKeyboardKey = selectedEdge.condition.keyboardKey || '';
 				editEdgeModifiers = [...(selectedEdge.condition.modifiers ?? [])];
 				editEdgeTimeoutMs = selectedEdge.condition.timeoutMs ?? 3000;
 				editEdgeCustomCode = selectedEdge.condition.customCode || '';
@@ -719,6 +722,7 @@
 			condition: {
 				...selectedEdge.condition,
 				button: editEdgeButton || undefined,
+				keyboardKey: editEdgeKeyboardKey || undefined,
 				modifiers: filteredModifiers.length > 0 ? filteredModifiers : undefined,
 				timeoutMs: ctype === 'button_hold' || ctype === 'timeout' ? editEdgeTimeoutMs : undefined,
 				customCode: editEdgeCustomCode || undefined,
@@ -2455,7 +2459,7 @@
 
 			<!-- Back Button -->
 			<div class="mb-3">
-				<label class="mb-1 block text-xs text-zinc-400">Back Button</label>
+				<label class="mb-1 block text-xs text-zinc-400">Back Button (Controller)</label>
 				<div class="flex items-center gap-1">
 					<div class="flex-1">
 						{#if selectedNode.backButton === '_ANY_BUTTON'}
@@ -2493,6 +2497,16 @@
 					{selectedNode.backButton === '_ANY_BUTTON' ? 'Any button press returns to previous state' : 'Returns to the previous state when pressed'}
 				</p>
 			</div>
+			{#if selectedNode.backButton && selectedNode.backButton !== '_ANY_BUTTON'}
+				<div class="mb-3">
+					<label class="mb-1 block text-xs text-zinc-400">Back Key (Keyboard)</label>
+					<KeySelect
+						value={selectedNode.backKey || ''}
+						onchange={(v) => onUpdateNode(selectedNode!.id, { backKey: v || undefined })}
+					/>
+					<p class="mt-0.5 text-[10px] text-zinc-600">Optional KBM equivalent for back navigation</p>
+				</div>
+			{/if}
 
 			<!-- Block Inputs -->
 			<div class="mb-3">
@@ -2804,12 +2818,20 @@
 			<!-- Condition-specific fields -->
 			{#if selectedEdge.condition.type === 'button_press' || selectedEdge.condition.type === 'button_hold'}
 				<div class="mb-3">
-					<label class="mb-1 block text-xs text-zinc-400">Button</label>
+					<label class="mb-1 block text-xs text-zinc-400">Controller Button</label>
 					<ButtonSelect
 						value={editEdgeButton}
 						onchange={(v) => { editEdgeButton = v; commitEdge(); }}
 						placeholder="Search buttons..."
 					/>
+				</div>
+				<div class="mb-3">
+					<label class="mb-1 block text-xs text-zinc-400">Keyboard Key</label>
+					<KeySelect
+						value={editEdgeKeyboardKey}
+						onchange={(v) => { editEdgeKeyboardKey = v; commitEdge(); }}
+					/>
+					<p class="mt-0.5 text-[10px] text-zinc-600">Optional KBM equivalent for the same transition</p>
 				</div>
 				<div class="mb-3">
 					<label class="mb-1 block text-xs text-zinc-400">Modifiers (held buttons)</label>

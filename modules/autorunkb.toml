@@ -2,6 +2,7 @@
 display_name = "Auto Run KB"
 id = "autorunkb"
 type = "all"
+input_device = "kbm"
 description = "Holds forward (W) when a keybind is pressed.\nStops when any WASD key is pressed. Designed for keyboard setups."
 state_display = "ARK"
 status_var = "AutoRunKBStatus"

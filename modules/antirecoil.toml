@@ -2,6 +2,7 @@
 display_name = "Anti Recoil (Basic)"
 id = "antirecoil"
 type = "fps"
+input_device = "controller"
 description = "Per-weapon anti-recoil compensation while firing.\nApplies randomized variance to vertical and horizontal correction for natural feel.\nUses per-weapon V/H values from weapon data."
 state_display = "AR"
 status_var = "AntiRecoilStatus"

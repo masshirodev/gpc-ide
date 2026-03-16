@@ -105,6 +105,15 @@ export interface SubNodeCodegenContext {
 		left: string;
 		right: string;
 	};
+	/** Optional keyboard key equivalents for buttons */
+	keys?: {
+		confirm?: string;
+		cancel?: string;
+		up?: string;
+		down?: string;
+		left?: string;
+		right?: string;
+	};
 	/** Name of the const string array for this node (e.g. "FlowText_Home") */
 	stringArrayName: string;
 	/** Shared mutable array — sub-nodes push their text strings here */
@@ -119,6 +128,20 @@ export function addString(ctx: SubNodeCodegenContext, text: string): number {
 	if (existing >= 0) return existing;
 	ctx.strings.push(text);
 	return ctx.strings.length - 1;
+}
+
+/**
+ * Generate a combined input check for controller button press + optional keyboard key.
+ * Uses _kb_nav_delay for debounce to prevent rapid-fire while key is held.
+ */
+export function inputPress(
+	ctx: SubNodeCodegenContext,
+	action: 'confirm' | 'cancel' | 'up' | 'down' | 'left' | 'right'
+): string {
+	const btn = ctx.buttons[action];
+	const key = ctx.keys?.[action];
+	if (!key) return `event_press(${btn})`;
+	return `(event_press(${btn}) || (GetKeyboardKey(${key}) && _kb_nav_delay <= 0))`;
 }
 
 export interface SubNodeDef {
@@ -191,6 +214,8 @@ export interface ModuleNodeData {
 	flowTarget?: string;
 	/** Custom string arrays for arraybuilder module — each entry is a named array with string values */
 	customArrays?: CustomArrayDef[];
+	/** Input device type: "controller", "kbm", or "any" */
+	inputDevice?: string;
 }
 
 /** A user-defined const string array for the Array Builder module */
@@ -275,6 +300,8 @@ export interface FlowNode {
 	scrollMode?: 'window' | 'wrap';
 	/** Button that navigates back to the previous state (e.g. 'PS5_CIRCLE') */
 	backButton?: string;
+	/** Keyboard key equivalent for back navigation (e.g. 'KEY_ESC') */
+	backKey?: string;
 	/** When true, calls block_all_inputs() so menu navigation doesn't send inputs to the console */
 	blockInputs?: boolean;
 	/** Variable to watch for changes (gameplay/data custom nodes) */
@@ -300,6 +327,8 @@ export type FlowConditionType =
 export interface FlowCondition {
 	type: FlowConditionType;
 	button?: string;
+	/** Keyboard key equivalent for the same transition (checked with GetKeyboardKey()) */
+	keyboardKey?: string;
 	/** Modifier buttons that must be held (checked with get_val()) */
 	modifiers?: string[];
 	timeoutMs?: number;
@@ -340,6 +369,15 @@ export interface FlowSettings {
 		down: string;
 		left: string;
 		right: string;
+	};
+	/** Keyboard key equivalents for button mappings (optional, for KBM navigation) */
+	keyboardMapping?: {
+		confirm?: string;
+		cancel?: string;
+		up?: string;
+		down?: string;
+		left?: string;
+		right?: string;
 	};
 }
 
@@ -509,6 +547,14 @@ export const DEFAULT_FLOW_SETTINGS: FlowSettings = {
 		down: 'PS5_DOWN',
 		left: 'PS5_LEFT',
 		right: 'PS5_RIGHT',
+	},
+	keyboardMapping: {
+		confirm: 'KEY_SPACE',
+		cancel: 'KEY_ESC',
+		up: 'KEY_W',
+		down: 'KEY_S',
+		left: 'KEY_A',
+		right: 'KEY_D',
 	},
 };
 

@@ -1,5 +1,5 @@
 import type { SubNodeDef } from '$lib/types/flow';
-import { addString } from '$lib/types/flow';
+import { addString, inputPress } from '$lib/types/flow';
 import { widgetDrawRect } from '$lib/oled-widgets/types';
 import { drawBitmapText, measureText } from '$lib/oled-widgets/font';
 
@@ -95,7 +95,7 @@ export const valueItemDef: SubNodeDef = {
 
 		// Value on right
 		const margin = (config.valueMargin as number) ?? 0;
-		const valX = ctx.x + ctx.width - measureText(valStr) - 2 - margin;
+		const valX = ctx.x + ctx.width - measureText(valStr) - 4 - margin;
 		drawBitmapText(ctx.pixels, valStr, valX, ctx.y, on);
 	},
 	generateGpc(config, ctx) {
@@ -114,7 +114,7 @@ export const valueItemDef: SubNodeDef = {
 		const valueMargin = (config.valueMargin as number) ?? 0;
 		const prefixOffset = (prefix.length + spacing) * 6;
 		const labelX = style === 'prefix' ? ctx.x + prefixOffset : ctx.x + 2;
-		const valX = valueAlign === 'right' ? 104 - valueMargin : labelX + ((label || 'Value').length + 1) * 6;
+		const valX = valueAlign === 'right' ? 98 - valueMargin : labelX + ((label || 'Value').length + 1) * 6;
 
 		// Non-interactive: just print label (if any) + value
 		if (ctx.cursorIndex < 0) {
@@ -162,10 +162,14 @@ export const valueItemDef: SubNodeDef = {
 		const changeSuffix = onChangeCode ? ` ${onChangeCode}` : '';
 		const lines: string[] = [];
 
+		const fastStep = 10;
 		lines.push(`    // Value adjust: ${label}`);
 		lines.push(`    if(${ctx.cursorVar} == ${ctx.cursorIndex}) {`);
-		lines.push(`        if(event_press(${ctx.buttons.left}) && ${boundVar} > ${min}) { ${boundVar} = ${boundVar} - ${step}; FlowRedraw = TRUE;${changeSuffix} }`);
-		lines.push(`        if(event_press(${ctx.buttons.right}) && ${boundVar} < ${max}) { ${boundVar} = ${boundVar} + ${step}; FlowRedraw = TRUE;${changeSuffix} }`);
+		const kbDelay = ctx.keys ? ' _kb_nav_delay = 200;' : '';
+		lines.push(`        if(${inputPress(ctx, 'left')} && ${boundVar} > ${min}) { ${boundVar} = ${boundVar} - ${step};${kbDelay} FlowRedraw = TRUE;${changeSuffix} }`);
+		lines.push(`        if(${inputPress(ctx, 'right')} && ${boundVar} < ${max}) { ${boundVar} = ${boundVar} + ${step};${kbDelay} FlowRedraw = TRUE;${changeSuffix} }`);
+		lines.push(`        if(event_press(PS5_L1) && ${boundVar} > ${min}) { ${boundVar} = ${boundVar} - ${fastStep}; if(${boundVar} < ${min}) ${boundVar} = ${min}; FlowRedraw = TRUE;${changeSuffix} }`);
+		lines.push(`        if(event_press(PS5_R1) && ${boundVar} < ${max}) { ${boundVar} = ${boundVar} + ${fastStep}; if(${boundVar} > ${max}) ${boundVar} = ${max}; FlowRedraw = TRUE;${changeSuffix} }`);
 		lines.push(`    }`);
 
 		return lines.join('\n');

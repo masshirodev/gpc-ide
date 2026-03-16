@@ -2,6 +2,7 @@
 display_name = "Auto Run"
 id = "autorun"
 type = "all"
+input_device = "controller"
 description = "Locks the left stick at 100% in the last direction when pushed past a threshold.\nRelease the stick to center to stop. Acts as cruise control for movement."
 state_display = "AR"
 status_var = "AutoRunStatus"

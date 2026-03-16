@@ -2,6 +2,7 @@
 display_name = "Omni Plus"
 id = "omniplus"
 type = "fps"
+input_device = "controller"
 description = "COD Mechanic - Enhanced omnidirectional movement by toggling L3.\nTaps sprint on and off to maintain momentum in all directions."
 state_display = "OP"
 status_var = "OmniPlusStatus"

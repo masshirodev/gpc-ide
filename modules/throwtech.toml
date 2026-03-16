@@ -2,6 +2,7 @@
 display_name = "Throw Tech"
 id = "throwtech"
 type = "fgs"
+input_device = "controller"
 description = "Mashes throw tech input during grab windows.\nRapidly presses LP+LK when a modifier is held to escape throws."
 state_display = "TT"
 status_var = "ThrowTechStatus"

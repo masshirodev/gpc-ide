@@ -10,6 +10,7 @@ export interface ModuleSummary {
 	needs_weapondata: boolean;
 	is_user_module: boolean;
 	flow_target: string;
+	input_device: string;
 }
 
 export interface ModuleDefinition {
@@ -33,6 +34,7 @@ export interface ModuleDefinition {
 	requires_keyboard_file?: boolean;
 	config_menu?: ConfigMenu;
 	flow_target?: string;
+	input_device?: string;
 }
 
 export interface ConfigMenu {
@@ -69,6 +71,7 @@ export interface ModuleFormState {
 	displayName: string;
 	moduleType: string;
 	flowTarget: 'gameplay' | 'data';
+	inputDevice: 'controller' | 'kbm' | 'any';
 	description: string;
 	enableVariable: string;
 	quickToggleMode: 'buttons' | 'key';

@@ -10,6 +10,11 @@
 
 	let search = $state(value || '');
 	let open = $state(false);
+
+	// Reset search text when value changes externally (e.g., switching edges)
+	$effect(() => {
+		search = value || '';
+	});
 	let highlightIndex = $state(0);
 	let inputEl: HTMLInputElement | undefined = $state();
 	let listEl: HTMLDivElement | undefined = $state();

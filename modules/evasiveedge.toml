@@ -2,6 +2,7 @@
 display_name = "Evasive Edge"
 id = "evasiveedge"
 type = "fps"
+input_device = "controller"
 description = "Strafes left and right while firing.\nOscillates the left stick horizontally when no manual movement is detected."
 state_display = "EE"
 status_var = "EvasiveEdgeStatus"

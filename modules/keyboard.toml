@@ -2,6 +2,7 @@
 display_name = "Keyboard"
 id = "keyboard"
 type = "fps"
+input_device = "kbm"
 description = "Keyboard-to-controller mapping for KBM setups.\nMaps keyboard keys to controller buttons via GetKeyboardKey() helper."
 requires_keyboard_file = true
 trigger = "// Keyboard-to-controller mapping\nif (KeyboardStatus) {\n    ApplyKeyboard();\n}"

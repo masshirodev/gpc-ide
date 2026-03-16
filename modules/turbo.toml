@@ -2,6 +2,7 @@
 display_name = "Turbo"
 id = "turbo"
 type = "fgs"
+input_device = "controller"
 description = "Rapid button press on hold for any configurable button.\nToggles the selected button on/off at a configurable speed."
 state_display = "TB"
 status_var = "TurboStatus"

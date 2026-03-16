@@ -2,6 +2,7 @@
 display_name = "Jump Shot"
 id = "jumpshot"
 type = "fps"
+input_device = "controller"
 description = "Automatically jumps when firing.\nTaps Cross on each shot to add vertical movement while shooting."
 state_display = "JS"
 status_var = "JumpShotStatus"

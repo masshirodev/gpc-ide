@@ -2,6 +2,7 @@
 display_name = "Aim Assist (Polar)"
 id = "aimassist_polar"
 type = "fps"
+input_device = "controller"
 description = "Circular aim assist using POLAR_GHOST for perfectly synced stick movement.\nThe cleanest circular method — adds smooth orbital motion without interfering with manual aim."
 state_display = "AP"
 status_var = "AimPolarStatus"

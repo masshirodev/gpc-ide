@@ -48,6 +48,7 @@
 		displayName: '',
 		moduleType: 'fps',
 		flowTarget: 'gameplay',
+		inputDevice: 'any',
 		description: '',
 		enableVariable: '',
 		quickToggleMode: 'buttons',
@@ -146,6 +147,7 @@
 			displayName: mod.display_name,
 			moduleType: mod.type,
 			flowTarget: (mod.flow_target as 'gameplay' | 'data') || 'gameplay',
+		inputDevice: (mod.input_device as 'controller' | 'kbm' | 'any') || 'any',
 			description: mod.description ?? '',
 			enableVariable: mod.status_var ?? '',
 			quickToggleMode:
@@ -292,6 +294,7 @@
 			needs_weapondata: form.needsWeapondata || undefined,
 			requires_keyboard_file: form.requiresKeyboardFile || undefined,
 			flow_target: form.flowTarget,
+			input_device: form.inputDevice,
 			status_var: enableVar
 		};
 	}
@@ -498,6 +501,10 @@
 										class="rounded bg-zinc-800/60 px-1 py-0.5 text-[10px] text-zinc-500"
 										>{mod.module_type}</span
 									>
+									<span
+										class="rounded px-1 py-0.5 text-[10px] {mod.input_device === 'kbm' ? 'bg-blue-900/30 text-blue-400' : mod.input_device === 'controller' ? 'bg-purple-900/30 text-purple-400' : 'bg-zinc-800/60 text-zinc-500'}"
+										>{mod.input_device === 'kbm' ? 'KBM' : mod.input_device === 'controller' ? 'Controller' : 'Any'}</span
+									>
 								</div>
 								{#if mod.description}
 									<p class="mt-1 truncate text-[10px] text-zinc-500">
@@ -606,7 +613,7 @@
 						</div>
 					</div>
 
-					<div class="grid grid-cols-3 gap-4">
+					<div class="grid grid-cols-4 gap-4">
 						<div>
 							<label class="mb-1 block text-sm text-zinc-300" for="mod-type"
 								>Game Type</label
@@ -622,6 +629,21 @@
 										>{type === 'all' ? 'All Types' : type.toUpperCase()}</option
 									>
 								{/each}
+							</select>
+						</div>
+						<div>
+							<label class="mb-1 block text-sm text-zinc-300" for="mod-input-device"
+								>Input Device</label
+							>
+							<select
+								id="mod-input-device"
+								bind:value={form.inputDevice}
+								class="w-full rounded border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-200 focus:border-emerald-500 focus:outline-none"
+								disabled={saving}
+							>
+								<option value="any">Any</option>
+								<option value="controller">Controller</option>
+								<option value="kbm">KBM</option>
 							</select>
 						</div>
 						<div>
@@ -1232,6 +1254,10 @@
 						<div>
 							<span class="text-xs text-zinc-500">Type</span>
 							<p class="text-sm text-zinc-200">{selectedModule.type.toUpperCase()}</p>
+						</div>
+						<div>
+							<span class="text-xs text-zinc-500">Input Device</span>
+							<p class="text-sm text-zinc-200">{selectedModule.input_device === 'kbm' ? 'KBM' : selectedModule.input_device === 'controller' ? 'Controller' : 'Any'}</p>
 						</div>
 						{#if selectedModule.description}
 							<div class="col-span-2">

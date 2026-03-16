@@ -2,6 +2,7 @@
 display_name = "Always Run"
 id = "alwaysrun"
 type = "all"
+input_device = "controller"
 description = "Automatically sprints when pushing the left stick forward past a threshold.\nHolds L3 without needing to click it manually."
 state_display = "ALR"
 status_var = "AlwaysRunStatus"

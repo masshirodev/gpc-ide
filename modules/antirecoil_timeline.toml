@@ -2,6 +2,7 @@
 display_name = "Anti Recoil (Timeline)"
 id = "antirecoil_timeline"
 type = "fps"
+input_device = "controller"
 description = "Per-weapon anti-recoil with 10-phase recoil curves.\nUses const WeaponRecoilTable[][] from recoiltable.gpc for time-based corrections.\nPer-weapon V/H modifiers editable via OLED submenu."
 state_display = "AR"
 status_var = "AntiRecoilStatus"

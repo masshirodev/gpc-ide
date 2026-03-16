@@ -2,6 +2,7 @@
 display_name = "Drop Shot"
 id = "dropshot"
 type = "fps"
+input_device = "controller"
 description = "Automatically goes prone when firing while ADS.\nPresses Circle to prone, then L3 to stand back up after a rest period."
 state_display = "DS"
 status_var = "DropShotStatus"

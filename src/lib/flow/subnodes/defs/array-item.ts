@@ -1,5 +1,5 @@
 import type { SubNodeDef } from '$lib/types/flow';
-import { addString } from '$lib/types/flow';
+import { addString, inputPress } from '$lib/types/flow';
 import { widgetDrawRect } from '$lib/oled-widgets/types';
 import { drawBitmapText, measureText } from '$lib/oled-widgets/font';
 
@@ -274,8 +274,9 @@ export const arrayItemDef: SubNodeDef = {
 
 		lines.push(`    // Array cycle: ${label}`);
 		lines.push(`    if(${ctx.cursorVar} == ${ctx.cursorIndex}) {`);
-		lines.push(`        if(event_press(${ctx.buttons.left})) { ${boundVar}--; if(${boundVar} < 0) ${boundVar} = ${maxExpr}; FlowRedraw = TRUE;${changeSuffix} }`);
-		lines.push(`        if(event_press(${ctx.buttons.right})) { ${boundVar}++; if(${boundVar} > ${maxExpr}) ${boundVar} = 0; FlowRedraw = TRUE;${changeSuffix} }`);
+		const kbDelay = ctx.keys ? ' _kb_nav_delay = 200;' : '';
+		lines.push(`        if(${inputPress(ctx, 'left')}) { ${boundVar}--; if(${boundVar} < 0) ${boundVar} = ${maxExpr};${kbDelay} FlowRedraw = TRUE;${changeSuffix} }`);
+		lines.push(`        if(${inputPress(ctx, 'right')}) { ${boundVar}++; if(${boundVar} > ${maxExpr}) ${boundVar} = 0;${kbDelay} FlowRedraw = TRUE;${changeSuffix} }`);
 		lines.push(`    }`);
 
 		return lines.join('\n');

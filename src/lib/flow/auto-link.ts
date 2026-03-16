@@ -46,6 +46,8 @@ export function syncModuleMenus(project: FlowProject): boolean {
 	const suppressedMenus = new Set(menuFlow.suppressedModuleMenus ?? []);
 	const confirmButton = menuFlow.settings.buttonMapping.confirm;
 	const cancelButton = menuFlow.settings.buttonMapping.cancel;
+	const confirmKey = menuFlow.settings.keyboardMapping?.confirm;
+	const cancelKey = menuFlow.settings.keyboardMapping?.cancel;
 
 	// --- Find or create parent "Module Settings" node ---
 	let parentNode = menuFlow.nodes.find(
@@ -238,7 +240,8 @@ export function syncModuleMenus(project: FlowProject): boolean {
 					parentNode!.id,
 					submenuNode.id,
 					menuItemSub.id,
-					confirmButton
+					confirmButton,
+					confirmKey
 				);
 				menuFlow.edges.push(edge);
 				changed = true;
@@ -519,11 +522,13 @@ function createAutoEdge(
 	parentNodeId: string,
 	submenuNodeId: string,
 	menuItemSubNodeId: string,
-	confirmButton: string
+	confirmButton: string,
+	confirmKey?: string
 ): FlowEdge {
 	const edge = createFlowEdge(parentNodeId, submenuNodeId, 'Open', {
 		type: 'button_press',
 		button: confirmButton,
+		keyboardKey: confirmKey,
 	});
 	edge.sourceSubNodeId = menuItemSubNodeId;
 	return edge;

@@ -2,6 +2,7 @@
 display_name = "Weapon Data"
 id = "weapondata"
 type = "fps"
+input_device = "any"
 flow_target = "data"
 description = "Dynamic weapon data arrays for per-weapon systems.\nProvides weapon selection, recoil value storage, and GetActiveWeapon() helper."
 state_display = "WPN"

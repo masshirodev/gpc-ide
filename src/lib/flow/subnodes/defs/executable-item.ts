@@ -1,5 +1,5 @@
 import type { SubNodeDef } from '$lib/types/flow';
-import { addString } from '$lib/types/flow';
+import { addString, inputPress } from '$lib/types/flow';
 import { widgetDrawRect } from '$lib/oled-widgets/types';
 import { drawBitmapText } from '$lib/oled-widgets/font';
 
@@ -135,7 +135,7 @@ export const executableItemDef: SubNodeDef = {
 		const lines: string[] = [];
 
 		lines.push(`    // Execute: ${label}`);
-		lines.push(`    if(${ctx.cursorVar} == ${ctx.cursorIndex} && event_press(${ctx.buttons.confirm})) {`);
+		lines.push(`    if(${ctx.cursorVar} == ${ctx.cursorIndex} && ${inputPress(ctx, 'confirm')}) {`);
 		lines.push(`        ${executeCode}`);
 		lines.push(`    }`);
 

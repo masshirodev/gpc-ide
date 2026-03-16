@@ -2,6 +2,7 @@
 display_name = "YY Cancel"
 id = "yycancel"
 type = "fps"
+input_device = "controller"
 description = "Weapon swap cancel by rapidly tapping Triangle while sprinting.\nUsed to cancel sprint animations for faster movement."
 state_display = "YY"
 status_var = "YYCancelStatus"

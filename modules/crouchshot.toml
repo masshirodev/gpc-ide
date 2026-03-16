@@ -2,6 +2,7 @@
 display_name = "Crouch Shot"
 id = "crouchshot"
 type = "fps"
+input_device = "controller"
 description = "Repeatedly crouches while ADS and firing.\nTaps Circle on a loop to peek from behind cover."
 state_display = "CS"
 status_var = "CrouchShotStatus"

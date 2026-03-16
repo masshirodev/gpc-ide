@@ -2,6 +2,7 @@
 display_name = "Aim Assist (Left Stick)"
 id = "aimassist_leftstick"
 type = "fps"
+input_device = "controller"
 description = "Rhythmic left-stick movement while ADS to engage rotational aim assist.\nOscillates the left stick in a square pattern to trigger movement-based tracking.\nStops when player is actively moving the left stick."
 state_display = "AL"
 status_var = "AimLSStatus"

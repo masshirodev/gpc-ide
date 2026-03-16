@@ -2,6 +2,7 @@
 display_name = "Aim Assist (Square)"
 id = "aimassist_square"
 type = "fps"
+input_device = "controller"
 description = "Micro square stick movement while ADS to engage aim assist.\nRotates the right stick in small increments across 4 angles."
 state_display = "AA"
 status_var = "AimAssistStatus"

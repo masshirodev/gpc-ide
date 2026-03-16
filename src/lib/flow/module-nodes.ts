@@ -89,6 +89,7 @@ export function createModuleNode(
 		conflicts: moduleDef.conflicts ?? [],
 		needsWeapondata: moduleDef.needs_weapondata ?? false,
 		flowTarget: moduleDef.flow_target,
+		inputDevice: moduleDef.input_device,
 	};
 
 	const node = createFlowNode('module', moduleDef.display_name, position);

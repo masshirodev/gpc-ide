@@ -2,6 +2,7 @@
 display_name = "Bunny Hop"
 id = "bunnyhop"
 type = "fps"
+input_device = "any"
 description = "Rapidly taps jump while holding Space for bunny hopping.\nDesigned for KBM setups to maintain momentum through repeated jumps."
 state_display = "BH"
 status_var = "BunnyHopStatus"

@@ -2,6 +2,7 @@
 display_name = "Mash"
 id = "mash"
 type = "fgs"
+input_device = "controller"
 description = "Frame-perfect button mash for dizzy or grab escape.\nRapidly toggles a configurable button at maximum speed."
 state_display = "MSH"
 status_var = "MashStatus"

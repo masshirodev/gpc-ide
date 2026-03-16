@@ -2,6 +2,7 @@
 display_name = "Divine Lock"
 id = "divinelock"
 type = "fps"
+input_device = "controller"
 description = "Pulse ADS trigger to maintain aim lock-on.\nHolds L2 for a duration then briefly releases to re-engage lock-on."
 state_display = "DL"
 status_var = "DivineLockStatus"

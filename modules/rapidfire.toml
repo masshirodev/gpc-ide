@@ -2,6 +2,7 @@
 display_name = "Rapid Fire"
 id = "rapid"
 type = "fps"
+input_device = "controller"
 description = "Rapid fire by toggling the fire button on/off while ADS.\nConfigurable speed controls the press/release cycle timing.\nADS Only mode requires L2+R2; Hip & ADS mode requires only R2."
 state_display = "RF"
 status_var = "RapidFireStatus"
