@@ -232,6 +232,9 @@
 
 	let confirmDialogCancel = $state<() => void>(() => {});
 
+	// Pending combo transfer — stashed in onMount, applied by $effect once flow project loads
+	let pendingComboTransfer = $state<import('$lib/stores/combo-transfer.svelte').ComboTransfer | null>(null);
+
 	// File tree state
 	let fileTree = $state<FileTreeEntry[]>([]);
 	let expandedDirs = $state<Set<string>>(new Set());
@@ -294,6 +297,32 @@
 				cachedFlowProject = flowStore.project;
 			}
 		}
+	});
+
+	// Apply pending combo transfer once flow project is loaded
+	$effect(() => {
+		if (!pendingComboTransfer || !flowStore.project) return;
+		const transfer = pendingComboTransfer;
+		pendingComboTransfer = null;
+		switchFlow('gameplay');
+		const entries = transfer.nodeEntries!;
+		let count = 0;
+		for (const entry of entries) {
+			const nodeCount = flowStore.graph?.nodes.length ?? 0;
+			const x = -flowStore.canvas.panX + 300 + ((nodeCount + count) % 4) * 260;
+			const y = -flowStore.canvas.panY + 200 + Math.floor((nodeCount + count) / 4) * 140;
+			const created = addNode('custom', { x, y });
+			if (created) {
+				updateNode(created.id, {
+					label: entry.name,
+					comboCode: entry.gpcCode,
+				});
+			}
+			count++;
+		}
+		activeTab = 'flow';
+		const plural = entries.length > 1 ? `${entries.length} nodes` : 'node';
+		addToast(`Combo ${plural} added to gameplay flow`, 'success');
 	});
 
 	// Detect antirecoil_timeline module in flow project
@@ -888,32 +917,14 @@
 			activeTab = 'flow';
 		}
 
-		// Handle return from combo editor — create flow node(s) or write GPC file
+		// Handle return from combo editor — stash for $effect or write GPC file
 		const comboTransfer = getComboTransfer();
 		if (comboTransfer?.returnTo && store.selectedGame?.path === comboTransfer.returnTo) {
 			clearComboTransfer();
 
-			if (comboTransfer.createNodes && comboTransfer.nodeEntries?.length && flowStore.project) {
-				// Create gameplay flow node(s)
-				switchFlow('gameplay');
-				const entries = comboTransfer.nodeEntries;
-				let count = 0;
-				for (const entry of entries) {
-					const nodeCount = flowStore.graph?.nodes.length ?? 0;
-					const x = -flowStore.canvas.panX + 300 + ((nodeCount + count) % 4) * 260;
-					const y = -flowStore.canvas.panY + 200 + Math.floor((nodeCount + count) / 4) * 140;
-					const created = addNode('custom', { x, y });
-					if (created) {
-						updateNode(created.id, {
-							label: entry.name,
-							comboCode: entry.gpcCode,
-						});
-					}
-					count++;
-				}
-				activeTab = 'flow';
-				const plural = entries.length > 1 ? `${entries.length} nodes` : 'node';
-				addToast(`Combo ${plural} added to gameplay flow`, 'success');
+			if (comboTransfer.createNodes && comboTransfer.nodeEntries?.length) {
+				// Defer node creation until flow project is loaded
+				pendingComboTransfer = comboTransfer;
 			} else {
 				// Legacy: write as .gpc file
 				const fileName = `${comboTransfer.comboName}.gpc`;

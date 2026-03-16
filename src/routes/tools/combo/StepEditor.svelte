@@ -97,9 +97,7 @@
 					class="rounded px-2 py-1 text-xs font-mono transition-colors {active
 						? 'bg-emerald-600/30 text-emerald-300 border border-emerald-600/50'
 						: 'bg-zinc-800 text-zinc-400 border border-zinc-700 hover:bg-zinc-700 hover:text-zinc-200'}"
-					onclick={() => toggleButton(btn.name)}
-					oncontextmenu={(e) => {
-						e.preventDefault();
+					onclick={() => {
 						if (active) {
 							editingValue = editingValue === btn.name ? null : btn.name;
 						} else {
@@ -107,7 +105,17 @@
 							editingValue = btn.name;
 						}
 					}}
-					title="{btn.name} (right-click for custom value)"
+					oncontextmenu={(e) => {
+						e.preventDefault();
+						if (active) {
+							toggleButton(btn.name);
+							editingValue = null;
+						} else {
+							toggleButton(btn.name);
+							editingValue = btn.name;
+						}
+					}}
+					title="{btn.name} (click to toggle value, right-click to remove)"
 				>
 					{shortName(btn.name)}
 					{#if active && active.value !== 100}

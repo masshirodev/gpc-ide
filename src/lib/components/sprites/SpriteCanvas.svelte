@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, untrack } from 'svelte';
 	import {
 		getPixel,
 		setPixel,
@@ -28,16 +28,17 @@
 	let container: HTMLDivElement;
 	let ctx: CanvasRenderingContext2D | null = null;
 
-	let cellSize = $state(0);
-	let offsetX = $state(0);
-	let offsetY = $state(0);
-
-	let isDrawing = $state(false);
-	let drawValue = $state(true);
-	let lastPixelX = $state(-1);
-	let lastPixelY = $state(-1);
-	let hoverX = $state(-1);
-	let hoverY = $state(-1);
+	// Use plain variables instead of $state — these are only used in draw()
+	// and event handlers, not in the template. Avoids reactive overhead.
+	let cellSize = 0;
+	let offsetX = 0;
+	let offsetY = 0;
+	let isDrawing = false;
+	let drawValue = true;
+	let lastPixelX = -1;
+	let lastPixelY = -1;
+	let hoverX = -1;
+	let hoverY = -1;
 
 	function resize() {
 		if (!container || !canvas) return;
@@ -214,10 +215,11 @@
 		return () => observer.disconnect();
 	});
 
+	// Only trigger redraws on version/pixels changes — nothing else.
 	$effect(() => {
 		void version;
 		void pixels;
-		draw();
+		untrack(() => draw());
 	});
 </script>
 
@@ -227,7 +229,7 @@
 >
 	<canvas
 		bind:this={canvas}
-		class="block"
+		class="block h-full w-full"
 		style:cursor={tool === 'fill' ? 'crosshair' : 'default'}
 		onmousedown={handleMouseDown}
 		onmousemove={handleMouseMove}

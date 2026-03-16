@@ -91,6 +91,8 @@
 	let stampData = $state<{ pixels: Uint8Array; width: number; height: number; scale: number } | null>(null);
 	let importStampActive = $state(false);
 	let importStampBase = $state<{ pixels: Uint8Array; width: number; height: number } | null>(null);
+	const IMPORT_SCALE_STEPS = [0.25, 0.5, 0.75, 1, 1.5, 2, 3, 4];
+	let importScaleIndex = $state(3); // default 1x
 	let pixelVersion = $state(0);
 
 	// Selection state
@@ -260,14 +262,16 @@
 		}
 		importStampBase = stamp;
 		importStampActive = true;
+		importScaleIndex = 3; // reset to 1x
 		stampData = { ...stamp, scale: 1 };
 		showStamps = false;
 		addToast('Click on canvas to place, Escape to cancel', 'info', 3000);
 	}
 
-	function handleImportStampScale(newScale: number) {
+	function handleImportStampScale(newIndex: number) {
 		if (!importStampBase) return;
-		stampData = { ...importStampBase, scale: newScale };
+		importScaleIndex = newIndex;
+		stampData = { ...importStampBase, scale: IMPORT_SCALE_STEPS[newIndex] };
 	}
 
 	function handleImportStampPlaced() {
@@ -852,15 +856,17 @@
 						<span class="text-xs text-zinc-400">Scale</span>
 						<input
 							type="range"
-							min="1"
-							max="4"
-							value={stampData?.scale ?? 1}
+							min="0"
+							max={IMPORT_SCALE_STEPS.length - 1}
+							value={importScaleIndex}
 							oninput={(e) => handleImportStampScale(parseInt(e.currentTarget.value))}
 							class="w-20 accent-emerald-600"
 						/>
-						<span class="w-5 text-xs text-zinc-300">{stampData?.scale ?? 1}x</span>
+						<span class="w-8 text-xs text-zinc-300">{stampData?.scale ?? 1}x</span>
 						<span class="mx-1 text-zinc-700">|</span>
-						<span class="text-xs text-zinc-500">{importStampBase.width}×{importStampBase.height}px</span>
+						<span class="text-xs text-zinc-500">
+							{Math.max(1, Math.round(importStampBase.width * (stampData?.scale ?? 1)))}×{Math.max(1, Math.round(importStampBase.height * (stampData?.scale ?? 1)))}px
+						</span>
 						<span class="mx-1 text-zinc-700">|</span>
 						<button
 							class="rounded px-2 py-0.5 text-xs text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
@@ -892,6 +898,8 @@
 			{:else if showStamps}
 				<div class="absolute top-0 right-0 z-10 h-full w-72 border-l border-zinc-800 bg-zinc-950">
 					<SpriteStampPanel
+						canvasPixels={activePixels}
+						{selection}
 						onStamp={(spritePixels, width, height, scale) => {
 							// Stamp is handled via stampData + canvas click
 						}}

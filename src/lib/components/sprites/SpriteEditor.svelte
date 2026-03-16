@@ -22,30 +22,35 @@
 
 	let { frames: initialFrames, onDone, onCancel }: Props = $props();
 
-	// Deep-copy frames so we can edit freely
-	let editFrames = $state<SpriteFrame[]>(initialFrames.map((f) => ({ ...f })));
+	// Use $state.raw to prevent Svelte from deep-proxying the frame array.
+	// We only need to track reference replacement, not per-frame mutations.
+	let editFrames = $state.raw<SpriteFrame[]>(initialFrames.map((f) => ({ ...f })));
 	let activeIndex = $state(0);
-	let frameWidth = $derived(editFrames[activeIndex]?.width ?? 16);
-	let frameHeight = $derived(editFrames[activeIndex]?.height ?? 16);
+	let frameCount = editFrames.length;
+	let frameWidth = editFrames[0]?.width ?? 16;
+	let frameHeight = editFrames[0]?.height ?? 16;
 
-	// Pixels for the active frame
-	let pixels = $state<Uint8Array>(new Uint8Array(0));
+	// Pixels for the active frame — raw to avoid proxy overhead on typed arrays
+	let pixels = $state.raw<Uint8Array>(new Uint8Array(0));
 	let version = $state(0);
 
 	// Tool state
 	let tool = $state<SpriteTool>('pen');
 	let brushSize = $state(1);
 
-	// Undo/redo
-	let undoStack = $state<Uint8Array[]>([]);
-	let redoStack = $state<Uint8Array[]>([]);
+	// Undo/redo — raw to avoid proxying arrays of Uint8Arrays
+	let undoStack: Uint8Array[] = [];
+	let redoStack: Uint8Array[] = [];
+	let undoLen = $state(0);
+	let redoLen = $state(0);
 
 	// Load pixels only when switching frames (activeIndex changes).
-	// Uses untrack on editFrames to avoid re-triggering when frame content is saved back.
 	$effect(() => {
 		const idx = activeIndex;
 		const frame = untrack(() => editFrames[idx]);
 		if (frame) {
+			frameWidth = frame.width;
+			frameHeight = frame.height;
 			const expectedBytes = totalBytes(frame.width, frame.height);
 			const decoded = base64ToSprite(frame.pixels);
 			if (decoded.length === expectedBytes) {
@@ -55,7 +60,10 @@
 			}
 			undoStack = [];
 			redoStack = [];
-			version++;
+			undoLen = 0;
+			redoLen = 0;
+			// Use untrack to avoid reading version (which would create a circular dependency)
+			version = untrack(() => version) + 1;
 		}
 	});
 
@@ -68,47 +76,48 @@
 
 	function handleBeforeDraw() {
 		undoStack = [...undoStack.slice(-99), cloneSprite(pixels)];
+		undoLen = undoStack.length;
 		redoStack = [];
+		redoLen = 0;
 	}
 
 	function handleDraw(updated: Uint8Array) {
 		pixels = updated;
 		version++;
-		saveCurrentPixelsToFrame();
 	}
 
 	function undo() {
 		if (undoStack.length === 0) return;
 		redoStack = [...redoStack, cloneSprite(pixels)];
+		redoLen = redoStack.length;
 		const prev = undoStack[undoStack.length - 1];
 		undoStack = undoStack.slice(0, -1);
+		undoLen = undoStack.length;
 		pixels = prev;
 		version++;
-		saveCurrentPixelsToFrame();
 	}
 
 	function redo() {
 		if (redoStack.length === 0) return;
 		undoStack = [...undoStack, cloneSprite(pixels)];
+		undoLen = undoStack.length;
 		const next = redoStack[redoStack.length - 1];
 		redoStack = redoStack.slice(0, -1);
+		redoLen = redoStack.length;
 		pixels = next;
 		version++;
-		saveCurrentPixelsToFrame();
 	}
 
 	function clearFrame() {
 		handleBeforeDraw();
 		pixels = createEmptySprite(frameWidth, frameHeight);
 		version++;
-		saveCurrentPixelsToFrame();
 	}
 
 	function invertFrame() {
 		handleBeforeDraw();
 		pixels = invertSprite(pixels);
 		version++;
-		saveCurrentPixelsToFrame();
 	}
 
 	function selectFrame(i: number) {
@@ -199,7 +208,7 @@
 		<button
 			class="rounded px-1.5 py-1 text-xs text-zinc-500 hover:bg-zinc-800 disabled:opacity-30"
 			onclick={undo}
-			disabled={undoStack.length === 0}
+			disabled={undoLen === 0}
 			title="Undo (Ctrl+Z)"
 		>
 			<svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 10h10a5 5 0 015 5v2M3 10l5-5M3 10l5 5" /></svg>
@@ -207,7 +216,7 @@
 		<button
 			class="rounded px-1.5 py-1 text-xs text-zinc-500 hover:bg-zinc-800 disabled:opacity-30"
 			onclick={redo}
-			disabled={redoStack.length === 0}
+			disabled={redoLen === 0}
 			title="Redo (Ctrl+Y)"
 		>
 			<svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10H11a5 5 0 00-5 5v2M21 10l-5-5M21 10l-5 5" /></svg>
@@ -243,12 +252,12 @@
 	</div>
 
 	<!-- Frame strip -->
-	{#if editFrames.length > 1}
+	{#if frameCount > 1}
 		<div class="flex items-center gap-1 border-t border-zinc-800 px-3 py-2 overflow-x-auto">
 			<span class="mr-2 shrink-0 text-[10px] text-zinc-500">
-				{m.sprite_editor_frame()} {activeIndex + 1} {m.sprite_editor_of()} {editFrames.length}
+				{m.sprite_editor_frame()} {activeIndex + 1} {m.sprite_editor_of()} {frameCount}
 			</span>
-			{#each editFrames as _, i}
+			{#each { length: frameCount } as _, i}
 				<button
 					class="shrink-0 rounded border px-2 py-0.5 text-[10px] transition-colors
 						{i === activeIndex

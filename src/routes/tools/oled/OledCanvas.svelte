@@ -408,26 +408,24 @@
 	function drawStampPreview(px: number, py: number) {
 		if (!ctx || !stampData) return;
 		const { pixels: spritePixels, width: sw, height: sh, scale } = stampData;
-		const scaledW = sw * scale;
-		const scaledH = sh * scale;
+		const scaledW = Math.max(1, Math.round(sw * scale));
+		const scaledH = Math.max(1, Math.round(sh * scale));
 
 		ctx.fillStyle = 'rgba(16, 185, 129, 0.4)';
-		for (let sy = 0; sy < sh; sy++) {
-			for (let sx = 0; sx < sw; sx++) {
-				if (getSpritePixel(spritePixels, sx, sy, sw, sh)) {
-					for (let dy = 0; dy < scale; dy++) {
-						for (let dx = 0; dx < scale; dx++) {
-							const ox = px + sx * scale + dx;
-							const oy = py + sy * scale + dy;
-							if (ox >= 0 && ox < OLED_WIDTH && oy >= 0 && oy < OLED_HEIGHT) {
-								ctx.fillRect(
-									offsetX + ox * cellSize,
-									offsetY + oy * cellSize,
-									cellSize,
-									cellSize
-								);
-							}
-						}
+		for (let oy = 0; oy < scaledH; oy++) {
+			for (let ox = 0; ox < scaledW; ox++) {
+				const sx = Math.floor(ox / scale);
+				const sy = Math.floor(oy / scale);
+				if (sx < sw && sy < sh && getSpritePixel(spritePixels, sx, sy, sw, sh)) {
+					const cx = px + ox;
+					const cy = py + oy;
+					if (cx >= 0 && cx < OLED_WIDTH && cy >= 0 && cy < OLED_HEIGHT) {
+						ctx.fillRect(
+							offsetX + cx * cellSize,
+							offsetY + cy * cellSize,
+							cellSize,
+							cellSize
+						);
 					}
 				}
 			}
@@ -449,19 +447,19 @@
 	function stampOntoCanvas(px: number, py: number) {
 		if (!stampData) return;
 		const { pixels: spritePixels, width: sw, height: sh, scale } = stampData;
+		const scaledW = Math.max(1, Math.round(sw * scale));
+		const scaledH = Math.max(1, Math.round(sh * scale));
 		const updated = clonePixels(pixels);
 
-		for (let sy = 0; sy < sh; sy++) {
-			for (let sx = 0; sx < sw; sx++) {
-				if (getSpritePixel(spritePixels, sx, sy, sw, sh)) {
-					for (let dy = 0; dy < scale; dy++) {
-						for (let dx = 0; dx < scale; dx++) {
-							const ox = px + sx * scale + dx;
-							const oy = py + sy * scale + dy;
-							if (ox >= 0 && ox < OLED_WIDTH && oy >= 0 && oy < OLED_HEIGHT) {
-								setPixel(updated, ox, oy, true);
-							}
-						}
+		for (let oy = 0; oy < scaledH; oy++) {
+			for (let ox = 0; ox < scaledW; ox++) {
+				const sx = Math.floor(ox / scale);
+				const sy = Math.floor(oy / scale);
+				if (sx < sw && sy < sh && getSpritePixel(spritePixels, sx, sy, sw, sh)) {
+					const cx = px + ox;
+					const cy = py + oy;
+					if (cx >= 0 && cx < OLED_WIDTH && cy >= 0 && cy < OLED_HEIGHT) {
+						setPixel(updated, cx, cy, true);
 					}
 				}
 			}
