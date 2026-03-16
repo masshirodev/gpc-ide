@@ -48,7 +48,8 @@
 		gitIsRepo,
 		exportGameZip,
 		importGameZip,
-		loadFlowProject
+		loadFlowProject,
+		saveFlowProject
 	} from '$lib/tauri/commands';
 	import { onFileChange } from '$lib/tauri/events';
 	import type { BuildResult, FileTreeEntry, SnapshotMeta } from '$lib/tauri/commands';
@@ -101,7 +102,7 @@
 	import FlowPersistencePanel from '$lib/components/editor/FlowPersistencePanel.svelte';
 	import FlowDefaultsPanel from '$lib/components/editor/FlowDefaultsPanel.svelte';
 	import { getDiagnosticsStore, getFileSeverityMap } from '$lib/stores/diagnostics.svelte';
-	import { getFlowStore, closeGraph, addNode, updateNode, switchFlow, updateVariableDefault, updateProfile, updateWeaponOverride } from '$lib/stores/flow.svelte';
+	import { getFlowStore, closeGraph, addNode, updateNode, switchFlow, updateVariableDefault, updateProfile, updateWeaponOverride, markClean, loadProject } from '$lib/stores/flow.svelte';
 	import { getKeyCombo, matchesCombo } from '$lib/stores/keybindings.svelte';
 	import CommandPalette from '$lib/components/layout/CommandPalette.svelte';
 	import type { Command } from '$lib/components/layout/CommandPalette.svelte';
@@ -298,6 +299,27 @@
 			}
 		}
 	});
+
+	// Ensure flow store has the project loaded (needed for defaults tab edits)
+	async function ensureFlowStoreLoaded() {
+		const game = store.selectedGame;
+		if (!game || game.generation_mode !== 'flow') return;
+		if (flowStore.project && flowStore.gamePath === game.path) return;
+		if (cachedFlowProject) {
+			loadProject(cachedFlowProject, game.path);
+		}
+	}
+
+	// Save flow project after defaults tab changes
+	async function saveFlowDefaults() {
+		const gamePath = store.selectedGame?.path;
+		if (!gamePath) return;
+		const project = flowStore.project;
+		if (project) {
+			await saveFlowProject(gamePath, project);
+			markClean();
+		}
+	}
 
 	// Apply pending combo transfer once flow project is loaded
 	$effect(() => {
@@ -1243,8 +1265,13 @@
 							<FlowDefaultsPanel
 								project={cachedFlowProject}
 								weaponNames={cachedWeaponNames}
-								onUpdateDefault={updateVariableDefault}
-								onUpdateProfileOverride={(profileId, varName, value) => {
+								onUpdateDefault={async (varName, value) => {
+									await ensureFlowStoreLoaded();
+									updateVariableDefault(varName, value);
+									await saveFlowDefaults();
+								}}
+								onUpdateProfileOverride={async (profileId, varName, value) => {
+									await ensureFlowStoreLoaded();
 									const profile = (cachedFlowProject?.profiles ?? []).find((p) => p.id === profileId);
 									if (!profile) return;
 									const overrides = { ...profile.variableOverrides };
@@ -1254,8 +1281,13 @@
 										overrides[varName] = value;
 									}
 									updateProfile(profileId, { variableOverrides: overrides });
+									await saveFlowDefaults();
 								}}
-								onUpdateWeaponOverride={updateWeaponOverride}
+								onUpdateWeaponOverride={async (weaponIndex, varName, value) => {
+									await ensureFlowStoreLoaded();
+									updateWeaponOverride(weaponIndex, varName, value);
+									await saveFlowDefaults();
+								}}
 							/>
 						{/if}
 					{:else if activeTab === 'persistence'}

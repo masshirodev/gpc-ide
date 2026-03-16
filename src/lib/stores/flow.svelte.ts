@@ -1006,16 +1006,26 @@ export function updateVariableDefault(varName: string, newDefault: number) {
 	const updateInList = (vars: FlowVariable[]) =>
 		vars.map((v) => (v.name === varName ? { ...v, defaultValue: newDefault } : v));
 
+	const updateNodeVarAndModuleOpt = (n: FlowNode) => {
+		const updated: FlowNode = { ...n, variables: updateInList(n.variables) };
+		if (updated.moduleData) {
+			const optIdx = updated.moduleData.options.findIndex((o) => o.variable === varName);
+			if (optIdx >= 0) {
+				const opts = [...updated.moduleData.options];
+				opts[optIdx] = { ...opts[optIdx], defaultValue: newDefault };
+				updated.moduleData = { ...updated.moduleData, options: opts };
+			}
+		}
+		return updated;
+	};
+
 	state.project = {
 		...state.project,
 		sharedVariables: updateInList(state.project.sharedVariables),
 		flows: state.project.flows.map((f) => ({
 			...f,
 			globalVariables: updateInList(f.globalVariables),
-			nodes: f.nodes.map((n) => ({
-				...n,
-				variables: updateInList(n.variables),
-			})),
+			nodes: f.nodes.map(updateNodeVarAndModuleOpt),
 		})),
 		updatedAt: Date.now(),
 	};
@@ -1024,10 +1034,7 @@ export function updateVariableDefault(varName: string, newDefault: number) {
 		state.graph = {
 			...state.graph,
 			globalVariables: updateInList(state.graph.globalVariables),
-			nodes: state.graph.nodes.map((n) => ({
-				...n,
-				variables: updateInList(n.variables),
-			})),
+			nodes: state.graph.nodes.map(updateNodeVarAndModuleOpt),
 		};
 	}
 	state.dirty = true;

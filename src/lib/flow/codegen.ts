@@ -942,7 +942,7 @@ export function generateFlowGpc(
 				lines.push(`    // Back button`);
 				const backKey = node.backKey ?? km?.cancel;
 				const backCheck = backKey
-					? `(event_press(${node.backButton}) || (GetKeyboardKey(${backKey}) && FlowStateTimer > 150))`
+					? `((event_press(${node.backButton})) || (GetKeyboardKey(${backKey}) && FlowStateTimer > 150))`
 					: `event_press(${node.backButton})`;
 				lines.push(`    if(${backCheck} && FlowStackTop > 0) {`);
 			}
@@ -1109,7 +1109,7 @@ function generateVarDeclaration(v: FlowVariable, profileCount: number = 0, weapo
  */
 function navPress(btn: string, key?: string): string {
 	if (!key) return `event_press(${btn})`;
-	return `(event_press(${btn}) || (GetKeyboardKey(${key}) && _kb_nav_delay <= 0))`;
+	return `((event_press(${btn})) || (GetKeyboardKey(${key}) && _kb_nav_delay <= 0))`;
 }
 
 function sanitizeName(name: string): string {
@@ -1128,24 +1128,48 @@ function generateConditionCode(edge: FlowEdge, sourceNode?: FlowNode): string | 
 	let result: string | null = null;
 	switch (c.type) {
 		case 'button_press': {
-			const parts: string[] = [];
-			if (c.button) parts.push(`event_press(${c.button})`);
+			// Build controller button check (modifiers apply only to this)
+			let btnPart: string | null = null;
+			if (c.button) {
+				const btnCheck = `event_press(${c.button})`;
+				btnPart = modChecks.length > 0
+					? `(${[...modChecks, btnCheck].join(' && ')})`
+					: `(${btnCheck})`;
+			}
 			// GetKeyboardKey fires every frame while held, so debounce with FlowStateTimer
 			// to prevent chain-transitions when entering a new state
-			if (c.keyboardKey) parts.push(`(GetKeyboardKey(${c.keyboardKey}) && FlowStateTimer > 150)`);
+			let kbPart: string | null = null;
+			if (c.keyboardKey) kbPart = `(GetKeyboardKey(${c.keyboardKey}) && FlowStateTimer > 150)`;
+			const parts = [btnPart, kbPart].filter(Boolean) as string[];
+			// Modifiers already folded into btnPart, so skip the generic modifier join below
+			if (parts.length > 0 && modChecks.length > 0) {
+				return parts.length === 1 ? parts[0] : `(${parts.join(' || ')})`;
+			}
 			result = parts.length > 0 ? (parts.length === 1 ? parts[0] : `(${parts.join(' || ')})`) : null;
 			break;
 		}
 		case 'button_hold': {
-			const parts: string[] = [];
-			if (c.button) parts.push(`get_val(${c.button})`);
-			if (c.keyboardKey) parts.push(`GetKeyboardKey(${c.keyboardKey})`);
-			const inputCheck = parts.length > 0 ? (parts.length === 1 ? parts[0] : `(${parts.join(' || ')})`) : null;
-			if (inputCheck && c.timeoutMs) {
-				result = `${inputCheck} && FlowStateTimer > ${c.timeoutMs}`;
-			} else {
-				result = inputCheck;
+			let btnPart: string | null = null;
+			if (c.button) {
+				const btnCheck = c.timeoutMs
+					? `get_val(${c.button}) && FlowStateTimer > ${c.timeoutMs}`
+					: `get_val(${c.button})`;
+				btnPart = modChecks.length > 0
+					? `(${[...modChecks, btnCheck].join(' && ')})`
+					: `(${btnCheck})`;
 			}
+			let kbPart: string | null = null;
+			if (c.keyboardKey) {
+				const kbCheck = c.timeoutMs
+					? `GetKeyboardKey(${c.keyboardKey}) && FlowStateTimer > ${c.timeoutMs}`
+					: `GetKeyboardKey(${c.keyboardKey})`;
+				kbPart = `(${kbCheck})`;
+			}
+			const parts = [btnPart, kbPart].filter(Boolean) as string[];
+			if (parts.length > 0 && modChecks.length > 0) {
+				return parts.length === 1 ? parts[0] : `(${parts.join(' || ')})`;
+			}
+			result = parts.length > 0 ? (parts.length === 1 ? parts[0] : `(${parts.join(' || ')})`) : null;
 			break;
 		}
 		case 'timeout':
